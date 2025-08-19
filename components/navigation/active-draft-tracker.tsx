@@ -54,6 +54,7 @@ export function ActiveDraftTracker() {
         `)
         .eq("match_participants.user_id", user.user.id)
         .in("status", ["waiting", "active", "drafting"])
+        .neq("status", "completed")
         .order("updated_at", { ascending: false })
 
       if (lobbyError) throw lobbyError

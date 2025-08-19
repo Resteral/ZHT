@@ -150,8 +150,9 @@ export default function WagerLobbyPage() {
   const currentParticipants = lobby.wager_participants.length
   const isFull = currentParticipants >= lobby.max_participants
   const isUserInWager = lobby.wager_participants.some((p) => p.user_id === user?.id)
-  const winnerPot = Math.floor(lobby.wager_amount * lobby.max_participants * 0.75)
-  const platformFee = lobby.wager_amount * lobby.max_participants - winnerPot
+  const totalPot = lobby.wager_amount * lobby.max_participants
+  const platformFee = totalPot * 0.25 // 25% platform fee
+  const winnerPot = totalPot * 0.75 // 75% to winner
 
   return (
     <div className="container mx-auto px-4 py-8 pt-24">
@@ -245,15 +246,15 @@ export default function WagerLobbyPage() {
                   </div>
                   <div className="flex justify-between">
                     <span>Total pot:</span>
-                    <span className="font-bold">${lobby.wager_amount * lobby.max_participants}</span>
+                    <span className="font-bold">${totalPot}</span>
                   </div>
                   <div className="flex justify-between text-green-600">
-                    <span>Winner receives:</span>
-                    <span className="font-bold">${winnerPot}</span>
+                    <span>Winner payout (75%):</span>
+                    <span className="font-bold">${winnerPot.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Platform fee:</span>
-                    <span>${platformFee}</span>
+                    <span>Platform fee (25%):</span>
+                    <span>${platformFee.toFixed(2)}</span>
                   </div>
                 </div>
               </CardContent>

@@ -127,6 +127,11 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
         throw new Error("Draft not found")
       }
 
+      if (match.status === "completed") {
+        router.push(`/draft/score/${params.id}`)
+        return
+      }
+
       // Get participants with their ELO ratings
       const { data: participantData, error: participantError } = await supabase
         .from("match_participants")

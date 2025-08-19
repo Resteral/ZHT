@@ -39,8 +39,9 @@ export default function CreateWagerMatchPage() {
   }
 
   const actualWager = formData.customWager ? Number.parseFloat(formData.customWager) : formData.wagerAmount
-  const winnerPayout = actualWager * 0.75
-  const platformFee = actualWager * 0.25
+  const totalPot = actualWager * 2
+  const platformFee = totalPot * 0.25 // 25% platform fee
+  const winnerPayout = totalPot * 0.75 // 75% to winner
 
   return (
     <div className="container mx-auto px-4 py-8 pt-24">
@@ -185,10 +186,10 @@ export default function CreateWagerMatchPage() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span>Total Wager Pool:</span>
-                  <span className="font-bold">${actualWager.toFixed(2)}</span>
+                  <span className="font-bold">${totalPot.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-green-600">
-                  <span>Winner Receives (75%):</span>
+                  <span>Winner Payout (75%):</span>
                   <span className="font-bold">${winnerPayout.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-muted-foreground text-sm">

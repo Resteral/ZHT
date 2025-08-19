@@ -143,38 +143,13 @@ export default function Dashboard() {
         console.log("[v0] Loaded players:", players?.length || 0)
       }
 
-      const { data: scoreData, error: scoreError } = await supabase
-        .from("score_submissions")
-        .select("*")
-        .order("submitted_at", { ascending: false })
-        .limit(10)
-
-      if (scoreError) {
-        console.error("[v0] Error loading score data:", scoreError)
-      } else {
-        console.log("[v0] Loaded score data:", scoreData?.length || 0)
-      }
-
-      // Load completed matches
       const { data: completedMatchesData, error: completedError } = await supabase
         .from("matches")
         .select(`
           id,
           name,
           status,
-          created_at,
-          match_results!inner(
-            team1_score,
-            team2_score,
-            winning_team,
-            match_duration,
-            validated_at
-          ),
-          match_analytics!match_analytics_match_id_fkey(
-            total_kills,
-            total_damage,
-            mvp_user_id
-          )
+          created_at
         `)
         .eq("status", "completed")
         .order("created_at", { ascending: false })
@@ -184,6 +159,25 @@ export default function Dashboard() {
         console.error("[v0] Error loading completed matches:", completedError)
       } else {
         console.log("[v0] Loaded completed matches:", completedMatchesData?.length || 0)
+      }
+
+      const { data: matchResultsData, error: resultsError } = await supabase
+        .from("match_results")
+        .select(`
+          match_id,
+          team1_score,
+          team2_score,
+          winning_team,
+          match_duration,
+          validated_at
+        `)
+        .order("validated_at", { ascending: false })
+        .limit(10)
+
+      if (resultsError) {
+        console.error("[v0] Error loading match results:", resultsError)
+      } else {
+        console.log("[v0] Loaded match results:", matchResultsData?.length || 0)
       }
 
       const formattedDrafts: LiveDraft[] = (matchesData || []).map((match: any) => {
@@ -247,20 +241,30 @@ export default function Dashboard() {
         recent_change: Math.floor(Math.random() * 40) - 20, // Mock recent change
       }))
 
+      const resultsMap = new Map()
+      if (matchResultsData) {
+        matchResultsData.forEach((result: any) => {
+          resultsMap.set(result.match_id, result)
+        })
+      }
+
       const formattedLiveScores: LiveScore[] = (completedMatchesData || []).map((match: any) => {
-        const result = match.match_results?.[0]
+        const result = resultsMap.get(match.id)
+
         return {
           id: match.id,
           name: match.name,
           status: match.status,
           team1_score: result?.team1_score || 0,
           team2_score: result?.team2_score || 0,
-          team1_captain: "Team 1", // Mock data
-          team2_captain: "Team 2", // Mock data
-          winner: result?.winning_team === 1 ? "Team 1" : "Team 2",
+          team1_captain: "Team 1", // Mock data - could be enhanced with actual team data
+          team2_captain: "Team 2", // Mock data - could be enhanced with actual team data
+          winner: result?.winning_team === 1 ? "Team 1" : result?.winning_team === 2 ? "Team 2" : "TBD",
           created_at: match.created_at,
         }
       })
+
+      console.log("[v0] Formatted live scores:", formattedLiveScores)
 
       setLiveDrafts(formattedDrafts)
       setTopPlayers(formattedTopPlayers)

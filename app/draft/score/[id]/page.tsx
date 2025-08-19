@@ -455,13 +455,12 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           if (voteCount >= 5) {
             const { error: mvpAwardError } = await supabase.from("player_mvp_awards").upsert(
               {
-                user_id: playerId,
+                player_id: playerId, // Fixed: use player_id instead of user_id
                 match_id: params.id,
-                vote_count: voteCount,
                 awarded_at: new Date().toISOString(),
               },
               {
-                onConflict: "user_id,match_id",
+                onConflict: "player_id,match_id",
               },
             )
 
@@ -490,20 +489,19 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           flagCounts[key] = (flagCounts[key] || 0) + 1
         })
 
-        // Record flags for players with 5+ reports of the same type
+        // Record flags for players with 3+ reports of the same type
         for (const [key, reportCount] of Object.entries(flagCounts)) {
-          if (reportCount >= 5) {
+          if (reportCount >= 3) {
             const [playerId, flagType] = key.split("-")
-            const { error: flagRecordError } = await supabase.from("player_flag_records").upsert(
+            const { error: flagRecordError } = await supabase.from("player_flag_summary").upsert(
               {
-                user_id: playerId,
-                match_id: params.id,
+                player_id: playerId, // Fixed: use correct table and field names
                 flag_type: flagType,
-                report_count: reportCount,
-                recorded_at: new Date().toISOString(),
+                flag_count: reportCount,
+                last_flagged: new Date().toISOString(),
               },
               {
-                onConflict: "user_id,match_id,flag_type",
+                onConflict: "player_id,flag_type",
               },
             )
 

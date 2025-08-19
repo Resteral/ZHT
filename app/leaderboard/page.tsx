@@ -20,6 +20,11 @@ interface Player {
   rank: number
   badge: string
   tier: string
+  goals: number
+  assists: number
+  saves: number
+  shots: number
+  avg_rating: number
 }
 
 interface Earner {
@@ -57,6 +62,20 @@ export default function LeaderboardPage() {
         .order("elo_rating", { ascending: false })
         .limit(50)
 
+      const { data: csvStats } = await supabase
+        .from("match_results")
+        .select(`
+          csv_code,
+          match_id,
+          matches!inner(
+            match_participants!inner(
+              user_id,
+              users!inner(username)
+            )
+          )
+        `)
+        .not("csv_code", "is", null)
+
       const { data: recentChanges } = await supabase
         .from("elo_history")
         .select("user_id, rating_change, created_at")
@@ -77,6 +96,31 @@ export default function LeaderboardPage() {
         const formattedPlayers = players.map((player, index) => {
           const recentChange = recentChanges?.find((change) => change.user_id === player.id)?.rating_change || 0
 
+          let totalGoals = 0,
+            totalAssists = 0,
+            totalSaves = 0,
+            totalShots = 0,
+            gameCount = 0
+
+          csvStats?.forEach((match) => {
+            if (match.csv_code) {
+              const lines = match.csv_code.split("\n").filter((line) => line.trim())
+              lines.forEach((line) => {
+                const values = line.split(",")
+                if (values.length >= 14) {
+                  const playerId = values[1]?.split("-").pop()
+                  if (playerId && player.username.toLowerCase().includes(playerId.slice(-4))) {
+                    totalGoals += Number.parseInt(values[3]) || 0
+                    totalAssists += Number.parseInt(values[4]) || 0
+                    totalSaves += Number.parseInt(values[6]) || 0
+                    totalShots += Number.parseInt(values[7]) || 0
+                    gameCount++
+                  }
+                }
+              })
+            }
+          })
+
           return {
             id: player.id,
             username: player.username,
@@ -88,6 +132,11 @@ export default function LeaderboardPage() {
             rank: index + 1,
             badge: getELOBadge(player.elo_rating || 1200),
             tier: getELOTier(player.elo_rating || 1200),
+            goals: totalGoals,
+            assists: totalAssists,
+            saves: totalSaves,
+            shots: totalShots,
+            avg_rating: gameCount > 0 ? ((totalGoals + totalAssists) / gameCount).toFixed(1) : 0,
           }
         })
         setEloPlayers(formattedPlayers)
@@ -317,9 +366,14 @@ export default function LeaderboardPage() {
                             />
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {player.total_games} games •{" "}
+                            {player.total_games} games • {player.wins}W-{player.losses}L •{" "}
                             {player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0}% win
                             rate
+                            {player.goals > 0 && (
+                              <span className="ml-2">
+                                • {player.goals}G {player.assists}A {player.saves}S
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
