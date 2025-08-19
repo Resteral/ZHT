@@ -1,0 +1,282 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { createClient } from "@/lib/supabase/client"
+import type { RealtimeChannel } from "@supabase/supabase-js"
+
+const supabase = createClient()
+
+export function useRealtimeSubscription<T>(table: string, filter?: string, initialData: T[] = []) {
+  const [data, setData] = useState<T[]>(initialData)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let channel: RealtimeChannel
+
+    const setupSubscription = async () => {
+      try {
+        // Initial data fetch
+        let query = supabase.from(table).select("*")
+        if (filter) {
+          query = query.filter(...filter.split(","))
+        }
+
+        const { data: initialData, error: fetchError } = await query
+
+        if (fetchError) {
+          setError(fetchError.message)
+          return
+        }
+
+        setData(initialData || [])
+        setLoading(false)
+
+        // Set up real-time subscription
+        channel = supabase
+          .channel(`${table}_changes`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: table,
+            },
+            (payload) => {
+              if (payload.eventType === "INSERT") {
+                setData((current) => [...current, payload.new as T])
+              } else if (payload.eventType === "UPDATE") {
+                setData((current) => current.map((item: any) => (item.id === payload.new.id ? payload.new : item)))
+              } else if (payload.eventType === "DELETE") {
+                setData((current) => current.filter((item: any) => item.id !== payload.old.id))
+              }
+            },
+          )
+          .subscribe()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error")
+        setLoading(false)
+      }
+    }
+
+    setupSubscription()
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [table, filter])
+
+  return { data, loading, error }
+}
+
+export function useRealtimeGame(gameId: string) {
+  const [gameState, setGameState] = useState<any>(null)
+  const [events, setEvents] = useState<any[]>([])
+
+  useEffect(() => {
+    if (!gameId) return
+
+    const channel = supabase
+      .channel(`game_${gameId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "games",
+          filter: `id=eq.${gameId}`,
+        },
+        (payload) => {
+          setGameState(payload.new)
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "game_events",
+          filter: `game_id=eq.${gameId}`,
+        },
+        (payload) => {
+          setEvents((current) => [payload.new, ...current])
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [gameId])
+
+  return { gameState, events }
+}
+
+export function useRealtimeBetting() {
+  const [markets, setMarkets] = useState<any[]>([])
+  const [odds, setOdds] = useState<Record<string, any>>({})
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("betting_updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "betting_markets",
+        },
+        (payload) => {
+          if (payload.eventType === "UPDATE") {
+            setMarkets((current) => current.map((market) => (market.id === payload.new.id ? payload.new : market)))
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "betting_odds",
+        },
+        (payload) => {
+          if (payload.eventType === "UPDATE") {
+            setOdds((current) => ({
+              ...current,
+              [payload.new.market_id]: payload.new,
+            }))
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  return { markets, odds }
+}
+
+export function useRealtimeDraft(draftId: string) {
+  const [draftState, setDraftState] = useState<any>(null)
+  const [picks, setPicks] = useState<any[]>([])
+  const [currentPick, setCurrentPick] = useState<number>(1)
+
+  useEffect(() => {
+    if (!draftId) return
+
+    const channel = supabase
+      .channel(`draft_${draftId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "captain_drafts",
+          filter: `id=eq.${draftId}`,
+        },
+        (payload) => {
+          setDraftState(payload.new)
+          setCurrentPick(payload.new.current_pick || 1)
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "draft_picks",
+          filter: `draft_id=eq.${draftId}`,
+        },
+        (payload) => {
+          setPicks((current) => [...current, payload.new])
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [draftId])
+
+  return { draftState, picks, currentPick }
+}
+
+export function useRealtimeStream(streamId: string) {
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [viewerCount, setViewerCount] = useState(0)
+
+  useEffect(() => {
+    if (!streamId) return
+
+    const channel = supabase
+      .channel(`stream_${streamId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "stream_chat",
+          filter: `stream_id=eq.${streamId}`,
+        },
+        (payload) => {
+          setChatMessages((current) => [...current, payload.new])
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "stream_viewers",
+          filter: `stream_id=eq.${streamId}`,
+        },
+        async () => {
+          // Recalculate viewer count
+          const { count } = await supabase
+            .from("stream_viewers")
+            .select("*", { count: "exact", head: true })
+            .eq("stream_id", streamId)
+            .is("left_at", null)
+
+          setViewerCount(count || 0)
+        },
+      )
+      .subscribe()
+
+    // Load initial chat messages
+    const loadInitialData = async () => {
+      try {
+        const { data: messages } = await supabase
+          .from("stream_chat")
+          .select("*")
+          .eq("stream_id", streamId)
+          .order("created_at", { ascending: true })
+          .limit(50)
+
+        if (messages) setChatMessages(messages)
+
+        const { count } = await supabase
+          .from("stream_viewers")
+          .select("*", { count: "exact", head: true })
+          .eq("stream_id", streamId)
+          .is("left_at", null)
+
+        setViewerCount(count || 0)
+      } catch (error) {
+        console.error("Error loading stream data:", error)
+      }
+    }
+
+    loadInitialData()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [streamId])
+
+  return { chatMessages, viewerCount }
+}

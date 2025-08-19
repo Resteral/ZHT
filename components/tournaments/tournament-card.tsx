@@ -1,0 +1,116 @@
+"use client"
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Trophy, Users, Calendar, DollarSign, Eye } from "lucide-react"
+import { useRouter } from "next/navigation"
+
+interface Tournament {
+  id: string
+  name: string
+  description: string
+  tournament_type: string
+  max_participants: number
+  entry_fee: number
+  prize_pool: number
+  status: string
+  start_date: string
+  participant_count: number
+}
+
+interface TournamentCardProps {
+  tournament: Tournament
+}
+
+export function TournamentCard({ tournament }: TournamentCardProps) {
+  const router = useRouter()
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "registration":
+        return "bg-blue-500"
+      case "in_progress":
+        return "bg-green-500"
+      case "completed":
+        return "bg-gray-500"
+      default:
+        return "bg-gray-500"
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "registration":
+        return "Registration Open"
+      case "in_progress":
+        return "In Progress"
+      case "completed":
+        return "Completed"
+      default:
+        return status
+    }
+  }
+
+  const getTournamentTypeText = (type: string) => {
+    switch (type) {
+      case "single_elimination":
+        return "Single Elimination"
+      case "double_elimination":
+        return "Double Elimination"
+      case "round_robin":
+        return "Round Robin"
+      default:
+        return type
+    }
+  }
+
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-lg">{tournament.name}</CardTitle>
+            <CardDescription>{tournament.description}</CardDescription>
+          </div>
+          <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+            <span>{getTournamentTypeText(tournament.tournament_type)}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span>
+              {tournament.participant_count}/{tournament.max_participants}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span>{new Date(tournament.start_date).toLocaleDateString()}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <span>${tournament.prize_pool.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {tournament.entry_fee > 0 && (
+          <div className="text-sm text-muted-foreground">Entry Fee: ${tournament.entry_fee}</div>
+        )}
+
+        <Button className="w-full" onClick={() => router.push(`/tournaments/${tournament.id}`)}>
+          <Eye className="h-4 w-4 mr-2" />
+          View Tournament
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
