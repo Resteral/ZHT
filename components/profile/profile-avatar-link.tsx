@@ -49,7 +49,6 @@ export function ProfileAvatarLink({
       setIsOpen(true)
       await trackProfileView(user.id, pageSource)
     } else {
-      // Navigate to full profile page
       window.location.href = `/profile/${user.id}`
       await trackProfileView(user.id, pageSource)
     }
@@ -137,13 +136,17 @@ export function ProfileAvatarLink({
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
           <button className={`relative ${className}`} onClick={handleProfileView}>
-            <Avatar className={`${sizeClasses[size]} cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all`}>
-              <AvatarImage src={user.avatar_url || "/placeholder.svg"} />
-              <AvatarFallback className="bg-primary/10 text-primary font-bold">
+            <Avatar
+              className={`${sizeClasses[size]} cursor-pointer hover:ring-2 hover:ring-secondary/50 transition-all`}
+            >
+              <AvatarImage
+                src={user.avatar_url || `/placeholder.svg?height=40&width=40&query=${user.username} avatar`}
+              />
+              <AvatarFallback className="bg-secondary/20 text-secondary font-bold">
                 {user.username.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            {user.is_captain && <Crown className="absolute -top-1 -right-1 h-4 w-4 text-yellow-500" />}
+            {user.is_captain && <Crown className="absolute -top-1 -right-1 h-4 w-4 text-chart-4" />}
           </button>
         </DialogTrigger>
         <DialogContent className="p-0 border-0 bg-transparent shadow-none">
@@ -155,13 +158,13 @@ export function ProfileAvatarLink({
 
   return (
     <button className={`relative ${className}`} onClick={handleProfileView}>
-      <Avatar className={`${sizeClasses[size]} cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all`}>
-        <AvatarImage src={user.avatar_url || "/placeholder.svg"} />
-        <AvatarFallback className="bg-primary/10 text-primary font-bold">
+      <Avatar className={`${sizeClasses[size]} cursor-pointer hover:ring-2 hover:ring-secondary/50 transition-all`}>
+        <AvatarImage src={user.avatar_url || `/placeholder.svg?height=40&width=40&query=${user.username} avatar`} />
+        <AvatarFallback className="bg-secondary/20 text-secondary font-bold">
           {user.username.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
-      {user.is_captain && <Crown className="absolute -top-1 -right-1 h-4 w-4 text-yellow-500" />}
+      {user.is_captain && <Crown className="absolute -top-1 -right-1 h-4 w-4 text-chart-4" />}
     </button>
   )
 }

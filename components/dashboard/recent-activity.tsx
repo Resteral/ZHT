@@ -59,7 +59,12 @@ export function RecentActivity() {
           .limit(5)
         transactions = transactionData
       } catch (error) {
-        console.log("[v0] Transactions table not available, using mock data")
+        console.error("Error fetching transactions:", error)
+      }
+
+      if (!transactions) {
+        console.log("[v0] No transactions available")
+        transactions = []
       }
 
       // Convert to activity format
@@ -78,26 +83,6 @@ export function RecentActivity() {
           iconColor: match.status === "completed" ? "text-green-500" : "text-blue-500",
         })
       })
-
-      if (!transactions) {
-        const mockTransactions = [
-          {
-            id: "mock-1",
-            type: "credit",
-            amount: 50,
-            description: "Match Victory Bonus",
-            created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-          },
-          {
-            id: "mock-2",
-            type: "debit",
-            amount: 10,
-            description: "Tournament Entry Fee",
-            created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-          },
-        ]
-        transactions = mockTransactions
-      }
 
       transactions?.forEach((transaction) => {
         activityList.push({

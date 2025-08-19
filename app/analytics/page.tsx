@@ -20,6 +20,17 @@ interface Match {
   status: string
   created_at: string
   max_participants: number
+  team1_name?: string
+  team2_name?: string
+  team1_score?: number
+  team2_score?: number
+  winning_team?: string
+  duration?: number
+  total_goals?: number
+  total_assists?: number
+  total_saves?: number
+  avg_elo?: number
+  all_players?: any[]
 }
 
 interface HockeyStat {
@@ -176,7 +187,9 @@ export default function AnalyticsPage() {
     try {
       const { data } = await supabase
         .from("matches")
-        .select("id, name, match_type, status, created_at, max_participants")
+        .select(
+          "id, name, match_type, status, created_at, max_participants, team1_name, team2_name, team1_score, team2_score, winning_team, duration, total_goals, total_assists, total_saves, avg_elo, all_players",
+        )
         .in("status", ["completed", "finished"])
         .order("created_at", { ascending: false })
         .limit(50)
@@ -231,6 +244,19 @@ export default function AnalyticsPage() {
     (match) =>
       match.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       match.match_type.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
+
+  const filteredMatchStats = matchesWithAnalytics.filter(
+    (match) =>
+      match.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      match.match_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      match.team1_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      match.team2_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      match.all_players.some(
+        (player) =>
+          player.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          player.username.toLowerCase().includes(searchTerm.toLowerCase()),
+      ),
   )
 
   const processHockeyCSV = async () => {
@@ -312,6 +338,41 @@ export default function AnalyticsPage() {
     window.URL.revokeObjectURL(url)
   }
 
+  const exportMatchStats = () => {
+    if (matchesWithAnalytics.length === 0) return
+
+    const csvContent = [
+      "Match,Date,Type,Status,Team 1,Team 2,Score,Winner,Duration,Total Goals,Total Assists,Total Saves,Avg ELO,Players",
+      ...matchesWithAnalytics.map(
+        (match) =>
+          `${match.name},${new Date(match.created_at).toLocaleDateString()},${match.match_type},${match.status},${match.team1_name},${match.team2_name},${match.team1_score}-${match.team2_score},${match.winning_team},${match.duration ? `${Math.round(match.duration / 60)}m` : "N/A"},${match.total_goals},${match.total_assists},${match.total_saves},${match.avg_elo},${match.all_players.map((player: any) => player.display_name || player.username).join(",")}`,
+      ),
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `match-stats-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const exportSingleMatch = (match: Match) => {
+    const csvContent = [
+      "Match,Date,Type,Status,Team 1,Team 2,Score,Winner,Duration,Total Goals,Total Assists,Total Saves,Avg ELO,Players",
+      `${match.name},${new Date(match.created_at).toLocaleDateString()},${match.match_type},${match.status},${match.team1_name},${match.team2_name},${match.team1_score}-${match.team2_score},${match.winning_team},${match.duration ? `${Math.round(match.duration / 60)}m` : "N/A"},${match.total_goals},${match.total_assists},${match.total_saves},${match.avg_elo},${match.all_players.map((player: any) => player.display_name || player.username).join(",")}`,
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `match-${match.name}-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -347,67 +408,251 @@ export default function AnalyticsPage() {
         </TabsList>
 
         <TabsContent value="match-analytics" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-3">
-            <Card className="md:col-span-1">
+          <div className="space-y-6">
+            {/* Match Statistics Spreadsheet */}
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Search className="h-5 w-5" />
-                  Select Match
+                  <TrendingUp className="h-5 w-5" />
+                  Match Statistics Spreadsheet
                 </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Input
-                  placeholder="Search matches..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {filteredMatches.length === 0 ? (
-                    <div className="text-center text-muted-foreground py-4">No matches found</div>
-                  ) : (
-                    filteredMatches.map((match) => (
-                      <Button
-                        key={match.id}
-                        variant={selectedMatch === match.id ? "default" : "outline"}
-                        className="w-full justify-start text-left h-auto p-3"
-                        onClick={() => setSelectedMatch(match.id)}
-                      >
-                        <div className="space-y-1">
-                          <div className="font-medium truncate">{match.name}</div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Badge variant="outline" className="text-xs">
-                              {match.match_type}
-                            </Badge>
-                            <Users className="h-3 w-3" />
-                            <span>{match.max_participants}</span>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(match.created_at).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </Button>
-                    ))
-                  )}
+                <div className="flex items-center gap-4">
+                  <Input
+                    placeholder="Search matches, players, or teams..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="max-w-sm"
+                  />
+                  <Button variant="outline" onClick={exportMatchStats} disabled={matchesWithAnalytics.length === 0}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
                 </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border border-gray-200">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Match</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Date</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Type</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Status</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Team 1</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Team 2</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Score</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Winner</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Duration</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Total Goals</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Total Assists</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Total Saves</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Avg ELO</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Players</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMatchStats.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={15}
+                            className="border border-gray-200 px-4 py-8 text-center text-muted-foreground"
+                          >
+                            No match statistics found
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMatchStats.map((match, index) => (
+                          <tr key={match.id} className={index % 2 === 0 ? "bg-white" : "bg-gray-25"}>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <div className="font-medium truncate max-w-48" title={match.name}>
+                                {match.name}
+                              </div>
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3 text-sm">
+                              {new Date(match.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <Badge variant="outline" className="text-xs">
+                                {match.match_type}
+                              </Badge>
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <Badge
+                                variant={match.status === "completed" ? "default" : "secondary"}
+                                className="text-xs"
+                              >
+                                {match.status}
+                              </Badge>
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <div className="text-sm font-medium">{match.team1_name || "Team 1"}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {match.team1_players?.length || 0} players
+                              </div>
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <div className="text-sm font-medium">{match.team2_name || "Team 2"}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {match.team2_players?.length || 0} players
+                              </div>
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <div className="text-lg font-bold">
+                                {match.team1_score || 0} - {match.team2_score || 0}
+                              </div>
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <Badge
+                                variant={
+                                  match.winning_team === "team1"
+                                    ? "default"
+                                    : match.winning_team === "team2"
+                                      ? "secondary"
+                                      : "outline"
+                                }
+                                className="text-xs"
+                              >
+                                {match.winning_team === "team1"
+                                  ? "Team 1"
+                                  : match.winning_team === "team2"
+                                    ? "Team 2"
+                                    : "Draw"}
+                              </Badge>
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3 text-sm">
+                              {match.duration ? `${Math.round(match.duration / 60)}m` : "N/A"}
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3 text-center font-semibold text-blue-600">
+                              {match.total_goals || 0}
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3 text-center font-semibold text-green-600">
+                              {match.total_assists || 0}
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3 text-center font-semibold text-purple-600">
+                              {match.total_saves || 0}
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3 text-center font-semibold">
+                              {match.avg_elo ? Math.round(match.avg_elo) : "N/A"}
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <div className="flex flex-wrap gap-1">
+                                {match.all_players?.slice(0, 3).map((player: any, i: number) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {player.display_name || player.username}
+                                  </Badge>
+                                ))}
+                                {match.all_players?.length > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{match.all_players.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
+                            <td className="border border-gray-200 px-4 py-3">
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleMatchChange(match.id)}
+                                  className="text-xs"
+                                >
+                                  View
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => exportSingleMatch(match)}
+                                  className="text-xs"
+                                >
+                                  Export
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {filteredMatchStats.length > 0 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Showing {filteredMatchStats.length} of {matchesWithAnalytics.length} matches
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" disabled>
+                        Previous
+                      </Button>
+                      <Button variant="outline" size="sm" disabled>
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            <div className="md:col-span-2">
-              {selectedMatch ? (
-                <MatchStatsViewer matchId={selectedMatch} />
-              ) : (
-                <Card>
-                  <CardContent className="p-12">
-                    <div className="text-center space-y-4">
-                      <Target className="h-12 w-12 mx-auto text-muted-foreground" />
-                      <div>
-                        <h3 className="text-lg font-semibold">Select a Match</h3>
-                        <p className="text-muted-foreground">Choose a completed match to view detailed analytics</p>
+            {/* Detailed Match Viewer */}
+            <div className="grid gap-6 md:grid-cols-3">
+              <Card className="md:col-span-1">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Search className="h-5 w-5" />
+                    Quick Match Selector
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {filteredMatches.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-4">No matches found</div>
+                    ) : (
+                      filteredMatches.slice(0, 10).map((match) => (
+                        <Button
+                          key={match.id}
+                          variant={selectedMatch === match.id ? "default" : "outline"}
+                          className="w-full justify-start text-left h-auto p-3"
+                          onClick={() => setSelectedMatch(match.id)}
+                        >
+                          <div className="space-y-1">
+                            <div className="font-medium truncate">{match.name}</div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Badge variant="outline" className="text-xs">
+                                {match.match_type}
+                              </Badge>
+                              <Users className="h-3 w-3" />
+                              <span>{match.max_participants}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(match.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </Button>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="md:col-span-2">
+                {selectedMatch ? (
+                  <MatchStatsViewer matchId={selectedMatch} />
+                ) : (
+                  <Card>
+                    <CardContent className="p-12">
+                      <div className="text-center space-y-4">
+                        <Target className="h-12 w-12 mx-auto text-muted-foreground" />
+                        <div>
+                          <h3 className="text-lg font-semibold">Select a Match</h3>
+                          <p className="text-muted-foreground">Choose a completed match to view detailed analytics</p>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </div>
           </div>
         </TabsContent>

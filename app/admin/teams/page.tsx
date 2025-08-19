@@ -1,3 +1,6 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -5,79 +8,114 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Plus, Edit, Users, Trophy, Target, DollarSign } from "lucide-react"
 import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+
+interface Team {
+  id: string
+  name: string
+  game: string
+  owner: string
+  players: number
+  maxPlayers: number
+  wins: number
+  losses: number
+  winRate: number
+  value: number
+  league: string
+  status: string
+}
 
 export default function TeamManagement() {
-  // Mock team data
-  const teams = [
-    {
-      id: 1,
-      name: "Team Alpha",
-      game: "Counter Strike",
-      owner: "AlexChen",
-      players: 5,
-      maxPlayers: 5,
-      wins: 12,
-      losses: 3,
-      winRate: 80.0,
-      value: 15420,
-      league: "Winter Championship",
-      status: "active",
-    },
-    {
-      id: 2,
-      name: "Storm Squad",
-      game: "Rainbow Six Siege",
-      owner: "SarahGamer",
-      players: 4,
-      maxPlayers: 5,
-      wins: 8,
-      losses: 4,
-      winRate: 66.7,
-      value: 12850,
-      league: "Spring Qualifiers",
-      status: "active",
-    },
-    {
-      id: 3,
-      name: "Fire Hawks",
-      game: "Call of Duty",
-      owner: "MikeRod",
-      players: 6,
-      maxPlayers: 6,
-      wins: 15,
-      losses: 8,
-      winRate: 65.2,
-      value: 18750,
-      league: "COD Elite League",
-      status: "inactive",
-    },
-    {
-      id: 4,
-      name: "Arctic Bears",
-      game: "Zealot Hockey",
-      owner: "EmmaWilson",
-      players: 8,
-      maxPlayers: 10,
-      wins: 20,
-      losses: 5,
-      winRate: 80.0,
-      value: 22300,
-      league: "Hockey Pro Season",
-      status: "active",
-    },
-  ]
+  const [teams, setTeams] = useState<Team[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    totalTeams: 0,
+    activeTeams: 0,
+    totalValue: 0,
+    championships: 0,
+  })
+  const supabase = createClient()
+
+  useEffect(() => {
+    loadTeams()
+  }, [])
+
+  const loadTeams = async () => {
+    try {
+      const { data: teamsData, error } = await supabase
+        .from("teams")
+        .select(`
+          id,
+          name,
+          game,
+          owner_id,
+          max_players,
+          created_at,
+          users!teams_owner_id_fkey(username),
+          team_members(user_id),
+          leagues(name)
+        `)
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+
+      const formattedTeams: Team[] =
+        teamsData?.map((team) => ({
+          id: team.id,
+          name: team.name || "Unnamed Team",
+          game: team.game || "Unknown",
+          owner: team.users?.username || "Unknown Owner",
+          players: team.team_members?.length || 0,
+          maxPlayers: team.max_players || 5,
+          wins: 0, // Would need match results to calculate
+          losses: 0, // Would need match results to calculate
+          winRate: 0, // Would need match results to calculate
+          value: Math.floor(Math.random() * 20000) + 5000, // Placeholder calculation
+          league: team.leagues?.name || "No League",
+          status: team.team_members?.length >= team.max_players ? "active" : "recruiting",
+        })) || []
+
+      setTeams(formattedTeams)
+
+      setStats({
+        totalTeams: formattedTeams.length,
+        activeTeams: formattedTeams.filter((t) => t.status === "active").length,
+        totalValue: formattedTeams.reduce((sum, t) => sum + t.value, 0),
+        championships: 0, // Would need tournament results to calculate
+      })
+    } catch (error) {
+      console.error("Error loading teams:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
         return "default"
-      case "inactive":
+      case "recruiting":
         return "secondary"
       case "disbanded":
         return "outline"
       default:
         return "default"
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3"></div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-24 bg-muted rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -103,7 +141,7 @@ export default function TeamManagement() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">156</div>
+            <div className="text-2xl font-bold">{stats.totalTeams}</div>
             <p className="text-xs text-muted-foreground">Across all leagues</p>
           </CardContent>
         </Card>
@@ -114,7 +152,7 @@ export default function TeamManagement() {
             <Target className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">142</div>
+            <div className="text-2xl font-bold">{stats.activeTeams}</div>
             <p className="text-xs text-muted-foreground">Currently competing</p>
           </CardContent>
         </Card>
@@ -125,7 +163,7 @@ export default function TeamManagement() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$2.4M</div>
+            <div className="text-2xl font-bold">${(stats.totalValue / 1000000).toFixed(1)}M</div>
             <p className="text-xs text-muted-foreground">Combined team values</p>
           </CardContent>
         </Card>
@@ -136,7 +174,7 @@ export default function TeamManagement() {
             <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23</div>
+            <div className="text-2xl font-bold">{stats.championships}</div>
             <p className="text-xs text-muted-foreground">Titles won</p>
           </CardContent>
         </Card>
@@ -167,76 +205,84 @@ export default function TeamManagement() {
           <CardDescription>{teams.length} teams shown</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Team Details</TableHead>
-                <TableHead>Game</TableHead>
-                <TableHead>Owner</TableHead>
-                <TableHead>Roster</TableHead>
-                <TableHead>Record</TableHead>
-                <TableHead>Value</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {teams.map((team) => (
-                <TableRow key={team.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{team.name}</div>
-                      <div className="text-sm text-muted-foreground">{team.league}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{team.game}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{team.owner}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>
-                        {team.players}/{team.maxPlayers} players
-                      </div>
-                      <div className="text-muted-foreground">
-                        {team.maxPlayers - team.players > 0 ? `${team.maxPlayers - team.players} spots open` : "Full"}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      <div>
-                        {team.wins}-{team.losses}
-                      </div>
-                      <div className="text-muted-foreground">{team.winRate}% win rate</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">${team.value.toLocaleString()}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(team.status)}>{team.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/admin/teams/${team.id}`}>
-                        <Button size="sm" variant="outline">
-                          View
-                        </Button>
-                      </Link>
-                      <Link href={`/admin/teams/${team.id}/edit`}>
-                        <Button size="sm" variant="outline">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </TableCell>
+          {teams.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No teams found</p>
+              <p className="text-sm">Create your first team to get started!</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Team Details</TableHead>
+                  <TableHead>Game</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Roster</TableHead>
+                  <TableHead>Record</TableHead>
+                  <TableHead>Value</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {teams.map((team) => (
+                  <TableRow key={team.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{team.name}</div>
+                        <div className="text-sm text-muted-foreground">{team.league}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{team.game}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{team.owner}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <div>
+                          {team.players}/{team.maxPlayers} players
+                        </div>
+                        <div className="text-muted-foreground">
+                          {team.maxPlayers - team.players > 0 ? `${team.maxPlayers - team.players} spots open` : "Full"}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <div>
+                          {team.wins}-{team.losses}
+                        </div>
+                        <div className="text-muted-foreground">{team.winRate}% win rate</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">${team.value.toLocaleString()}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusColor(team.status)}>{team.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/admin/teams/${team.id}`}>
+                          <Button size="sm" variant="outline">
+                            View
+                          </Button>
+                        </Link>
+                        <Link href={`/admin/teams/${team.id}/edit`}>
+                          <Button size="sm" variant="outline">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -204,6 +204,21 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
     const supabase = createClient()
 
     try {
+      const { data: currentUser, error: balanceCheckError } = await supabase
+        .from("users")
+        .select("balance")
+        .eq("id", user.id)
+        .single()
+
+      if (balanceCheckError) throw balanceCheckError
+
+      const currentBalance = currentUser.balance || 0
+      if (currentBalance < amount) {
+        console.log(`[v0] Insufficient balance: ${currentBalance} < ${amount}`)
+        alert(`Insufficient balance. You have $${currentBalance.toFixed(2)} but tried to bet $${amount}`)
+        return
+      }
+
       const shortBetType = `${marketId.substring(0, 8)}_${optionId.substring(0, 8)}`
 
       const { error } = await supabase.from("bets").insert({
@@ -219,30 +234,14 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
 
       if (error) throw error
 
-      const { error: balanceError } = await supabase.rpc("update_user_balance", {
-        user_id: user.id,
-        amount_change: -amount,
-      })
+      const newBalance = currentBalance - amount
 
-      if (balanceError) {
-        // Fallback to direct update without using supabase.raw
-        const { data: currentUser, error: fetchError } = await supabase
-          .from("users")
-          .select("balance")
-          .eq("id", user.id)
-          .single()
+      const { error: directBalanceError } = await supabase
+        .from("users")
+        .update({ balance: newBalance })
+        .eq("id", user.id)
 
-        if (fetchError) throw fetchError
-
-        const newBalance = (currentUser.balance || 0) - amount
-
-        const { error: directBalanceError } = await supabase
-          .from("users")
-          .update({ balance: newBalance })
-          .eq("id", user.id)
-
-        if (directBalanceError) throw directBalanceError
-      }
+      if (directBalanceError) throw directBalanceError
 
       console.log(`[v0] Bet placed: ${marketId} - ${optionId} for $${amount}`)
       setTimeout(() => loadPublicBets(), 500)

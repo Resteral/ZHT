@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Calendar, Filter, TrendingUp, TrendingDown, Search } from "lucide-react"
 import { ProfileNameLink } from "./profile-name-link"
+import { supabase } from "@/lib/supabase"
 
 interface Match {
   id: string
@@ -50,64 +51,50 @@ export function EnhancedMatchHistory({ userId }: EnhancedMatchHistoryProps) {
 
   const loadMatches = async () => {
     try {
-      // Mock data - would fetch from Supabase with filters
-      const mockMatches: Match[] = [
-        {
-          id: "1",
-          opponent_id: "opp1",
-          opponent_username: "ShadowNinja",
-          game: "counter_strike",
-          match_type: "tournament",
-          tournament_name: "Winter Championship",
-          result: "win",
-          player_score: 16,
-          opponent_score: 12,
-          elo_before: 1823,
-          elo_after: 1847,
-          elo_change: 24,
-          match_duration: 45,
-          match_date: "2024-01-15T20:30:00Z",
-          season: "2024-Q1",
-        },
-        {
-          id: "2",
-          opponent_id: "opp2",
-          opponent_username: "TacticalAce",
-          game: "rainbow_six_siege",
-          match_type: "league",
-          tournament_name: "Pro League",
-          result: "loss",
-          player_score: 2,
-          opponent_score: 3,
-          elo_before: 1841,
-          elo_after: 1823,
-          elo_change: -18,
-          match_duration: 38,
-          match_date: "2024-01-14T19:15:00Z",
-          season: "2024-Q1",
-        },
-        {
-          id: "3",
-          opponent_id: "opp3",
-          opponent_username: "QuickScope99",
-          game: "call_of_duty",
-          match_type: "ranked",
-          result: "win",
-          player_score: 250,
-          opponent_score: 180,
-          elo_before: 1810,
-          elo_after: 1841,
-          elo_change: 31,
-          match_duration: 22,
-          match_date: "2024-01-13T21:45:00Z",
-          season: "2024-Q1",
-        },
-      ]
+      const { data: matchResults, error } = await supabase
+        .from("match_results")
+        .select(`
+          id,
+          match_id,
+          team1_score,
+          team2_score,
+          winning_team,
+          created_at,
+          matches!match_results_match_id_fkey(
+            name,
+            match_type,
+            description
+          )
+        `)
+        .order("created_at", { ascending: false })
+        .limit(10)
 
-      setMatches(page === 1 ? mockMatches : [...matches, ...mockMatches])
-      setHasMore(mockMatches.length === 10) // Assume 10 per page
+      if (error) throw error
+
+      const formattedMatches: Match[] =
+        matchResults?.map((result) => ({
+          id: result.id,
+          opponent_id: "unknown", // Would need participant data to determine opponent
+          opponent_username: "Unknown Opponent",
+          game: "zealot_hockey",
+          match_type: result.matches?.match_type || "ranked",
+          tournament_name: result.matches?.name,
+          result: result.winning_team === "team1" ? "win" : result.winning_team === "team2" ? "loss" : "draw",
+          player_score: result.team1_score || 0,
+          opponent_score: result.team2_score || 0,
+          elo_before: 1200, // Would need ELO history to calculate
+          elo_after: 1200, // Would need ELO history to calculate
+          elo_change: 0, // Would need ELO history to calculate
+          match_duration: 30, // Placeholder
+          match_date: result.created_at,
+          season: "2024-Q1",
+        })) || []
+
+      setMatches(page === 1 ? formattedMatches : [...matches, ...formattedMatches])
+      setHasMore(formattedMatches.length === 10)
     } catch (error) {
       console.error("Error loading matches:", error)
+      setMatches([]) // Set empty array instead of mock data
     } finally {
       setLoading(false)
     }

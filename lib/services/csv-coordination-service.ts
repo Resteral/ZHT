@@ -112,12 +112,22 @@ export class CSVCoordinationService {
 
   private async updateLeaderboardStats(stats: ProcessedHockeyStats[], actualMatchId?: string) {
     try {
+      let matchResult = null
+      if (actualMatchId) {
+        const { data } = await this.supabase
+          .from("match_results")
+          .select("team1_score, team2_score, winning_team")
+          .eq("match_id", actualMatchId)
+          .single()
+        matchResult = data
+      }
+
       for (const stat of stats.filter((s) => s.userFound && s.userId)) {
         console.log(`[v0] Processing stats for ${stat.actualUsername}, userId: ${stat.userId}`)
 
         const { data: userExists, error: userCheckError } = await this.supabase
           .from("users")
-          .select("id, username")
+          .select("id, username, elo_rating, wins, losses, total_games")
           .eq("id", stat.userId)
           .single()
 
@@ -130,6 +140,34 @@ export class CSVCoordinationService {
         }
 
         console.log(`[v0] User validation passed for ${userExists.username} (${userExists.id})`)
+
+        let eloChange = 0
+        let isWinner = false
+        let newWins = userExists.wins || 0
+        let newLosses = userExists.losses || 0
+        const newTotalGames = (userExists.total_games || 0) + 1
+
+        if (matchResult && matchResult.winning_team !== 0) {
+          isWinner = stat.team === matchResult.winning_team
+
+          // Calculate ELO change (simplified K-factor of 32)
+          const kFactor = 32
+          const currentElo = userExists.elo_rating || 1200
+
+          // Basic ELO calculation - can be enhanced with opponent ratings
+          eloChange = isWinner ? 25 : -25
+
+          // Update win/loss counts
+          if (isWinner) {
+            newWins += 1
+          } else {
+            newLosses += 1
+          }
+
+          console.log(
+            `[v0] ELO update for ${userExists.username}: ${isWinner ? "WIN" : "LOSS"}, ELO change: ${eloChange}`,
+          )
+        }
 
         const performanceRecord = {
           player_id: userExists.id,
@@ -175,6 +213,29 @@ export class CSVCoordinationService {
           }
         } else {
           console.log(`[v0] Successfully updated performance stats for ${stat.actualUsername}`)
+        }
+
+        if (matchResult) {
+          const newEloRating = Math.max(800, (userExists.elo_rating || 1200) + eloChange)
+
+          const { error: userUpdateError } = await this.supabase
+            .from("users")
+            .update({
+              elo_rating: newEloRating,
+              wins: newWins,
+              losses: newLosses,
+              total_games: newTotalGames,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", userExists.id)
+
+          if (userUpdateError) {
+            console.error(`Error updating ELO and win/loss for ${stat.actualUsername}:`, userUpdateError)
+          } else {
+            console.log(
+              `[v0] Updated ELO for ${userExists.username}: ${userExists.elo_rating || 1200} → ${newEloRating}, Record: ${newWins}W-${newLosses}L`,
+            )
+          }
         }
 
         console.log(

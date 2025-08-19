@@ -16,9 +16,9 @@ export interface Bet {
   id: string
   user_id: string
   market_id: string
-  selection: string
+  bet_type: string
+  stake_amount: number
   odds: number
-  stake: number
   potential_payout: number
   status: "pending" | "won" | "lost" | "cancelled"
   placed_at: string
@@ -66,16 +66,17 @@ export class BettingService {
   async placeBet(userId: string, marketId: string, selection: string, odds: number, stake: number) {
     const potentialPayout = stake * (odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1)
 
-    // Check user balance
     const { data: user, error: userError } = await this.supabase
       .from("users")
-      .select("wallet_balance")
+      .select("balance") // use balance column instead of wallet_balance
       .eq("id", userId)
       .single()
 
     if (userError) throw userError
-    if (!user || user.wallet_balance < stake) {
-      throw new Error("Insufficient balance")
+    if (!user || (user.balance || 0) < stake) {
+      throw new Error(
+        `Insufficient balance. Available: $${(user?.balance || 0).toFixed(2)}, Required: $${stake.toFixed(2)}`,
+      )
     }
 
     // Create bet and update balance in transaction
@@ -84,9 +85,9 @@ export class BettingService {
       .insert({
         user_id: userId,
         market_id: marketId,
-        selection,
+        bet_type: selection, // use bet_type column instead of selection
+        stake_amount: stake, // use stake_amount column
         odds,
-        stake,
         potential_payout: potentialPayout,
         status: "pending",
         placed_at: new Date().toISOString(),
@@ -96,10 +97,9 @@ export class BettingService {
 
     if (betError) throw betError
 
-    // Update user balance
     const { error: balanceError } = await this.supabase
       .from("users")
-      .update({ wallet_balance: user.wallet_balance - stake })
+      .update({ balance: (user.balance || 0) - stake })
       .eq("id", userId)
 
     if (balanceError) throw balanceError
@@ -165,7 +165,7 @@ export class BettingService {
     if (result === "won") {
       const { data: user, error: userError } = await this.supabase
         .from("users")
-        .select("wallet_balance")
+        .select("balance")
         .eq("id", bet.user_id)
         .single()
 
@@ -173,7 +173,7 @@ export class BettingService {
 
       const { error: balanceError } = await this.supabase
         .from("users")
-        .update({ wallet_balance: user.wallet_balance + bet.potential_payout })
+        .update({ balance: (user.balance || 0) + bet.potential_payout })
         .eq("id", bet.user_id)
 
       if (balanceError) throw balanceError
@@ -196,10 +196,10 @@ export class BettingService {
     const lostBets = bets?.filter((bet) => bet.status === "lost").length || 0
     const pendingBets = bets?.filter((bet) => bet.status === "pending").length || 0
 
-    const totalWagered = bets?.reduce((sum, bet) => sum + bet.stake, 0) || 0
+    const totalWagered = bets?.reduce((sum, bet) => sum + bet.stake_amount, 0) || 0
     const totalWon =
       bets?.filter((bet) => bet.status === "won").reduce((sum, bet) => sum + bet.potential_payout, 0) || 0
-    const totalLost = bets?.filter((bet) => bet.status === "lost").reduce((sum, bet) => sum + bet.stake, 0) || 0
+    const totalLost = bets?.filter((bet) => bet.status === "lost").reduce((sum, bet) => sum + bet.stake_amount, 0) || 0
 
     const winRate = totalBets > 0 ? (wonBets / (wonBets + lostBets)) * 100 : 0
     const netProfit = totalWon - totalLost

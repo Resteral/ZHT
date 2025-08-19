@@ -96,27 +96,36 @@ export function LiveDraftViewer() {
 
   const loadDraftPicks = async (draftId: string) => {
     try {
-      // Mock draft picks for now - in a real implementation, this would come from a draft_picks table
-      const mockPicks: DraftPick[] = [
-        {
-          id: "1",
-          player_name: "ProPlayer123",
-          picker_name: "TeamCaptain1",
-          pick_number: 1,
-          timestamp: new Date(Date.now() - 30000).toISOString(),
-        },
-        {
-          id: "2",
-          player_name: "EliteGamer456",
-          picker_name: "TeamCaptain2",
-          pick_number: 2,
-          timestamp: new Date(Date.now() - 15000).toISOString(),
-        },
-      ]
+      const { data: draftPicks, error } = await supabase
+        .from("draft_picks")
+        .select(`
+          id,
+          pick_number,
+          created_at,
+          users!draft_picks_player_id_fkey(username),
+          draft_captains!draft_picks_captain_id_fkey(
+            users!draft_captains_user_id_fkey(username)
+          )
+        `)
+        .eq("match_id", draftId)
+        .order("pick_number", { ascending: false })
+        .limit(10)
 
-      setDraftPicks(mockPicks)
+      if (error) throw error
+
+      const formattedPicks: DraftPick[] =
+        draftPicks?.map((pick) => ({
+          id: pick.id,
+          player_name: pick.users?.username || "Unknown Player",
+          picker_name: pick.draft_captains?.users?.username || "Unknown Captain",
+          pick_number: pick.pick_number,
+          timestamp: pick.created_at,
+        })) || []
+
+      setDraftPicks(formattedPicks)
     } catch (error) {
       console.error("[v0] Error loading draft picks:", error)
+      setDraftPicks([]) // Set empty array instead of mock data
     }
   }
 

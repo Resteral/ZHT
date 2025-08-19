@@ -367,29 +367,9 @@ export default function ProfilePage() {
         .limit(10)
 
       if (error) {
-        // If table doesn't exist, create mock activity data
-        console.log("[v0] User activity table not found, using mock data")
-        const mockActivity = [
-          {
-            id: "1",
-            activity_type: "draft_join",
-            details: { draft_name: "4v4 ELO Draft", game: "Omega Strikers" },
-            created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-          },
-          {
-            id: "2",
-            activity_type: "match_complete",
-            details: { result: "win", elo_change: "+24", opponent: "ShadowNinja" },
-            created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-          },
-          {
-            id: "3",
-            activity_type: "tournament_join",
-            details: { tournament_name: "Winter Championship", entry_fee: "$10" },
-            created_at: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), // 6 hours ago
-          },
-        ]
-        setRecentActivity(mockActivity)
+        // If table doesn't exist, show empty state instead
+        console.log("[v0] User activity table not found, showing empty state")
+        setRecentActivity([])
         return
       }
 
