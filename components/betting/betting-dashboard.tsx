@@ -7,7 +7,6 @@ import { LiveBettingMarkets } from "./live-betting-markets"
 import { UpcomingBets } from "./upcoming-bets"
 import { BettingHistory } from "./betting-history"
 import { BetSlip } from "./bet-slip"
-import { MVPBettingMarkets } from "./mvp-betting-markets"
 import { ELODraftBetting } from "./elo-draft-betting"
 
 export function BettingDashboard() {
@@ -71,7 +70,6 @@ export function BettingDashboard() {
                   <span>Live Markets</span>
                 </TabsTrigger>
                 <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-                <TabsTrigger value="mvp">MVP Betting</TabsTrigger>
                 <TabsTrigger value="elo-draft">ELO Draft</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
@@ -89,10 +87,6 @@ export function BettingDashboard() {
 
             <TabsContent value="upcoming" className="space-y-6">
               <UpcomingBets />
-            </TabsContent>
-
-            <TabsContent value="mvp" className="space-y-6">
-              <MVPBettingMarkets />
             </TabsContent>
 
             <TabsContent value="elo-draft" className="space-y-6">
@@ -114,28 +108,8 @@ export function BettingDashboard() {
               <CardDescription>Popular bets right now</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium">Thunder Hawks Win</h4>
-                  <Badge variant="secondary">+150</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">87% of bets on this outcome</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium">Over 45.5 Points</h4>
-                  <Badge variant="secondary">-110</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">High-scoring game expected</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium">Player Props</h4>
-                  <Badge variant="secondary">Various</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">Top performers trending</p>
+              <div className="text-center py-4">
+                <p className="text-muted-foreground text-sm">No trending bets available</p>
               </div>
             </CardContent>
           </Card>

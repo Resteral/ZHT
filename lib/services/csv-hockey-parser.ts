@@ -114,3 +114,9 @@ export function parseHockeyCSV(csvText: string) {
     skaterMinutes: stat.skaterMinutes,
   }))
 }
+
+export const csvHockeyParser = {
+  parseCSVData: CSVHockeyParser.parseCSVData.bind(CSVHockeyParser),
+  calculateDerivedStats: CSVHockeyParser.calculateDerivedStats.bind(CSVHockeyParser),
+  parseHockeyCSV,
+}

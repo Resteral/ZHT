@@ -156,6 +156,8 @@ export default function AnalyticsPage() {
             skaterMinutes: stat.skaterMinutes,
           })),
         )
+
+        await loadEloStats()
       } else {
         console.error("CSV coordination errors:", result.errors)
       }
@@ -310,12 +312,12 @@ export default function AnalyticsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Upload className="h-5 w-5" />
-                  CSV Input
+                  CSV Input & Coordination
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Textarea
-                  placeholder="Paste your hockey CSV data here..."
+                  placeholder="Paste your hockey CSV data here...&#10;Format: ID,steals,goals,assists,shots,pickups,passes,passes_received,save_%,shots_on_goalie,shots_saved,goalie_minutes,skater_minutes"
                   value={csvInput}
                   onChange={(e) => setCsvInput(e.target.value)}
                   rows={10}
@@ -323,11 +325,14 @@ export default function AnalyticsPage() {
                 />
                 <div className="flex gap-2">
                   <Button onClick={processHockeyCSV} disabled={!csvInput.trim() || csvProcessing} className="flex-1">
-                    {csvProcessing ? "Processing..." : "Process CSV"}
+                    {csvProcessing ? "Processing..." : "Process & Coordinate CSV"}
                   </Button>
                   <Button variant="outline" onClick={exportHockeyStats} disabled={hockeyStats.length === 0}>
                     <Download className="h-4 w-4" />
                   </Button>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  CSV data will be automatically coordinated across analytics, betting odds, and leaderboards
                 </div>
               </CardContent>
             </Card>

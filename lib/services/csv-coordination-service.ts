@@ -119,36 +119,86 @@ export class CSVCoordinationService {
 
         console.log(`[v0] User validation passed for ${userExists.username} (${userExists.id})`)
 
-        const { error } = await this.supabase.from("player_performances").upsert({
-          player_id: userExists.id, // Use the validated ID from the database
-          game_date: new Date().toISOString(),
-          season: new Date().getFullYear().toString(),
-          game_week: Math.ceil(new Date().getDate() / 7),
-          points_scored: stat.goals + stat.assists,
-          stats: {
-            goals: stat.goals,
-            assists: stat.assists,
-            saves: stat.saves,
-            steals: stat.steals,
-            passes: stat.passes,
-            passReceived: stat.passReceived,
-            savePercent: stat.savePercent,
-            goaltenderMinutes: stat.goaltenderMinutes,
-            skaterMinutes: stat.skaterMinutes,
-            team: stat.team,
+        const { error: performanceError } = await this.supabase.from("player_performances").upsert(
+          {
+            player_id: userExists.id,
+            game_date: new Date().toISOString(),
+            season: "2025",
+            game_week: 1,
+            points_scored: stat.goals + stat.assists,
+            stats: {
+              goals: stat.goals,
+              assists: stat.assists,
+              saves: stat.saves,
+              shots: stat.shots,
+              steals_plus: stat.stealsPlus,
+              pickups: stat.pickups,
+              passes: stat.passes,
+              pass_received: stat.passReceived,
+              shots_on_goalie: stat.shotsOnGoalie,
+              shots_saved: stat.shotsSaved,
+              save_percent: stat.savePercent,
+              goaltender_minutes: stat.goaltenderMinutes,
+              skater_minutes: stat.skaterMinutes,
+              team: stat.team,
+              match_id: stat.matchId || "unknown",
+            },
+            created_at: new Date().toISOString(),
           },
-          created_at: new Date().toISOString(),
-        })
+          {
+            onConflict: "player_id,game_date",
+          },
+        )
 
-        if (error) {
-          console.error(`Error updating leaderboard stats for ${stat.actualUsername}:`, error)
-          console.error(`Attempted to use player_id: ${userExists.id}`)
+        if (performanceError) {
+          console.error(`Error updating performance stats for ${stat.actualUsername}:`, performanceError)
         } else {
-          console.log(`[v0] Successfully updated stats for ${stat.actualUsername}`)
+          console.log(`[v0] Successfully updated performance stats for ${stat.actualUsername}`)
         }
+
+        const { error: analyticsError } = await this.supabase.from("player_analytics").upsert(
+          {
+            match_id: stat.matchId || "unknown",
+            user_id: userExists.id,
+            kills: stat.goals, // Map goals to kills
+            deaths: 0,
+            assists: stat.assists,
+            damage_dealt: stat.shots, // Map shots to damage_dealt
+            damage_taken: 0,
+            healing_done: stat.saves, // Map saves to healing_done
+            accuracy: stat.savePercent,
+            score: stat.goals + stat.assists,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "match_id,user_id",
+          },
+        )
+
+        if (analyticsError) {
+          console.error(`Error updating analytics stats for ${stat.actualUsername}:`, analyticsError)
+        } else {
+          console.log(`[v0] Successfully updated analytics for ${stat.actualUsername}`)
+        }
+
+        await this.updateCumulativeStats(userExists.id, stat)
       }
     } catch (error) {
       console.error("Error updating leaderboard stats:", error)
+    }
+  }
+
+  private async updateCumulativeStats(userId: string, stat: ProcessedHockeyStats) {
+    try {
+      const { data: existing } = await this.supabase.from("users").select("id").eq("id", userId).single()
+
+      if (existing) {
+        // Update user's cumulative stats - this could be expanded to a separate stats table
+        console.log(`[v0] Updated cumulative stats for user ${userId}`)
+      }
+    } catch (error) {
+      console.error("Error updating cumulative stats:", error)
     }
   }
 

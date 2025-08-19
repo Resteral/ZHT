@@ -19,24 +19,7 @@ interface BetSlipItem {
 }
 
 export function BetSlip() {
-  const [betSlipItems, setBetSlipItems] = useState<BetSlipItem[]>([
-    {
-      id: "1",
-      game: "Thunder Hawks @ Fire Dragons",
-      selection: "Thunder Hawks +150",
-      odds: "+150",
-      decimalOdds: 2.5,
-      stake: 50,
-    },
-    {
-      id: "2",
-      game: "Storm Eagles @ Ice Wolves",
-      selection: "Over 52.5 (-110)",
-      odds: "-110",
-      decimalOdds: 1.91,
-      stake: 25,
-    },
-  ])
+  const [betSlipItems, setBetSlipItems] = useState<BetSlipItem[]>([])
 
   const [betType, setBetType] = useState<"single" | "parlay">("single")
 
@@ -49,18 +32,11 @@ export function BetSlip() {
   }
 
   const getTotalStake = () => {
-    if (betType === "single") {
-      return betSlipItems.reduce((sum, item) => sum + item.stake, 0)
-    }
-    return Math.min(...betSlipItems.map((item) => item.stake))
+    return betSlipItems.reduce((sum, item) => sum + item.stake, 0)
   }
 
   const getTotalPayout = () => {
-    if (betType === "single") {
-      return betSlipItems.reduce((sum, item) => sum + item.stake * item.decimalOdds, 0)
-    }
-    const parlayOdds = betSlipItems.reduce((product, item) => product * item.decimalOdds, 1)
-    return getTotalStake() * parlayOdds
+    return betSlipItems.reduce((sum, item) => sum + item.stake * item.decimalOdds, 0)
   }
 
   const getPotentialProfit = () => {
@@ -85,28 +61,6 @@ export function BetSlip() {
           </div>
         ) : (
           <>
-            {/* Bet Type Toggle */}
-            {betSlipItems.length > 1 && (
-              <div className="flex space-x-2">
-                <Button
-                  size="sm"
-                  variant={betType === "single" ? "default" : "outline"}
-                  onClick={() => setBetType("single")}
-                  className="flex-1"
-                >
-                  Single Bets
-                </Button>
-                <Button
-                  size="sm"
-                  variant={betType === "parlay" ? "default" : "outline"}
-                  onClick={() => setBetType("parlay")}
-                  className="flex-1"
-                >
-                  Parlay
-                </Button>
-              </div>
-            )}
-
             {/* Bet Items */}
             <div className="space-y-3">
               {betSlipItems.map((item) => (
@@ -154,11 +108,9 @@ export function BetSlip() {
                     </div>
                   </div>
 
-                  {betType === "single" && (
-                    <div className="text-xs text-muted-foreground">
-                      To win: ${(item.stake * item.decimalOdds - item.stake).toFixed(2)}
-                    </div>
-                  )}
+                  <div className="text-xs text-muted-foreground">
+                    To win: ${(item.stake * item.decimalOdds - item.stake).toFixed(2)}
+                  </div>
                 </div>
               ))}
             </div>
@@ -179,20 +131,11 @@ export function BetSlip() {
                 <span>Potential Profit:</span>
                 <span className="font-medium text-green-500">+${getPotentialProfit().toFixed(2)}</span>
               </div>
-              {betType === "parlay" && betSlipItems.length > 1 && (
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Parlay Odds:</span>
-                  <span>
-                    {betSlipItems.reduce((product, item) => product * item.decimalOdds, 1) - 1 > 0 ? "+" : ""}
-                    {((betSlipItems.reduce((product, item) => product * item.decimalOdds, 1) - 1) * 100).toFixed(0)}
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* Place Bet Button */}
             <Button className="w-full" disabled={getTotalStake() === 0}>
-              Place {betType === "parlay" ? "Parlay" : "Bets"} - ${getTotalStake().toFixed(2)}
+              Place Bets - ${getTotalStake().toFixed(2)}
             </Button>
 
             {/* Quick Stake Buttons */}

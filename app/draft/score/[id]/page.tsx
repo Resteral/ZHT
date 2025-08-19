@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { MatchStatsViewer } from "@/components/analytics/match-stats-viewer"
 import { loadMatchResult as loadMatchResultUtil } from "@/lib/supabase/match-result"
+import { csvCoordinationService } from "@/lib/csv-coordination-service" // Import CSV coordination service
 import type { Match } from "@/lib/types/match" // Import Match type
 
 interface ScoreScreenPageProps {
@@ -446,8 +447,8 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
                 ? consensusSubmission.team1_score
                 : consensusSubmission.team2_score
               : participant.team_assignment === 1
-                ? consensusSubmission.team1_score
-                : consensusSubmission.team2_score,
+                ? consensusSubmission.team2_score
+                : consensusSubmission.team1_score,
             opponent_score: isWinner
               ? participant.team_assignment === 1
                 ? consensusSubmission.team2_score
@@ -662,80 +663,20 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         console.log("[v0] Parsing CSV data for hockey analytics:", csvCode.trim())
 
         try {
-          // Parse CSV data with hockey-specific fields
-          const csvLines = csvCode.trim().split("\n")
-          const headers = csvLines[0].split(",").map((h) => h.trim().toLowerCase())
+          const result = await csvCoordinationService.processAndCoordinateCSV(csvCode.trim(), params.id)
 
-          // Expected headers: ID, steals, goals, assists, shots, pickups, passes, passes_received, save_%, shots_on_goalie, shots_saved, goalie_minutes, skater_minutes
-          const expectedFields = [
-            "id",
-            "steals",
-            "goals",
-            "assists",
-            "shots",
-            "pickups",
-            "passes",
-            "passes_received",
-            "save_%",
-            "shots_on_goalie",
-            "shots_saved",
-            "goalie_minutes",
-            "skater_minutes",
-          ]
-
-          for (let i = 1; i < csvLines.length; i++) {
-            const values = csvLines[i].split(",").map((v) => v.trim())
-            const playerData: any = {}
-
-            headers.forEach((header, index) => {
-              if (expectedFields.includes(header)) {
-                playerData[header] = values[index]
-              }
-            })
-
-            // Store analytics data linked to player ID
-            if (playerData.id) {
-              const { error: analyticsError } = await supabase.from("player_analytics").upsert(
-                {
-                  match_id: params.id,
-                  user_id: playerData.id,
-                  kills: Number.parseInt(playerData.goals) || 0,
-                  deaths: 0, // Not in hockey stats
-                  assists: Number.parseInt(playerData.assists) || 0,
-                  damage_dealt: 0, // Not applicable
-                  damage_taken: 0, // Not applicable
-                  healing_done: 0, // Not applicable
-                  accuracy: Number.parseFloat(playerData["save_%"]) || 0,
-                  score: (Number.parseInt(playerData.goals) || 0) + (Number.parseInt(playerData.assists) || 0),
-                  // Hockey-specific fields
-                  steals: Number.parseInt(playerData.steals) || 0,
-                  shots: Number.parseInt(playerData.shots) || 0,
-                  pickups: Number.parseInt(playerData.pickups) || 0,
-                  passes: Number.parseInt(playerData.passes) || 0,
-                  passes_received: Number.parseInt(playerData.passes_received) || 0,
-                  shots_on_goalie: Number.parseInt(playerData.shots_on_goalie) || 0,
-                  shots_saved: Number.parseInt(playerData.shots_saved) || 0,
-                  goalie_minutes: Number.parseFloat(playerData.goalie_minutes) || 0,
-                  skater_minutes: Number.parseFloat(playerData.skater_minutes) || 0,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                },
-                {
-                  onConflict: "match_id,user_id",
-                },
-              )
-
-              if (analyticsError) {
-                console.error("[v0] Error storing player analytics:", analyticsError)
-              }
-            }
+          if (result.success) {
+            console.log(
+              `[v0] Successfully coordinated ${result.processedStats.length} hockey stats across analytics, betting, and leaderboards`,
+            )
+            toast.success("Score and hockey statistics recorded and coordinated!")
+          } else {
+            console.error("[v0] CSV coordination errors:", result.errors)
+            toast.error("Score submitted but some hockey statistics failed to process")
           }
-
-          console.log("[v0] Hockey CSV analytics processed successfully")
-          toast.success("Score and hockey statistics recorded!")
         } catch (parseError) {
-          console.error("[v0] Error parsing hockey CSV:", parseError)
-          toast.error("Score submitted but failed to parse hockey statistics")
+          console.error("[v0] Error in CSV coordination:", parseError)
+          toast.error("Score submitted but failed to coordinate hockey statistics")
         }
       }
 
