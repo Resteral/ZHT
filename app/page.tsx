@@ -35,6 +35,7 @@ interface LiveDraft {
   participants: number
   max_participants: number
   created_at: string
+  description: string
   players: Array<{
     id: string
     username: string
@@ -116,10 +117,12 @@ export default function Dashboard() {
           status,
           created_at,
           max_participants,
+          description,
           match_participants!inner(
             users!inner(id, username, elo_rating)
           )
         `)
+        .in("status", ["waiting", "active", "drafting"])
         .order("created_at", { ascending: false })
         .limit(10)
 
@@ -180,21 +183,40 @@ export default function Dashboard() {
         console.log("[v0] Loaded match results:", matchResultsData?.length || 0)
       }
 
-      const formattedDrafts: LiveDraft[] = (matchesData || []).map((match: any) => {
-        const participants = match.match_participants || []
-        const players = participants.map((p: any) => p.users).filter(Boolean)
+      const formattedDrafts: LiveDraft[] = (matchesData || [])
+        .map((match: any) => {
+          const participants = match.match_participants || []
+          const players = participants.map((p: any) => p.users).filter(Boolean)
 
-        return {
-          id: match.id,
-          name: match.name,
-          match_type: match.match_type,
-          status: match.status,
-          participants: participants.length,
-          max_participants: match.max_participants || 8,
-          created_at: match.created_at,
-          players: players,
-        }
-      })
+          let isCompleted = false
+          if (match.description) {
+            try {
+              const description = JSON.parse(match.description)
+              if (description.draft_state?.status === "completed") {
+                isCompleted = true
+              }
+            } catch (e) {
+              // Ignore JSON parse errors
+            }
+          }
+
+          if (isCompleted) {
+            return null
+          }
+
+          return {
+            id: match.id,
+            name: match.name,
+            match_type: match.match_type,
+            status: match.status,
+            participants: participants.length,
+            max_participants: match.max_participants || 8,
+            created_at: match.created_at,
+            description: match.description,
+            players: players,
+          }
+        })
+        .filter(Boolean)
 
       console.log("[v0] Formatted drafts:", formattedDrafts)
 

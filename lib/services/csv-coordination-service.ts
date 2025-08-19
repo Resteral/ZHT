@@ -49,7 +49,7 @@ export class CSVCoordinationService {
       }
 
       // Update leaderboard statistics
-      await this.updateLeaderboardStats(processedStats)
+      await this.updateLeaderboardStats(processedStats, matchId)
 
       // Update betting odds based on performance - removed due to missing table
 
@@ -72,14 +72,24 @@ export class CSVCoordinationService {
 
   private async storeCSVDataForMatch(matchId: string, csvData: string, stats: ProcessedHockeyStats[]) {
     try {
+      const { data: existingResult } = await this.supabase
+        .from("match_results")
+        .select("match_id")
+        .eq("match_id", matchId)
+        .single()
+
+      if (existingResult) {
+        console.log(`[v0] Match result already exists for ${matchId}, skipping CSV storage`)
+        return
+      }
+
       // Calculate team scores from CSV data
       const team1Goals = stats.filter((s) => s.team === 1).reduce((sum, s) => sum + s.goals, 0)
       const team2Goals = stats.filter((s) => s.team === 2).reduce((sum, s) => sum + s.goals, 0)
 
       const winningTeam = team1Goals > team2Goals ? 1 : team2Goals > team1Goals ? 2 : 0
 
-      // Store or update match results with CSV data
-      const { error } = await this.supabase.from("match_results").upsert({
+      const { error } = await this.supabase.from("match_results").insert({
         match_id: matchId,
         team1_score: team1Goals,
         team2_score: team2Goals,
@@ -92,13 +102,15 @@ export class CSVCoordinationService {
 
       if (error) {
         console.error("Error storing CSV match data:", error)
+      } else {
+        console.log(`[v0] Successfully stored CSV match data for ${matchId}`)
       }
     } catch (error) {
       console.error("Error in storeCSVDataForMatch:", error)
     }
   }
 
-  private async updateLeaderboardStats(stats: ProcessedHockeyStats[]) {
+  private async updateLeaderboardStats(stats: ProcessedHockeyStats[], actualMatchId?: string) {
     try {
       for (const stat of stats.filter((s) => s.userFound && s.userId)) {
         console.log(`[v0] Processing stats for ${stat.actualUsername}, userId: ${stat.userId}`)
@@ -119,68 +131,55 @@ export class CSVCoordinationService {
 
         console.log(`[v0] User validation passed for ${userExists.username} (${userExists.id})`)
 
-        const { error: performanceError } = await this.supabase.from("player_performances").upsert(
-          {
-            player_id: userExists.id,
-            game_date: new Date().toISOString(),
-            season: "2025",
-            game_week: 1,
-            points_scored: stat.goals + stat.assists,
-            stats: {
-              goals: stat.goals,
-              assists: stat.assists,
-              saves: stat.saves,
-              shots: stat.shots,
-              steals_plus: stat.stealsPlus,
-              pickups: stat.pickups,
-              passes: stat.passes,
-              pass_received: stat.passReceived,
-              shots_on_goalie: stat.shotsOnGoalie,
-              shots_saved: stat.shotsSaved,
-              save_percent: stat.savePercent,
-              goaltender_minutes: stat.goaltenderMinutes,
-              skater_minutes: stat.skaterMinutes,
-              team: stat.team,
-              match_id: stat.matchId || "unknown",
-            },
-            created_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "player_id,game_date",
-          },
-        )
-
-        if (performanceError) {
-          console.error(`Error updating performance stats for ${stat.actualUsername}:`, performanceError)
-        } else {
-          console.log(`[v0] Successfully updated performance stats for ${stat.actualUsername}`)
-        }
-
-        const { error: analyticsError } = await this.supabase.from("player_analytics").upsert(
-          {
-            match_id: stat.matchId || "unknown",
-            user_id: userExists.id,
+        const performanceRecord = {
+          player_id: userExists.id,
+          game_date: new Date().toISOString(),
+          season: "2025",
+          game_week: 1,
+          points_scored: stat.goals + stat.assists,
+          stats: {
+            goals: stat.goals,
+            assists: stat.assists,
+            saves: stat.saves,
+            shots: stat.shots,
+            steals_plus: stat.stealsPlus,
+            pickups: stat.pickups,
+            passes: stat.passes,
+            pass_received: stat.passReceived,
+            shots_on_goalie: stat.shotsOnGoalie,
+            shots_saved: stat.shotsSaved,
+            save_percent: stat.savePercent,
+            goaltender_minutes: stat.goaltenderMinutes,
+            skater_minutes: stat.skaterMinutes,
+            team: stat.team,
+            match_id: actualMatchId || "unknown",
+            // Include analytics data in performance stats
             kills: stat.goals, // Map goals to kills
             deaths: 0,
-            assists: stat.assists,
             damage_dealt: stat.shots, // Map shots to damage_dealt
             damage_taken: 0,
             healing_done: stat.saves, // Map saves to healing_done
             accuracy: stat.savePercent,
             score: stat.goals + stat.assists,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
           },
-          {
-            onConflict: "match_id,user_id",
-          },
-        )
-
-        if (analyticsError) {
-          console.error(`Error updating analytics stats for ${stat.actualUsername}:`, analyticsError)
-        } else {
-          console.log(`[v0] Successfully updated analytics for ${stat.actualUsername}`)
+          created_at: new Date().toISOString(),
         }
+
+        const { error: performanceError } = await this.supabase.from("player_performances").insert(performanceRecord)
+
+        if (performanceError) {
+          if (performanceError.code === "23505") {
+            console.log(`[v0] Performance record exists for ${stat.actualUsername}, skipping`)
+          } else {
+            console.error(`Error updating performance stats for ${stat.actualUsername}:`, performanceError)
+          }
+        } else {
+          console.log(`[v0] Successfully updated performance stats for ${stat.actualUsername}`)
+        }
+
+        console.log(
+          `[v0] Analytics data stored in performance stats for ${stat.actualUsername} (RLS policy compliance)`,
+        )
 
         await this.updateCumulativeStats(userExists.id, stat)
       }

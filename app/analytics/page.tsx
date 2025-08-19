@@ -57,6 +57,8 @@ export default function AnalyticsPage() {
   const [csvProcessing, setCsvProcessing] = useState(false)
   const [eloStats, setEloStats] = useState<any[]>([])
   const [loadingEloStats, setLoadingEloStats] = useState(false)
+  const [autoProcessing, setAutoProcessing] = useState(false)
+  const [cumulativeStats, setCumulativeStats] = useState<Map<string, any>>(new Map())
 
   const supabase = createClient()
 
@@ -64,7 +66,111 @@ export default function AnalyticsPage() {
     fetchMatches()
     loadAnalyticsData()
     loadEloStats()
+    processCompletedMatches()
   }, [])
+
+  const processCompletedMatches = async () => {
+    setAutoProcessing(true)
+    try {
+      console.log("[v0] Processing completed matches for hockey stats...")
+
+      // Get all completed matches with results
+      const { data: completedMatches } = await supabase
+        .from("match_results")
+        .select(`
+          match_id,
+          team1_score,
+          team2_score,
+          winning_team,
+          csv_code,
+          validated_at,
+          matches!inner(name, status, created_at)
+        `)
+        .not("csv_code", "is", null)
+        .order("validated_at", { ascending: false })
+
+      if (completedMatches && completedMatches.length > 0) {
+        console.log(`[v0] Found ${completedMatches.length} completed matches with CSV data`)
+
+        // Process each match's CSV data and combine statistics
+        const allStats = new Map<string, any>()
+
+        for (const match of completedMatches) {
+          if (match.csv_code) {
+            const result = await csvCoordinationService.processAndCoordinateCSV(match.csv_code, match.match_id)
+
+            // Combine stats for each player across all matches
+            result.processedStats.forEach((stat) => {
+              if (stat.userFound && stat.userId) {
+                const existing = allStats.get(stat.userId) || {
+                  playerId: stat.userId,
+                  playerName: stat.actualUsername || `Player ${stat.playerId}`,
+                  totalGames: 0,
+                  totalGoals: 0,
+                  totalAssists: 0,
+                  totalSaves: 0,
+                  totalShots: 0,
+                  totalSteals: 0,
+                  totalMinutes: 0,
+                  avgSavePercent: 0,
+                  team: stat.team,
+                  matches: [],
+                }
+
+                existing.totalGames += 1
+                existing.totalGoals += stat.goals
+                existing.totalAssists += stat.assists
+                existing.totalSaves += stat.saves
+                existing.totalShots += stat.shots
+                existing.totalSteals += stat.stealsPlus
+                existing.totalMinutes += stat.goaltenderMinutes + stat.skaterMinutes
+                existing.avgSavePercent =
+                  existing.totalSaves > 0 ? (existing.totalSaves / existing.totalShots) * 100 : 0
+                existing.matches.push({
+                  matchId: match.match_id,
+                  matchName: match.matches.name,
+                  date: match.validated_at,
+                  goals: stat.goals,
+                  assists: stat.assists,
+                  saves: stat.saves,
+                })
+
+                allStats.set(stat.userId, existing)
+              }
+            })
+          }
+        }
+
+        // Convert to hockey stats format for display
+        const combinedHockeyStats: HockeyStat[] = Array.from(allStats.values()).map((stat) => ({
+          playerId: stat.playerId,
+          playerName: stat.playerName,
+          team: stat.team,
+          steals: stat.totalSteals,
+          goals: stat.totalGoals,
+          assists: stat.totalAssists,
+          saves: stat.totalSaves,
+          shotsOnGoal: stat.totalShots,
+          shotsBlocked: 0,
+          checks: 0,
+          faceoffWinPercentage: 0,
+          interceptions: stat.totalSteals,
+          passes: 0,
+          faceoffs: 0,
+          goalieMinutes: Math.floor(stat.totalMinutes * 0.3), // Estimate goalie time
+          skaterMinutes: Math.floor(stat.totalMinutes * 0.7), // Estimate skater time
+        }))
+
+        setHockeyStats(combinedHockeyStats)
+        setCumulativeStats(allStats)
+        console.log(`[v0] Successfully processed ${combinedHockeyStats.length} players' cumulative stats`)
+      }
+    } catch (error) {
+      console.error("Error processing completed matches:", error)
+    } finally {
+      setAutoProcessing(false)
+    }
+  }
 
   const fetchMatches = async () => {
     try {
@@ -331,15 +437,71 @@ export default function AnalyticsPage() {
                     <Download className="h-4 w-4" />
                   </Button>
                 </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={processCompletedMatches}
+                    disabled={autoProcessing}
+                    className="flex-1"
+                  >
+                    {autoProcessing ? "Auto-Processing..." : "Refresh from Completed Matches"}
+                  </Button>
+                </div>
                 <div className="text-xs text-muted-foreground">
-                  CSV data will be automatically coordinated across analytics, betting odds, and leaderboards
+                  CSV data will be automatically coordinated across analytics, betting odds, and leaderboards.
+                  {hockeyStats.length > 0 && (
+                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-green-700">
+                      ✓ Showing combined stats from {cumulativeStats.size} players across multiple completed matches
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             <div className="lg:col-span-2">
               {hockeyStats.length > 0 ? (
-                <HockeyStatsTable stats={hockeyStats} />
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        Cumulative Hockey Statistics
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-4 gap-4 mb-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">
+                            {hockeyStats.reduce((sum, s) => sum + s.goals, 0)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Total Goals</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600">
+                            {hockeyStats.reduce((sum, s) => sum + s.assists, 0)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Total Assists</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-purple-600">
+                            {hockeyStats.reduce((sum, s) => sum + s.saves, 0)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Total Saves</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-orange-600">
+                            {Array.from(cumulativeStats.values()).reduce(
+                              (sum: number, s: any) => sum + s.totalGames,
+                              0,
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Games Played</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <HockeyStatsTable stats={hockeyStats} />
+                </div>
               ) : (
                 <Card>
                   <CardContent className="p-12">
@@ -347,7 +509,10 @@ export default function AnalyticsPage() {
                       <Upload className="h-12 w-12 mx-auto text-muted-foreground" />
                       <div>
                         <h3 className="text-lg font-semibold">No Hockey Stats</h3>
-                        <p className="text-muted-foreground">Process CSV data to view hockey statistics</p>
+                        <p className="text-muted-foreground">
+                          Process CSV data manually or click "Refresh from Completed Matches" to automatically load
+                          statistics from all completed games
+                        </p>
                       </div>
                     </div>
                   </CardContent>
