@@ -149,7 +149,7 @@ export default function LeaguesPage() {
             participants: participantCount,
             max_participants: match.max_participants || 8,
             team_price: 0, // Free drafts
-            prize_pool: participantCount * 50, // $50 per participant
+            prize_pool: participantCount * 5, // $5 per participant
             status: match.status,
             current_pick: match.current_pick,
             round: match.current_round,
@@ -249,7 +249,7 @@ export default function LeaguesPage() {
                   FREE
                 </Badge>
               </h3>
-              <p className="text-xs text-muted-foreground">FREE + $50 per game</p>
+              <p className="text-xs text-muted-foreground">FREE + $5 per game</p>
             </CardContent>
           </Card>
 
@@ -342,12 +342,12 @@ export default function LeaguesPage() {
                 <div className="flex-1">
                   <h3 className="font-semibold mb-1">Start Earning Today!</h3>
                   <p className="text-sm text-muted-foreground">
-                    Join matches to compete for prize pools • Earn $50 per game played • $25 per tournament • Start with
+                    Join matches to compete for prize pools • Earn $5 per game played • $25 per tournament • Start with
                     $25 bonus
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-green-500">$50</div>
+                  <div className="text-2xl font-bold text-green-500">$5</div>
                   <div className="text-xs text-muted-foreground">per game played</div>
                 </div>
                 <Button asChild size="lg">
@@ -569,7 +569,7 @@ export default function LeaguesPage() {
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="text-right">
-                              <div className="font-bold text-green-500">$50</div>
+                              <div className="font-bold text-green-500">$5</div>
                               <div className="text-xs text-muted-foreground">per player</div>
                             </div>
                             <div className="text-right">
@@ -605,11 +605,11 @@ export default function LeaguesPage() {
                     </Badge>
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Snake draft picks players • Strategic team building • Earn $50 per game played • No entry fees!
+                    Snake draft picks players • Strategic team building • Earn $5 per game played • No entry fees!
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-green-500">$50</div>
+                  <div className="text-2xl font-bold text-green-500">$5</div>
                   <div className="text-xs text-muted-foreground">per game played</div>
                 </div>
               </div>
@@ -623,7 +623,7 @@ export default function LeaguesPage() {
                     Join ELO Draft
                   </CardTitle>
                   <CardDescription>
-                    Choose from 1v1 to 6v6 formats. All FREE with $50 rewards per player!
+                    Choose from 1v1 to 6v6 formats. All FREE with $5 rewards per player!
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -637,7 +637,7 @@ export default function LeaguesPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary" className="bg-green-100 text-green-700">
-                        $50 Reward
+                        $5 Reward
                       </Badge>
                       <span>Per player</span>
                     </div>
@@ -714,7 +714,7 @@ export default function LeaguesPage() {
                 <CardContent>
                   <div className="space-y-4">
                     <div className="text-center py-4">
-                      <div className="text-2xl font-bold text-green-500">$50</div>
+                      <div className="text-2xl font-bold text-green-500">$5</div>
                       <div className="text-sm text-muted-foreground">Average wager size</div>
                     </div>
                     <Button className="w-full" variant="secondary">

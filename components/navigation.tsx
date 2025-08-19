@@ -64,13 +64,13 @@ export function Navigation() {
 
   if (isLoading) {
     return (
-      <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link href="/" className="flex items-center space-x-2">
                 <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
-                <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                   TugLobbies
                 </span>
               </Link>
@@ -84,13 +84,13 @@ export function Navigation() {
 
   if (!user) {
     return (
-      <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link href="/" className="flex items-center space-x-2">
                 <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
-                <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                   TugLobbies
                 </span>
               </Link>
@@ -99,7 +99,7 @@ export function Navigation() {
               <Button asChild variant="ghost" size="sm">
                 <Link href="/auth/login">Sign In</Link>
               </Button>
-              <Button asChild size="sm">
+              <Button asChild size="sm" className="gaming-button-primary">
                 <Link href="/auth/sign-up">Sign Up</Link>
               </Button>
             </div>
@@ -110,14 +110,14 @@ export function Navigation() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <div className="flex items-center space-x-4">
             <Link href="/" className="flex items-center space-x-2">
               <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+              <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                 TugLobbies
               </span>
             </Link>
@@ -134,7 +134,7 @@ export function Navigation() {
                       <Button
                         variant={isActive(item.href) ? "secondary" : "ghost"}
                         size="sm"
-                        className="flex items-center space-x-2"
+                        className="flex items-center space-x-2 hover:bg-primary/10 hover:text-primary"
                       >
                         <Icon className="h-4 w-4" />
                         <span>{item.name}</span>
@@ -157,7 +157,7 @@ export function Navigation() {
                   <Button
                     variant={isActive(item.href) ? "secondary" : "ghost"}
                     size="sm"
-                    className="flex items-center space-x-2"
+                    className="flex items-center space-x-2 hover:bg-primary/10 hover:text-primary data-[state=open]:bg-primary/10"
                   >
                     <Icon className="h-4 w-4" />
                     <span>{item.name}</span>
@@ -169,15 +169,17 @@ export function Navigation() {
 
           {/* User Menu */}
           <div className="flex items-center space-x-4">
-            <div className="hidden sm:flex items-center space-x-2 bg-secondary/50 rounded-lg px-3 py-1">
-              <DollarSign className="h-4 w-4 text-green-500" />
-              <span className="text-sm font-medium">${user.balance.toFixed(2)}</span>
+            <div className="hidden sm:flex items-center space-x-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-1">
+              <DollarSign className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium text-primary">${user.balance.toFixed(2)}</span>
             </div>
 
             {/* Notifications */}
-            <Button size="sm" variant="ghost" className="relative">
+            <Button size="sm" variant="ghost" className="relative hover:bg-primary/10">
               <Bell className="h-4 w-4" />
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs">3</Badge>
+              <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-accent text-accent-foreground">
+                3
+              </Badge>
             </Button>
 
             {/* User Dropdown */}

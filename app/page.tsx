@@ -310,16 +310,16 @@ export default function Dashboard() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 pt-20">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary/5 pt-20">
       <div className="container mx-auto px-4 py-8 space-y-8">
         <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-green-600 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
             TUG E-Sport Lobbies
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Compete in ELO-ranked e-sport lobbies, earn rewards, and climb the leaderboards
           </p>
-          <Badge variant="secondary" className="bg-purple-500/10 text-purple-500">
+          <Badge variant="secondary" className="bg-accent/10 text-accent border-accent/20">
             <TrendingUp className="h-3 w-3 mr-1" />
             ELO Rankings
           </Badge>
@@ -327,12 +327,12 @@ export default function Dashboard() {
       </div>
 
       <div className="container mx-auto px-4 space-y-8 relative z-10">
-        <Card className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-green-500/10 border border-blue-500/20">
+        <Card className="gaming-card bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 border-primary/20">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                  <Trophy className="h-5 w-5 text-blue-500" />
+                <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                  <Trophy className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <CardTitle className="text-xl">Live Draft Rooms</CardTitle>
@@ -340,7 +340,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <Link href="/leagues">
-                <Button variant="outline" className="bg-transparent">
+                <Button variant="outline" className="gaming-button-secondary bg-transparent">
                   View All Drafts
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
@@ -357,7 +357,7 @@ export default function Dashboard() {
             ) : liveDrafts.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-3">
                 {liveDrafts.map((draft) => (
-                  <Card key={draft.id} className="bg-background/50 border-border/50">
+                  <Card key={draft.id} className="gaming-card">
                     <CardContent className="p-4">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -366,7 +366,10 @@ export default function Dashboard() {
                             <Badge variant="outline" className="text-xs">
                               {draft.match_type?.replace("_draft", "").toUpperCase() || "DRAFT"}
                             </Badge>
-                            <Badge variant="secondary" className="bg-green-500/20 text-green-500">
+                            <Badge
+                              variant="secondary"
+                              className="bg-gaming-success/20 text-gaming-success border-gaming-success/30"
+                            >
                               <Timer className="h-3 w-3 mr-1" />
                               Live
                             </Badge>
@@ -399,7 +402,7 @@ export default function Dashboard() {
                           </div>
                         )}
                         <Link href={`/leagues/lobby/${draft.id}`}>
-                          <Button size="sm" className="w-full">
+                          <Button size="sm" className="w-full gaming-button-primary">
                             <Eye className="h-3 w-3 mr-1" />
                             Join Lobby
                           </Button>
@@ -414,7 +417,7 @@ export default function Dashboard() {
                 <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">No live drafts at the moment</p>
                 <Link href="/leagues">
-                  <Button className="mt-4">
+                  <Button className="mt-4 gaming-button-primary">
                     Create New Draft
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -424,12 +427,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 border border-emerald-500/20">
+        <Card className="gaming-card bg-gradient-to-r from-secondary/5 via-accent/5 to-primary/5 border-secondary/20">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-emerald-500" />
+                <div className="h-10 w-10 rounded-lg bg-secondary/20 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-secondary" />
                 </div>
                 <div>
                   <CardTitle className="text-xl">Active ELO Players</CardTitle>
@@ -437,7 +440,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <Link href="/leaderboard">
-                <Button variant="outline" className="bg-transparent">
+                <Button variant="outline" className="gaming-button-secondary bg-transparent">
                   View All Players
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
@@ -504,12 +507,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-r from-orange-500/10 via-red-500/10 to-pink-500/10 border border-orange-500/20">
+        <Card className="gaming-card bg-gradient-to-r from-gaming-accent/5 via-gaming-warning/5 to-gaming-danger/5 border-gaming-accent/20">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
-                  <BarChart3 className="h-5 w-5 text-orange-500" />
+                <div className="h-10 w-10 rounded-lg bg-gaming-accent/20 flex items-center justify-center">
+                  <BarChart3 className="h-5 w-5 text-gaming-accent" />
                 </div>
                 <div>
                   <CardTitle className="text-xl">Live Results</CardTitle>
@@ -517,7 +520,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <Link href="/analytics">
-                <Button variant="outline" className="bg-transparent">
+                <Button variant="outline" className="gaming-button-secondary bg-transparent">
                   View All Results
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
@@ -534,7 +537,7 @@ export default function Dashboard() {
             ) : liveScores.length > 0 ? (
               <div className="space-y-4">
                 {liveScores.map((score) => (
-                  <Card key={score.id} className="bg-background/50 border-border/50">
+                  <Card key={score.id} className="gaming-card">
                     <CardContent className="p-4">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -593,7 +596,7 @@ export default function Dashboard() {
                 <BarChart3 className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">No recent match results</p>
                 <Link href="/leagues">
-                  <Button className="mt-4">
+                  <Button className="mt-4 gaming-button-primary">
                     Start New Match
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -603,12 +606,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-r from-green-500/10 via-emerald-500/10 to-teal-500/10 border border-green-500/20">
+        <Card className="gaming-card bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 border-primary/20">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                  <Crown className="h-5 w-5 text-purple-500" />
+                <div className="h-10 w-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                  <Crown className="h-5 w-5 text-accent" />
                 </div>
                 <div>
                   <CardTitle className="text-xl">Top ELO Players</CardTitle>
@@ -616,7 +619,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <Link href="/leaderboard">
-                <Button variant="outline" className="bg-transparent">
+                <Button variant="outline" className="gaming-button-secondary bg-transparent">
                   Full Leaderboard
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
@@ -682,37 +685,42 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <div className="bg-gradient-to-r from-green-500/10 via-blue-500/10 to-purple-500/10 border border-green-500/20 rounded-xl p-8 mb-8">
+        <div className="gaming-gradient rounded-xl p-8 mb-8 border border-primary/20">
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <DollarSign className="h-8 w-8 text-green-500" />
-              <h2 className="text-3xl font-bold">Start Earning Today</h2>
+              <DollarSign className="h-8 w-8 text-white" />
+              <h2 className="text-3xl font-bold text-white">Start Earning Today</h2>
             </div>
             <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-500 mb-2">$25</div>
-                <div className="text-sm text-muted-foreground">Starting Balance</div>
-                <div className="text-xs text-muted-foreground mt-1">Free when you sign up</div>
+                <div className="text-2xl font-bold text-white mb-2">$25</div>
+                <div className="text-sm text-white/80">Starting Balance</div>
+                <div className="text-xs text-white/60 mt-1">Free when you sign up</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-500 mb-2">$50</div>
-                <div className="text-sm text-muted-foreground">Per Game Played</div>
-                <div className="text-xs text-muted-foreground mt-1">Automatic rewards</div>
+                <div className="text-2xl font-bold text-white mb-2">$5</div>
+                <div className="text-sm text-white/80">Per Game Played</div>
+                <div className="text-xs text-white/60 mt-1">Automatic rewards</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-500 mb-2">∞</div>
-                <div className="text-sm text-muted-foreground">Earning Potential</div>
-                <div className="text-xs text-muted-foreground mt-1">No limits on winnings</div>
+                <div className="text-2xl font-bold text-white mb-2">∞</div>
+                <div className="text-sm text-white/80">Earning Potential</div>
+                <div className="text-xs text-white/60 mt-1">No limits on winnings</div>
               </div>
             </div>
             <div className="flex items-center justify-center gap-4 pt-4">
-              <Button asChild size="lg" className="bg-green-500 hover:bg-green-600">
+              <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90">
                 <Link href="/auth/sign-up">
                   Get Your $25 Now
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="lg">
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="border-white text-white hover:bg-white/10 bg-transparent"
+              >
                 <Link href="/leagues">
                   <Crown className="h-4 w-4 mr-2" />
                   Join ELO Draft
@@ -742,11 +750,11 @@ export default function Dashboard() {
         </Suspense>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/20">
+          <Card className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/40">
             <CardHeader>
               <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <Trophy className="h-5 w-5 text-blue-500" />
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Trophy className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <CardTitle>Auction Drafts</CardTitle>
@@ -766,7 +774,7 @@ export default function Dashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="group-hover:bg-primary group-hover:text-primary-foreground bg-transparent"
+                    className="group-hover:bg-primary group-hover:text-primary-foreground gaming-button-secondary bg-transparent"
                   >
                     Join Draft
                     <ArrowRight className="h-3 w-3 ml-1" />
@@ -776,11 +784,11 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/20">
+          <Card className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-secondary/40">
             <CardHeader>
               <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                  <Target className="h-5 w-5 text-green-500" />
+                <div className="h-10 w-10 rounded-lg bg-secondary/10 flex items-center justify-center">
+                  <Target className="h-5 w-5 text-secondary" />
                 </div>
                 <div>
                   <CardTitle>Live Betting</CardTitle>
@@ -800,7 +808,7 @@ export default function Dashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="group-hover:bg-primary group-hover:text-primary-foreground bg-transparent"
+                    className="group-hover:bg-primary group-hover:text-primary-foreground gaming-button-secondary bg-transparent"
                   >
                     Place Bets
                     <ArrowRight className="h-3 w-3 ml-1" />
@@ -810,11 +818,11 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/20">
+          <Card className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-accent/40">
             <CardHeader>
               <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-purple-500" />
+                <div className="h-10 w-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <TrendingUp className="h-5 w-5 text-accent" />
                 </div>
                 <div>
                   <CardTitle>ELO Rankings</CardTitle>
@@ -834,7 +842,7 @@ export default function Dashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="group-hover:bg-primary group-hover:text-primary-foreground bg-transparent"
+                    className="group-hover:bg-primary group-hover:text-primary-foreground gaming-button-secondary bg-transparent"
                   >
                     View Rankings
                     <ArrowRight className="h-3 w-3 ml-1" />
@@ -844,11 +852,11 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/20">
+          <Card className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-gaming-accent/40">
             <CardHeader>
               <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                  <BarChart3 className="h-5 w-5 text-orange-500" />
+                <div className="h-10 w-10 rounded-lg bg-gaming-accent/10 flex items-center justify-center">
+                  <BarChart3 className="h-5 w-5 text-gaming-accent" />
                 </div>
                 <div>
                   <CardTitle>Analytics</CardTitle>
@@ -868,7 +876,7 @@ export default function Dashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="group-hover:bg-primary group-hover:text-primary-foreground bg-transparent"
+                    className="group-hover:bg-primary group-hover:text-primary-foreground gaming-button-secondary bg-transparent"
                   >
                     View Analytics
                     <ArrowRight className="h-3 w-3 ml-1" />
@@ -878,11 +886,11 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/20">
+          <Card className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-gaming-danger/40">
             <CardHeader>
               <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-                  <Calendar className="h-5 w-5 text-red-500" />
+                <div className="h-10 w-10 rounded-lg bg-gaming-danger/10 flex items-center justify-center">
+                  <Calendar className="h-5 w-5 text-gaming-danger" />
                 </div>
                 <div>
                   <CardTitle>Scheduling</CardTitle>
@@ -902,7 +910,7 @@ export default function Dashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="group-hover:bg-primary group-hover:text-primary-foreground bg-transparent"
+                    className="group-hover:bg-primary group-hover:text-primary-foreground gaming-button-secondary bg-transparent"
                   >
                     View Schedule
                     <ArrowRight className="h-3 w-3 ml-1" />
@@ -912,11 +920,11 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/20">
+          <Card className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-gaming-accent/40">
             <CardHeader>
               <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-cyan-500" />
+                <div className="h-10 w-10 rounded-lg bg-gaming-accent/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-gaming-accent" />
                 </div>
                 <div>
                   <CardTitle>Player Pools</CardTitle>
@@ -936,7 +944,7 @@ export default function Dashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="group-hover:bg-primary group-hover:text-primary-foreground bg-transparent"
+                    className="group-hover:bg-primary group-hover:text-primary-foreground gaming-button-secondary bg-transparent"
                   >
                     Browse Players
                     <ArrowRight className="h-3 w-3 ml-1" />

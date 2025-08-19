@@ -10,7 +10,7 @@ const draftFormats = [
     description: "Head-to-head draft matches",
     players: "2 Players",
     duration: "15-20 minutes",
-    reward: "$50 per game",
+    reward: "$5 per game",
     href: "/draft/1v1",
     icon: Users,
     color: "bg-blue-500",
@@ -20,7 +20,7 @@ const draftFormats = [
     description: "Team draft with 4 players",
     players: "4 Players",
     duration: "20-25 minutes",
-    reward: "$50 per game",
+    reward: "$5 per game",
     href: "/draft/2v2",
     icon: Users,
     color: "bg-green-500",
@@ -30,7 +30,7 @@ const draftFormats = [
     description: "Squad draft with 6 players",
     players: "6 Players",
     duration: "25-30 minutes",
-    reward: "$50 per game",
+    reward: "$5 per game",
     href: "/draft/3v3",
     icon: Users,
     color: "bg-purple-500",
@@ -53,7 +53,7 @@ export default function DraftPage() {
           <div className="flex items-center justify-center space-x-4">
             <Badge variant="secondary" className="text-lg px-4 py-2">
               <DollarSign className="h-4 w-4 mr-1" />
-              $50 Per Game
+              $5 Per Game
             </Badge>
             <Badge variant="outline" className="text-lg px-4 py-2">
               FREE Entry
@@ -69,7 +69,7 @@ export default function DraftPage() {
                 <Gamepad2 className="h-6 w-6" />
                 Choose Your Format
               </CardTitle>
-              <CardDescription>Select from 1v1 to 6v6 draft formats. All FREE with $50 rewards!</CardDescription>
+              <CardDescription>Select from 1v1 to 6v6 draft formats. All FREE with $5 rewards!</CardDescription>
             </CardHeader>
             <CardContent>
               <UnifiedDraftSelector buttonText="Browse All Formats" buttonSize="lg" className="w-full" />
@@ -108,7 +108,7 @@ export default function DraftPage() {
                   <span className="text-lg font-bold text-primary">3</span>
                 </div>
                 <h3 className="font-semibold mb-2">Earn Rewards</h3>
-                <p className="text-sm text-muted-foreground">Earn $50 for participating, plus ELO rating updates</p>
+                <p className="text-sm text-muted-foreground">Earn $5 for participating, plus ELO rating updates</p>
               </div>
             </div>
           </CardContent>

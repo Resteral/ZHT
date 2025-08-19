@@ -384,269 +384,329 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
-          <p className="text-muted-foreground">Comprehensive match analytics and performance insights</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            <Badge variant="secondary">{matches.length} Matches</Badge>
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+      <div className="container mx-auto p-6 space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-700 via-teal-600 to-blue-600 bg-clip-text text-transparent">
+              Analytics Dashboard
+            </h1>
+            <p className="text-slate-600 text-lg mt-2">Comprehensive match analytics and performance insights</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full border border-emerald-200 shadow-sm">
+              <TrendingUp className="h-5 w-5 text-emerald-600" />
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold">
+                {matches.length} Matches
+              </Badge>
+            </div>
           </div>
         </div>
-      </div>
 
-      <Tabs defaultValue="match-analytics" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="match-analytics">Match Analytics</TabsTrigger>
-          <TabsTrigger value="hockey-stats">Hockey Stats</TabsTrigger>
-          <TabsTrigger value="elo-stats">ELO Stats</TabsTrigger>
-          <TabsTrigger value="player-performance">Performance</TabsTrigger>
-          <TabsTrigger value="team-comparison">Teams</TabsTrigger>
-        </TabsList>
+        <Tabs defaultValue="match-analytics" className="space-y-8">
+          <TabsList className="grid w-full grid-cols-5 bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl p-1">
+            <TabsTrigger
+              value="match-analytics"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+            >
+              Match Analytics
+            </TabsTrigger>
+            <TabsTrigger
+              value="hockey-stats"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+            >
+              Hockey Stats
+            </TabsTrigger>
+            <TabsTrigger
+              value="elo-stats"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-violet-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+            >
+              ELO Stats
+            </TabsTrigger>
+            <TabsTrigger
+              value="player-performance"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+            >
+              Performance
+            </TabsTrigger>
+            <TabsTrigger
+              value="team-comparison"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+            >
+              Teams
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="match-analytics" className="space-y-6">
-          <div className="space-y-6">
-            {/* Match Statistics Spreadsheet */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Match Statistics Spreadsheet
-                </CardTitle>
-                <div className="flex items-center gap-4">
-                  <Input
-                    placeholder="Search matches, players, or teams..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="max-w-sm"
-                  />
-                  <Button variant="outline" onClick={exportMatchStats} disabled={matchesWithAnalytics.length === 0}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Export CSV
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-200">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Match</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Date</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Type</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Status</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Team 1</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Team 2</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Score</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Winner</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Duration</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Total Goals</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Total Assists</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Total Saves</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Avg ELO</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Players</th>
-                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredMatchStats.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={15}
-                            className="border border-gray-200 px-4 py-8 text-center text-muted-foreground"
-                          >
-                            No match statistics found
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredMatchStats.map((match, index) => (
-                          <tr key={match.id} className={index % 2 === 0 ? "bg-white" : "bg-gray-25"}>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <div className="font-medium truncate max-w-48" title={match.name}>
-                                {match.name}
-                              </div>
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3 text-sm">
-                              {new Date(match.created_at).toLocaleDateString()}
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <Badge variant="outline" className="text-xs">
-                                {match.match_type}
-                              </Badge>
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <Badge
-                                variant={match.status === "completed" ? "default" : "secondary"}
-                                className="text-xs"
-                              >
-                                {match.status}
-                              </Badge>
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <div className="text-sm font-medium">{match.team1_name || "Team 1"}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {match.team1_players?.length || 0} players
-                              </div>
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <div className="text-sm font-medium">{match.team2_name || "Team 2"}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {match.team2_players?.length || 0} players
-                              </div>
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <div className="text-lg font-bold">
-                                {match.team1_score || 0} - {match.team2_score || 0}
-                              </div>
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <Badge
-                                variant={
-                                  match.winning_team === "team1"
-                                    ? "default"
-                                    : match.winning_team === "team2"
-                                      ? "secondary"
-                                      : "outline"
-                                }
-                                className="text-xs"
-                              >
-                                {match.winning_team === "team1"
-                                  ? "Team 1"
-                                  : match.winning_team === "team2"
-                                    ? "Team 2"
-                                    : "Draw"}
-                              </Badge>
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3 text-sm">
-                              {match.duration ? `${Math.round(match.duration / 60)}m` : "N/A"}
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3 text-center font-semibold text-blue-600">
-                              {match.total_goals || 0}
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3 text-center font-semibold text-green-600">
-                              {match.total_assists || 0}
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3 text-center font-semibold text-purple-600">
-                              {match.total_saves || 0}
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3 text-center font-semibold">
-                              {match.avg_elo ? Math.round(match.avg_elo) : "N/A"}
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <div className="flex flex-wrap gap-1">
-                                {match.all_players?.slice(0, 3).map((player: any, i: number) => (
-                                  <Badge key={i} variant="outline" className="text-xs">
-                                    {player.display_name || player.username}
-                                  </Badge>
-                                ))}
-                                {match.all_players?.length > 3 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{match.all_players.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
-                            </td>
-                            <td className="border border-gray-200 px-4 py-3">
-                              <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleMatchChange(match.id)}
-                                  className="text-xs"
-                                >
-                                  View
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => exportSingleMatch(match)}
-                                  className="text-xs"
-                                >
-                                  Export
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                {filteredMatchStats.length > 0 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-muted-foreground">
-                      Showing {filteredMatchStats.length} of {matchesWithAnalytics.length} matches
+          <TabsContent value="match-analytics" className="space-y-8">
+            <div className="space-y-8">
+              <Card className="bg-white/90 backdrop-blur-sm border-emerald-200 shadow-xl rounded-2xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <TrendingUp className="h-6 w-6" />
+                    Match Analytics Overview
+                  </CardTitle>
+                  <div className="flex items-center gap-4 mt-4">
+                    <Input
+                      placeholder="Search matches..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="max-w-sm bg-white/20 border-white/30 placeholder:text-white/70 text-white focus:bg-white/30 focus:border-white/50"
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="p-8">
+                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+                    <div className="text-center p-6 bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 rounded-2xl border border-blue-300 shadow-lg">
+                      <div className="text-3xl font-bold text-blue-700 mb-2">
+                        {matchesWithAnalytics.reduce((sum, m) => sum + (m.total_goals || 0), 0)}
+                      </div>
+                      <div className="text-sm font-semibold text-blue-600">Total Goals</div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" disabled>
-                        Previous
-                      </Button>
-                      <Button variant="outline" size="sm" disabled>
-                        Next
-                      </Button>
+                    <div className="text-center p-6 bg-gradient-to-br from-green-50 via-green-100 to-green-200 rounded-2xl border border-green-300 shadow-lg">
+                      <div className="text-3xl font-bold text-green-700 mb-2">
+                        {matchesWithAnalytics.reduce((sum, m) => sum + (m.total_assists || 0), 0)}
+                      </div>
+                      <div className="text-sm font-semibold text-green-600">Total Assists</div>
+                    </div>
+                    <div className="text-center p-6 bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 rounded-2xl border border-purple-300 shadow-lg">
+                      <div className="text-3xl font-bold text-purple-700 mb-2">
+                        {matchesWithAnalytics.reduce((sum, m) => sum + (m.total_saves || 0), 0)}
+                      </div>
+                      <div className="text-sm font-semibold text-purple-600">Total Saves</div>
+                    </div>
+                    <div className="text-center p-6 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-200 rounded-2xl border border-orange-300 shadow-lg">
+                      <div className="text-3xl font-bold text-orange-700 mb-2">{matchesWithAnalytics.length}</div>
+                      <div className="text-sm font-semibold text-orange-600">Completed Matches</div>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* Detailed Match Viewer */}
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card className="md:col-span-1">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Search className="h-5 w-5" />
-                    Quick Match Selector
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {filteredMatches.length === 0 ? (
-                      <div className="text-center text-muted-foreground py-4">No matches found</div>
+                  <div className="space-y-4">
+                    {filteredMatchStats.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500">
+                        <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-semibold mb-2">No matches found</h3>
+                        <p>Try adjusting your search criteria</p>
+                      </div>
                     ) : (
-                      filteredMatches.slice(0, 10).map((match) => (
-                        <Button
+                      filteredMatchStats.slice(0, 10).map((match) => (
+                        <div
                           key={match.id}
-                          variant={selectedMatch === match.id ? "default" : "outline"}
-                          className="w-full justify-start text-left h-auto p-3"
-                          onClick={() => setSelectedMatch(match.id)}
+                          className="p-6 bg-gradient-to-r from-white via-slate-50 to-white border border-slate-200 rounded-xl hover:shadow-lg hover:border-emerald-300 transition-all duration-300"
                         >
-                          <div className="space-y-1">
-                            <div className="font-medium truncate">{match.name}</div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Badge variant="outline" className="text-xs">
-                                {match.match_type}
-                              </Badge>
-                              <Users className="h-3 w-3" />
-                              <span>{match.max_participants}</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-bold text-slate-800 mb-2 text-lg">{match.name}</div>
+                              <div className="flex items-center gap-6 text-sm text-slate-600">
+                                <Badge
+                                  variant="outline"
+                                  className="border-emerald-300 text-emerald-700 bg-emerald-50 font-semibold"
+                                >
+                                  {match.match_type}
+                                </Badge>
+                                <span className="font-medium">{new Date(match.created_at).toLocaleDateString()}</span>
+                                <span className="font-bold text-lg text-slate-800">
+                                  {match.team1_score || 0} - {match.team2_score || 0}
+                                </span>
+                              </div>
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(match.created_at).toLocaleDateString()}
+                            <div className="flex items-center gap-3">
+                              <Button
+                                size="sm"
+                                onClick={() => handleMatchChange(match.id)}
+                                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md"
+                              >
+                                View Details
+                              </Button>
                             </div>
                           </div>
-                        </Button>
+                        </div>
                       ))
                     )}
                   </div>
                 </CardContent>
               </Card>
 
-              <div className="md:col-span-2">
-                {selectedMatch ? (
-                  <MatchStatsViewer matchId={selectedMatch} />
+              {/* Detailed Match Viewer */}
+              <div className="grid gap-8 md:grid-cols-3">
+                <Card className="md:col-span-1 bg-white/90 backdrop-blur-sm border-slate-200 shadow-xl rounded-2xl overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-slate-50 via-slate-100 to-slate-50 border-b border-slate-200">
+                    <CardTitle className="flex items-center gap-3 text-slate-800 text-lg">
+                      <Search className="h-5 w-5 text-slate-600" />
+                      Quick Match Selector
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6 p-6">
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {filteredMatches.length === 0 ? (
+                        <div className="text-center text-slate-500 py-8">
+                          <Search className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                          No matches found
+                        </div>
+                      ) : (
+                        filteredMatches.slice(0, 10).map((match) => (
+                          <Button
+                            key={match.id}
+                            variant={selectedMatch === match.id ? "default" : "outline"}
+                            className={`w-full justify-start text-left h-auto p-4 rounded-xl transition-all duration-200 ${
+                              selectedMatch === match.id
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                                : "border-slate-300 hover:bg-slate-50"
+                            }`}
+                            onClick={() => setSelectedMatch(match.id)}
+                          >
+                            <div className="space-y-2">
+                              <div className="font-medium truncate text-slate-800">{match.name}</div>
+                              <div className="flex items-center gap-3 text-xs opacity-75">
+                                <Badge variant="outline" className="text-xs border-current font-medium">
+                                  {match.match_type}
+                                </Badge>
+                                <Users className="h-3 w-3" />
+                                <span>{match.max_participants}</span>
+                              </div>
+                              <div className="text-xs opacity-75">
+                                {new Date(match.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </Button>
+                        ))
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="md:col-span-2">
+                  {selectedMatch ? (
+                    <MatchStatsViewer matchId={selectedMatch} />
+                  ) : (
+                    <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-xl rounded-2xl overflow-hidden">
+                      <CardContent className="p-16">
+                        <div className="text-center space-y-6">
+                          <Target className="h-16 w-16 mx-auto text-slate-400" />
+                          <div>
+                            <h3 className="text-2xl font-bold text-slate-800">Select a Match</h3>
+                            <p className="text-slate-600 text-lg">
+                              Choose a completed match to view detailed analytics
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="hockey-stats" className="space-y-8">
+            <div className="grid gap-8 lg:grid-cols-3">
+              <Card className="lg:col-span-1 bg-white/90 backdrop-blur-sm border-blue-200 shadow-xl rounded-2xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-500 text-white">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <Upload className="h-6 w-6" />
+                    CSV Input & Coordination
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6 p-8">
+                  <Textarea
+                    placeholder="Paste your hockey CSV data here...&#10;Format: ID,steals,goals,assists,shots,pickups,passes,passes_received,save_%,shots_on_goalie,shots_saved,goalie_minutes,skater_minutes"
+                    value={csvInput}
+                    onChange={(e) => setCsvInput(e.target.value)}
+                    rows={10}
+                    className="font-mono text-sm border-blue-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                  />
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={processHockeyCSV}
+                      disabled={!csvInput.trim() || csvProcessing}
+                      className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 shadow-md"
+                    >
+                      {csvProcessing ? "Processing..." : "Process & Coordinate CSV"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={exportHockeyStats}
+                      disabled={hockeyStats.length === 0}
+                      className="border-blue-300 text-blue-700 hover:bg-blue-50 bg-white/80 shadow-md"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={processCompletedMatches}
+                      disabled={autoProcessing}
+                      className="flex-1 bg-gradient-to-r from-slate-100 to-slate-200 hover:from-slate-200 hover:to-slate-300 text-slate-700 shadow-md"
+                    >
+                      {autoProcessing ? "Auto-Processing..." : "Refresh from Completed Matches"}
+                    </Button>
+                  </div>
+                  <div className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    CSV data will be automatically coordinated across analytics, betting odds, and leaderboards.
+                    {hockeyStats.length > 0 && (
+                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 font-medium">
+                        ✓ Showing combined stats from {cumulativeStats.size} players across multiple completed matches
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="lg:col-span-2">
+                {hockeyStats.length > 0 ? (
+                  <div className="space-y-6">
+                    <Card className="bg-white/90 backdrop-blur-sm border-blue-200 shadow-xl rounded-2xl overflow-hidden">
+                      <CardHeader className="bg-gradient-to-r from-blue-500 via-teal-500 to-cyan-500 text-white">
+                        <CardTitle className="flex items-center gap-3 text-xl">
+                          <TrendingUp className="h-6 w-6" />
+                          Cumulative Hockey Statistics
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-8">
+                        <div className="grid grid-cols-4 gap-6 mb-6">
+                          <div className="text-center p-6 bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 rounded-2xl border border-blue-300 shadow-lg">
+                            <div className="text-3xl font-bold text-blue-700 mb-2">
+                              {hockeyStats.reduce((sum, s) => sum + s.goals, 0)}
+                            </div>
+                            <div className="text-sm font-semibold text-blue-600">Total Goals</div>
+                          </div>
+                          <div className="text-center p-6 bg-gradient-to-br from-green-50 via-green-100 to-green-200 rounded-2xl border border-green-300 shadow-lg">
+                            <div className="text-3xl font-bold text-green-700 mb-2">
+                              {hockeyStats.reduce((sum, s) => sum + s.assists, 0)}
+                            </div>
+                            <div className="text-sm font-semibold text-green-600">Total Assists</div>
+                          </div>
+                          <div className="text-center p-6 bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 rounded-2xl border border-purple-300 shadow-lg">
+                            <div className="text-3xl font-bold text-purple-700 mb-2">
+                              {hockeyStats.reduce((sum, s) => sum + s.saves, 0)}
+                            </div>
+                            <div className="text-sm font-semibold text-purple-600">Total Saves</div>
+                          </div>
+                          <div className="text-center p-6 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-200 rounded-2xl border border-orange-300 shadow-lg">
+                            <div className="text-3xl font-bold text-orange-700 mb-2">
+                              {Array.from(cumulativeStats.values()).reduce(
+                                (sum: number, s: any) => sum + s.totalGames,
+                                0,
+                              )}
+                            </div>
+                            <div className="text-sm font-semibold text-orange-600">Games Played</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <HockeyStatsTable stats={hockeyStats} />
+                  </div>
                 ) : (
-                  <Card>
-                    <CardContent className="p-12">
-                      <div className="text-center space-y-4">
-                        <Target className="h-12 w-12 mx-auto text-muted-foreground" />
+                  <Card className="bg-white/90 backdrop-blur-sm border-blue-200 shadow-xl rounded-2xl">
+                    <CardContent className="p-16">
+                      <div className="text-center space-y-6">
+                        <Upload className="h-16 w-16 mx-auto text-blue-400" />
                         <div>
-                          <h3 className="text-lg font-semibold">Select a Match</h3>
-                          <p className="text-muted-foreground">Choose a completed match to view detailed analytics</p>
+                          <h3 className="text-2xl font-bold text-slate-800 mb-2">No Hockey Stats</h3>
+                          <p className="text-slate-600 text-lg">
+                            Process CSV data manually or click "Refresh from Completed Matches" to automatically load
+                            statistics from all completed games
+                          </p>
                         </div>
                       </div>
                     </CardContent>
@@ -654,165 +714,74 @@ export default function AnalyticsPage() {
                 )}
               </div>
             </div>
-          </div>
-        </TabsContent>
+          </TabsContent>
 
-        <TabsContent value="hockey-stats" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-3">
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="h-5 w-5" />
-                  CSV Input & Coordination
+          <TabsContent value="elo-stats" className="space-y-8">
+            <Card className="bg-white/90 backdrop-blur-sm border-purple-200 shadow-xl rounded-2xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-500 text-white">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <Trophy className="h-6 w-6" />
+                  ELO Rankings
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <Textarea
-                  placeholder="Paste your hockey CSV data here...&#10;Format: ID,steals,goals,assists,shots,pickups,passes,passes_received,save_%,shots_on_goalie,shots_saved,goalie_minutes,skater_minutes"
-                  value={csvInput}
-                  onChange={(e) => setCsvInput(e.target.value)}
-                  rows={10}
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2">
-                  <Button onClick={processHockeyCSV} disabled={!csvInput.trim() || csvProcessing} className="flex-1">
-                    {csvProcessing ? "Processing..." : "Process & Coordinate CSV"}
-                  </Button>
-                  <Button variant="outline" onClick={exportHockeyStats} disabled={hockeyStats.length === 0}>
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    onClick={processCompletedMatches}
-                    disabled={autoProcessing}
-                    className="flex-1"
-                  >
-                    {autoProcessing ? "Auto-Processing..." : "Refresh from Completed Matches"}
-                  </Button>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  CSV data will be automatically coordinated across analytics, betting odds, and leaderboards.
-                  {hockeyStats.length > 0 && (
-                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-green-700">
-                      ✓ Showing combined stats from {cumulativeStats.size} players across multiple completed matches
-                    </div>
-                  )}
-                </div>
+              <CardContent className="p-8">
+                {loadingEloStats ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <div className="animate-spin h-8 w-8 border-2 border-purple-500 border-t-transparent rounded-full mx-auto mb-4" />
+                    <p className="text-lg">Loading ELO statistics...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {eloStats.map((player, index) => (
+                      <div
+                        key={player.id}
+                        className="flex items-center justify-between p-6 bg-gradient-to-r from-white via-purple-50 to-white border border-purple-200 rounded-xl hover:shadow-lg hover:border-purple-300 transition-all duration-300"
+                      >
+                        <div className="flex items-center gap-6">
+                          <Badge
+                            variant="outline"
+                            className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${
+                              index === 0
+                                ? "bg-gradient-to-r from-yellow-100 to-yellow-200 border-yellow-400 text-yellow-800 shadow-lg"
+                                : index === 1
+                                  ? "bg-gradient-to-r from-gray-100 to-gray-200 border-gray-400 text-gray-800 shadow-lg"
+                                  : index === 2
+                                    ? "bg-gradient-to-r from-orange-100 to-orange-200 border-orange-400 text-orange-800 shadow-lg"
+                                    : "bg-gradient-to-r from-slate-100 to-slate-200 border-slate-400 text-slate-700 shadow-md"
+                            }`}
+                          >
+                            {index + 1}
+                          </Badge>
+                          <div>
+                            <div className="font-bold text-slate-800 text-lg">
+                              {player.display_name || player.username}
+                            </div>
+                            <div className="text-sm text-slate-600 font-medium">
+                              {player.wins}W - {player.losses}L ({player.total_games} games)
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-3xl font-bold text-purple-700 mb-1">{player.elo_rating}</div>
+                          <div className="text-sm font-semibold text-purple-600">ELO</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
+          </TabsContent>
 
-            <div className="lg:col-span-2">
-              {hockeyStats.length > 0 ? (
-                <div className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5" />
-                        Cumulative Hockey Statistics
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-4 gap-4 mb-4">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-blue-600">
-                            {hockeyStats.reduce((sum, s) => sum + s.goals, 0)}
-                          </div>
-                          <div className="text-sm text-muted-foreground">Total Goals</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-green-600">
-                            {hockeyStats.reduce((sum, s) => sum + s.assists, 0)}
-                          </div>
-                          <div className="text-sm text-muted-foreground">Total Assists</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-purple-600">
-                            {hockeyStats.reduce((sum, s) => sum + s.saves, 0)}
-                          </div>
-                          <div className="text-sm text-muted-foreground">Total Saves</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-orange-600">
-                            {Array.from(cumulativeStats.values()).reduce(
-                              (sum: number, s: any) => sum + s.totalGames,
-                              0,
-                            )}
-                          </div>
-                          <div className="text-sm text-muted-foreground">Games Played</div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <HockeyStatsTable stats={hockeyStats} />
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="p-12">
-                    <div className="text-center space-y-4">
-                      <Upload className="h-12 w-12 mx-auto text-muted-foreground" />
-                      <div>
-                        <h3 className="text-lg font-semibold">No Hockey Stats</h3>
-                        <p className="text-muted-foreground">
-                          Process CSV data manually or click "Refresh from Completed Matches" to automatically load
-                          statistics from all completed games
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-        </TabsContent>
+          <TabsContent value="player-performance" className="space-y-8">
+            {/* Placeholder for Player Performance tab content */}
+          </TabsContent>
 
-        <TabsContent value="elo-stats" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5" />
-                ELO Rankings
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingEloStats ? (
-                <div className="text-center py-8">Loading ELO statistics...</div>
-              ) : (
-                <div className="space-y-4">
-                  {eloStats.map((player, index) => (
-                    <div key={player.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <Badge variant="outline" className="w-8 h-8 rounded-full flex items-center justify-center">
-                          {index + 1}
-                        </Badge>
-                        <div>
-                          <div className="font-semibold">{player.display_name || player.username}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {player.wins}W - {player.losses}L ({player.total_games} games)
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold">{player.elo_rating}</div>
-                        <div className="text-sm text-muted-foreground">ELO</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="player-performance" className="space-y-6">
-          {/* Placeholder for Player Performance tab content */}
-        </TabsContent>
-
-        <TabsContent value="team-comparison" className="space-y-6">
-          {/* Placeholder for Team Comparison tab content */}
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="team-comparison" className="space-y-8">
+            {/* Placeholder for Team Comparison tab content */}
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

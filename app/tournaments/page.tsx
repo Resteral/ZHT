@@ -76,14 +76,14 @@ export default function TournamentsPage() {
           <div className="flex-1">
             <h3 className="font-semibold mb-1">Tournament & League Rewards</h3>
             <p className="text-sm text-muted-foreground">
-              Choose team tournaments or solo leagues • Earn $50 per game played • Win massive prize pools • Team
+              Choose team tournaments or solo leagues • Earn $5 per game played • Win massive prize pools • Team
               tournaments last 3 days, leagues run longer
             </p>
           </div>
           <div className="text-right">
             <div className="flex items-center gap-4">
               <div>
-                <div className="text-lg font-bold text-green-500">$50</div>
+                <div className="text-lg font-bold text-green-500">$5</div>
                 <div className="text-xs text-muted-foreground">Per Game Played</div>
               </div>
               <div>
@@ -267,7 +267,7 @@ export default function TournamentsPage() {
               <div className="flex-1">
                 <h3 className="font-semibold mb-1">Solo League Play</h3>
                 <p className="text-sm text-muted-foreground">
-                  Individual competition • Extended seasons • ELO-based matchmaking • $50 per game played
+                  Individual competition • Extended seasons • ELO-based matchmaking • $5 per game played
                 </p>
               </div>
               <div className="text-right">
@@ -293,7 +293,7 @@ export default function TournamentsPage() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">Extended season • $50 per game • ELO matchmaking</div>
+                  <div className="text-sm text-muted-foreground">Extended season • $5 per game • ELO matchmaking</div>
                   <Button asChild>
                     <Link href="/draft/1v1">Join Solo League</Link>
                   </Button>
