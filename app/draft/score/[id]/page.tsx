@@ -372,6 +372,101 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         throw resultError
       }
 
+      const { data: participants, error: participantsError } = await supabase
+        .from("match_participants")
+        .select(`
+          user_id,
+          team_assignment,
+          users (
+            id,
+            username,
+            elo_rating,
+            wins,
+            losses,
+            total_games
+          )
+        `)
+        .eq("match_id", params.id)
+
+      if (participantsError) {
+        console.error("[v0] Error fetching participants:", participantsError)
+      } else if (participants && participants.length > 0) {
+        console.log("[v0] Updating player statistics for", participants.length, "participants")
+
+        // Update player statistics for each participant
+        for (const participant of participants) {
+          const isWinner =
+            (winningTeam === 1 && participant.team_assignment === 1) ||
+            (winningTeam === 2 && participant.team_assignment === 2)
+
+          const currentElo = participant.users?.elo_rating || 1200
+          const currentWins = participant.users?.wins || 0
+          const currentLosses = participant.users?.losses || 0
+          const currentTotalGames = participant.users?.total_games || 0
+
+          // Calculate ELO change (simplified calculation)
+          const eloChange = isWinner ? 25 : -25
+          const newElo = Math.max(800, currentElo + eloChange) // Minimum ELO of 800
+
+          // Update user statistics
+          const { error: statsError } = await supabase
+            .from("users")
+            .update({
+              elo_rating: newElo,
+              wins: isWinner ? currentWins + 1 : currentWins,
+              losses: isWinner ? currentLosses : currentLosses + 1,
+              total_games: currentTotalGames + 1,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", participant.user_id)
+
+          if (statsError) {
+            console.error("[v0] Error updating player stats for", participant.user_id, ":", statsError)
+          } else {
+            console.log(
+              "[v0] Updated stats for",
+              participant.users?.username,
+              "- ELO:",
+              currentElo,
+              "→",
+              newElo,
+              "Result:",
+              isWinner ? "WIN" : "LOSS",
+            )
+          }
+
+          // Record match history
+          const { error: historyError } = await supabase.from("match_history").insert({
+            player_id: participant.user_id,
+            game: "hockey",
+            match_type: "4v4_draft",
+            result: isWinner ? "win" : "loss",
+            player_score: isWinner
+              ? participant.team_assignment === 1
+                ? consensusSubmission.team1_score
+                : consensusSubmission.team2_score
+              : participant.team_assignment === 1
+                ? consensusSubmission.team1_score
+                : consensusSubmission.team2_score,
+            opponent_score: isWinner
+              ? participant.team_assignment === 1
+                ? consensusSubmission.team2_score
+                : consensusSubmission.team1_score
+              : participant.team_assignment === 1
+                ? consensusSubmission.team2_score
+                : consensusSubmission.team1_score,
+            elo_before: currentElo,
+            elo_after: newElo,
+            elo_change: eloChange,
+            match_date: new Date().toISOString(),
+          })
+
+          if (historyError) {
+            console.error("[v0] Error recording match history for", participant.user_id, ":", historyError)
+          }
+        }
+      }
+
       const consensusSubmissions =
         consensusGroups[`${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`] || []
 
