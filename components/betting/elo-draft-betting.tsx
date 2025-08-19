@@ -16,9 +16,17 @@ interface ELODraftMarket {
     user_id: string
     username: string
     elo_rating: number
+    team_assignment: number | null
+    wins: number
+    losses: number
+    total_games: number
+    recent_goals?: number
+    recent_assists?: number
+    recent_save_percentage?: number
+    recent_pass_accuracy?: number
   }>
   markets: Array<{
-    type: "winner" | "total_score" | "highest_elo_wins" | "mvp"
+    type: "winner" | "total_score" | "highest_elo_wins" | "mvp" | "team_winner" | "player_passes" | "player_assists"
     description: string
     options: Array<{
       selection: string
@@ -53,28 +61,54 @@ export function ELODraftBetting() {
           status,
           start_date,
           match_type,
+          max_participants,
           match_participants (
             user_id,
             users (
               username,
-              elo_rating
+              display_name,
+              elo_rating,
+              wins,
+              losses,
+              total_games
             )
           )
         `)
-        .in("match_type", ["4v4", "3v3", "2v2", "1v1", "5v5", "6v6"])
+        .in("match_type", ["4v4", "3v3", "2v2", "1v1", "5v5", "6v6", "4v4_draft"])
         .in("status", ["waiting", "active", "drafting"])
+        .gte("start_date", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
         .order("start_date", { ascending: true })
 
       if (error) throw error
 
+      const { data: performanceData } = await supabase
+        .from("player_performance_cache")
+        .select("user_id, recent_goals, recent_save_percentage, recent_pass_accuracy")
+
+      const performanceMap = new Map()
+      performanceData?.forEach((perf) => {
+        performanceMap.set(perf.user_id, perf)
+      })
+
       const markets: ELODraftMarket[] =
         matches?.map((match) => {
           const participants =
-            match.match_participants?.map((p: any) => ({
-              user_id: p.user_id,
-              username: p.users?.username || "Unknown",
-              elo_rating: p.users?.elo_rating || 1200,
-            })) || []
+            match.match_participants?.map((p: any) => {
+              const performance = performanceMap.get(p.user_id) || {}
+              return {
+                user_id: p.user_id,
+                username: p.users?.display_name || p.users?.username || "Unknown",
+                elo_rating: p.users?.elo_rating || 1200,
+                team_assignment: null, // Set to null since team_assignment column doesn't exist
+                wins: p.users?.wins || 0,
+                losses: p.users?.losses || 0,
+                total_games: p.users?.total_games || 0,
+                recent_goals: performance.recent_goals || 0,
+                recent_assists: performance.recent_goals || 0, // Using goals as proxy for assists
+                recent_save_percentage: performance.recent_save_percentage || 0,
+                recent_pass_accuracy: performance.recent_pass_accuracy || 0,
+              }
+            }) || []
 
           const sortedByElo = [...participants].sort((a, b) => b.elo_rating - a.elo_rating)
           const avgElo = participants.reduce((sum, p) => sum + p.elo_rating, 0) / participants.length
@@ -91,7 +125,7 @@ export function ELODraftBetting() {
                 description: "Match Winner",
                 options: participants.map((p) => ({
                   selection: p.username,
-                  odds: calculateWinnerOdds(p.elo_rating, avgElo),
+                  odds: calculateWinnerOdds(p.elo_rating, avgElo, p.wins, p.losses, p.recent_goals),
                   player_id: p.user_id,
                 })),
               },
@@ -100,7 +134,7 @@ export function ELODraftBetting() {
                 description: "Most Valuable Player",
                 options: participants.map((p) => ({
                   selection: p.username,
-                  odds: calculateMVPOdds(p.elo_rating, participants.length),
+                  odds: calculateMVPOdds(p.elo_rating, participants.length, p.total_games, p.recent_goals),
                   player_id: p.user_id,
                 })),
               },
@@ -108,16 +142,64 @@ export function ELODraftBetting() {
                 type: "highest_elo_wins",
                 description: "Highest ELO Player Wins",
                 options: [
-                  { selection: "Yes", odds: sortedByElo.length > 1 ? -150 : -200 },
-                  { selection: "No", odds: sortedByElo.length > 1 ? +130 : +170 },
+                  {
+                    selection: "Yes",
+                    odds:
+                      sortedByElo.length > 1 ? calculateHighestEloOdds(sortedByElo[0].elo_rating, avgElo, true) : -200,
+                  },
+                  {
+                    selection: "No",
+                    odds:
+                      sortedByElo.length > 1 ? calculateHighestEloOdds(sortedByElo[0].elo_rating, avgElo, false) : +170,
+                  },
                 ],
               },
               {
                 type: "total_score",
                 description: "Total Match Score",
                 options: [
-                  { selection: "Over 50.5", odds: -110 },
-                  { selection: "Under 50.5", odds: -110 },
+                  { selection: "Over 50.5", odds: calculateTotalScoreOdds(avgElo, true) },
+                  { selection: "Under 50.5", odds: calculateTotalScoreOdds(avgElo, false) },
+                ],
+              },
+              {
+                type: "player_passes",
+                description: "Player Passes Over/Under",
+                options: participants.flatMap((p) => [
+                  {
+                    selection: `${p.username} Over 15.5 Passes`,
+                    odds: calculatePlayerStatOdds(p.elo_rating, p.total_games, "passes", true, p.recent_pass_accuracy),
+                    player_id: p.user_id,
+                  },
+                  {
+                    selection: `${p.username} Under 15.5 Passes`,
+                    odds: calculatePlayerStatOdds(p.elo_rating, p.total_games, "passes", false, p.recent_pass_accuracy),
+                    player_id: p.user_id,
+                  },
+                ]),
+              },
+              {
+                type: "player_assists",
+                description: "Player Assists Over/Under",
+                options: participants.flatMap((p) => [
+                  {
+                    selection: `${p.username} Over 2.5 Assists`,
+                    odds: calculatePlayerStatOdds(p.elo_rating, p.total_games, "assists", true, p.recent_assists),
+                    player_id: p.user_id,
+                  },
+                  {
+                    selection: `${p.username} Under 2.5 Assists`,
+                    odds: calculatePlayerStatOdds(p.elo_rating, p.total_games, "assists", false, p.recent_assists),
+                    player_id: p.user_id,
+                  },
+                ]),
+              },
+              {
+                type: "team_winner",
+                description: "Winning Team",
+                options: [
+                  { selection: "Team 1", odds: calculateTeamOdds(participants, 1) },
+                  { selection: "Team 2", odds: calculateTeamOdds(participants, 2) },
                 ],
               },
             ],
@@ -133,18 +215,91 @@ export function ELODraftBetting() {
     }
   }
 
-  const calculateWinnerOdds = (playerElo: number, avgElo: number) => {
+  const calculateWinnerOdds = (
+    playerElo: number,
+    avgElo: number,
+    wins: number,
+    losses: number,
+    recentGoals?: number,
+  ) => {
     const eloDiff = playerElo - avgElo
-    const baseOdds = 100 // Even odds baseline
-    const adjustment = eloDiff * 2 // 2 points per ELO difference
-    return Math.round(Math.max(baseOdds - adjustment, -300)) // Cap at -300 (heavy favorite)
+    const winRate = wins + losses > 0 ? wins / (wins + losses) : 0.5
+    const baseOdds = 100
+    const eloAdjustment = eloDiff * 1.5
+    const formAdjustment = (winRate - 0.5) * 50
+    const performanceAdjustment = recentGoals ? recentGoals * 5 : 0
+    const finalOdds = Math.round(Math.max(baseOdds - eloAdjustment - formAdjustment - performanceAdjustment, -400))
+    return finalOdds
   }
 
-  const calculateMVPOdds = (playerElo: number, totalPlayers: number) => {
-    const baseOdds = 100 / totalPlayers // Equal odds baseline
-    const eloBonus = (playerElo - 1200) / 15 // ELO adjustment for MVP
-    const adjustedOdds = Math.max(baseOdds + eloBonus, 5) // Minimum 5% chance
-    return Math.round((100 / adjustedOdds - 1) * 100) // Convert to American odds
+  const calculateMVPOdds = (playerElo: number, totalPlayers: number, totalGames: number, recentGoals?: number) => {
+    const baseOdds = 100 / totalPlayers
+    const eloBonus = (playerElo - 1200) / 12
+    const experienceBonus = Math.min(totalGames / 50, 0.2) * 20
+    const performanceBonus = recentGoals ? recentGoals * 2 : 0
+    const adjustedOdds = Math.max(baseOdds + eloBonus + experienceBonus + performanceBonus, 5)
+    return Math.round((100 / adjustedOdds - 1) * 100)
+  }
+
+  const calculateHighestEloOdds = (highestElo: number, avgElo: number, isYes: boolean) => {
+    const eloDiff = highestElo - avgElo
+    const advantage = Math.min(eloDiff / 100, 3)
+    const yesOdds = Math.max(-300, -150 - advantage * 50)
+    const noOdds = Math.min(+300, +130 + advantage * 30)
+    return isYes ? yesOdds : noOdds
+  }
+
+  const calculateTotalScoreOdds = (avgElo: number, isOver: boolean) => {
+    const eloFactor = (avgElo - 1200) / 200
+    const baseOdds = -110
+    const adjustment = eloFactor * 20
+    return isOver ? baseOdds - adjustment : baseOdds + adjustment
+  }
+
+  const calculatePlayerStatOdds = (
+    playerElo: number,
+    totalGames: number,
+    statType: "passes" | "assists",
+    isOver: boolean,
+    recentPerformance?: number,
+  ) => {
+    const eloFactor = (playerElo - 1200) / 100
+    const experienceFactor = Math.min(totalGames / 100, 1)
+
+    const baseOdds = -110
+    let eloAdjustment = eloFactor * 15
+    const experienceAdjustment = experienceFactor * 10
+    const performanceAdjustment = recentPerformance ? recentPerformance * 3 : 0
+
+    if (statType === "assists") {
+      eloAdjustment *= 1.5
+    }
+
+    const totalAdjustment = eloAdjustment + experienceAdjustment + performanceAdjustment
+
+    if (isOver) {
+      return Math.round(Math.max(baseOdds - totalAdjustment, -300))
+    } else {
+      return Math.round(Math.min(baseOdds + totalAdjustment, +250))
+    }
+  }
+
+  const calculateTeamOdds = (participants: any[], teamNumber: number) => {
+    // Since team_assignment doesn't exist, we'll assign teams based on participant order
+    const halfPoint = Math.ceil(participants.length / 2)
+    const teamPlayers = teamNumber === 1 ? participants.slice(0, halfPoint) : participants.slice(halfPoint)
+    const otherTeamPlayers = teamNumber === 1 ? participants.slice(halfPoint) : participants.slice(0, halfPoint)
+
+    if (teamPlayers.length === 0 || otherTeamPlayers.length === 0) return -110
+
+    const teamAvgElo = teamPlayers.reduce((sum, p) => sum + p.elo_rating, 0) / teamPlayers.length
+    const otherAvgElo = otherTeamPlayers.reduce((sum, p) => sum + p.elo_rating, 0) / otherTeamPlayers.length
+
+    const eloDiff = teamAvgElo - otherAvgElo
+    const baseOdds = -110
+    const adjustment = eloDiff / 10
+
+    return Math.round(Math.max(baseOdds - adjustment, -300))
   }
 
   const placeELODraftBet = async (
@@ -207,7 +362,6 @@ export function ELODraftBetting() {
 
       if (updateWalletError) throw updateWalletError
 
-      // Remove from selected bets
       const betKey = `${matchId}-${marketType}-${selection}`
       setSelectedBets((prev) => {
         const newBets = { ...prev }
@@ -216,7 +370,7 @@ export function ELODraftBetting() {
       })
 
       alert(`${marketType.toUpperCase()} bet placed successfully! $${stake} on ${selection}`)
-      loadELODraftMarkets() // Refresh markets
+      loadELODraftMarkets()
     } catch (error) {
       console.error("Error placing ELO draft bet:", error)
       alert(`Failed to place bet: ${error instanceof Error ? error.message : "Unknown error"}`)
@@ -231,6 +385,11 @@ export function ELODraftBetting() {
         return <Target className="h-4 w-4" />
       case "highest_elo_wins":
         return <TrendingUp className="h-4 w-4" />
+      case "player_passes":
+      case "player_assists":
+        return <Target className="h-4 w-4" />
+      case "team_winner":
+        return <Users className="h-4 w-4" />
       default:
         return <Gamepad2 className="h-4 w-4" />
     }
@@ -272,6 +431,44 @@ export function ELODraftBetting() {
           </Button>
         </div>
       </div>
+
+      {draftMarkets.length > 0 && (
+        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Market Insights
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">
+                  {Math.round(
+                    draftMarkets.reduce(
+                      (sum, m) => sum + m.participants.reduce((s, p) => s + p.elo_rating, 0) / m.participants.length,
+                      0,
+                    ) / draftMarkets.length,
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">Average ELO</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">
+                  {draftMarkets.reduce((sum, m) => sum + m.participants.length, 0)}
+                </div>
+                <div className="text-xs text-muted-foreground">Total Players</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">
+                  {draftMarkets.reduce((sum, m) => sum + m.markets.length, 0)}
+                </div>
+                <div className="text-xs text-muted-foreground">Betting Markets</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="space-y-6">
         {draftMarkets.map((market) => (

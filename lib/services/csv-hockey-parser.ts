@@ -42,8 +42,11 @@ export class CSVHockeyParser {
       const playerIdMatch = fullIdentifier.match(/-(\d+)$/) // Extract the last numeric part after the final dash
       const extractedPlayerId = playerIdMatch ? playerIdMatch[1] : fullIdentifier
 
+      const teamMatch = fullIdentifier.match(/^(\d+)-/) // Extract the first number before the first dash
+      const extractedTeam = teamMatch ? Number.parseInt(teamMatch[1]) : Number.parseInt(values[0]) || 0
+
       const stat: HockeyStats = {
-        team: Number.parseInt(values[0]) || 0,
+        team: extractedTeam, // Use extracted team from identifier
         matchId: fullIdentifier,
         playerId: extractedPlayerId, // Use extracted player ID instead of values[2]
         stealsPlus: Number.parseInt(values[2]) || 0,
@@ -60,7 +63,9 @@ export class CSVHockeyParser {
         skaterMinutes: Number.parseInt(values[13]) || 0,
       }
 
-      console.log(`[v0] Extracted player ID "${extractedPlayerId}" from identifier "${fullIdentifier}"`)
+      console.log(
+        `[v0] Extracted team ${extractedTeam} and player ID "${extractedPlayerId}" from identifier "${fullIdentifier}"`,
+      )
       stats.push(stat)
     }
 

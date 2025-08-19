@@ -68,48 +68,30 @@ export function LiveBettingMarkets() {
           id: market.id,
           gameId: market.game_id || market.id,
           homeTeam: {
-            name: `Team ${Math.floor(Math.random() * 100) + 1}`,
-            avatar: "/placeholder.svg?height=32&width=32",
-            score: Math.floor(Math.random() * 5),
+            name: `Team A`,
+            score: 0,
           },
           awayTeam: {
-            name: `Team ${Math.floor(Math.random() * 100) + 1}`,
-            avatar: "/placeholder.svg?height=32&width=32",
-            score: Math.floor(Math.random() * 5),
+            name: `Team B`,
+            score: 0,
           },
-          timeRemaining: "15:30",
-          quarter: "Q2",
+          timeRemaining: "00:00",
+          quarter: "Final",
           markets: [
             {
               type: "moneyline",
-              homeOdds: market.odds_home?.toString() || "+150",
-              awayOdds: market.odds_away?.toString() || "-120",
+              homeOdds: market.odds_home?.toString() || "EVEN",
+              awayOdds: market.odds_away?.toString() || "EVEN",
               trend: "stable",
             },
-            {
-              type: "spread",
-              homeSpread: market.spread_line ? `+${market.spread_line}` : "+3.5",
-              awaySpread: market.spread_line ? `-${market.spread_line}` : "-3.5",
-              homeOdds: "-110",
-              awayOdds: "-110",
-              trend: "up",
-            },
-            {
-              type: "total",
-              over: market.total_line?.toString() || "45.5",
-              under: market.total_line?.toString() || "45.5",
-              overOdds: "-105",
-              underOdds: "-115",
-              trend: "down",
-            },
           ],
-          volume: Math.floor(Math.random() * 500) + 50,
+          volume: 0,
         })) || []
 
       setLiveMarkets(formattedMarkets)
     } catch (error) {
       console.error("Error loading live markets:", error)
-      setLiveMarkets([]) // No mock data fallback
+      setLiveMarkets([])
     } finally {
       setLoading(false)
     }

@@ -4,15 +4,15 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Calendar } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 interface Game {
   id: string
+  scheduled_time: string
   home_team: { name: string; avatar?: string; record: string }
   away_team: { name: string; avatar?: string; record: string }
-  scheduled_time: string
   markets: Array<{
     type: string
     home_odds?: string
@@ -50,28 +50,66 @@ export function UpcomingBets() {
         .from("games")
         .select(`
           id,
-          scheduled_time,
-          home_team:teams!games_home_team_id_fkey(name, logo_url),
-          away_team:teams!games_away_team_id_fkey(name, logo_url),
-          betting_markets(type, home_odds, away_odds, home_spread, away_spread, over, under, over_odds, under_odds)
+          game_date,
+          home_score,
+          away_score,
+          status,
+          home_user:users!games_home_user_id_fkey(username, display_name, wins, losses),
+          away_user:users!games_away_user_id_fkey(username, display_name, wins, losses),
+          betting_markets(market_type, odds_home, odds_away, spread_line, total_line)
         `)
-        .gte("scheduled_time", new Date().toISOString())
-        .order("scheduled_time", { ascending: true })
+        .gte("game_date", new Date().toISOString())
+        .order("game_date", { ascending: true })
         .limit(10)
 
       if (gamesError) throw gamesError
 
-      const { data: futuresData, error: futuresError } = await supabase
-        .from("betting_futures")
+      const transformedGames =
+        gamesData?.map((game) => ({
+          id: game.id,
+          scheduled_time: game.game_date,
+          home_team: {
+            name: game.home_user?.display_name || game.home_user?.username || "Unknown Player",
+            avatar: undefined,
+            record: `${game.home_user?.wins || 0}-${game.home_user?.losses || 0}`,
+          },
+          away_team: {
+            name: game.away_user?.display_name || game.away_user?.username || "Unknown Player",
+            avatar: undefined,
+            record: `${game.away_user?.wins || 0}-${game.away_user?.losses || 0}`,
+          },
+          markets:
+            game.betting_markets?.map((market: any) => ({
+              type: market.market_type,
+              home_odds: market.odds_home ? `${market.odds_home > 0 ? "+" : ""}${market.odds_home}` : "EVEN",
+              away_odds: market.odds_away ? `${market.odds_away > 0 ? "+" : ""}${market.odds_away}` : "EVEN",
+              home_spread: market.spread_line ? `${market.spread_line > 0 ? "+" : ""}${market.spread_line}` : "0",
+              away_spread: market.spread_line ? `${-market.spread_line > 0 ? "+" : ""}${-market.spread_line}` : "0",
+              over: market.total_line?.toString() || "TBD",
+              under: market.total_line?.toString() || "TBD",
+              over_odds: "EVEN",
+              under_odds: "EVEN",
+            })) || [],
+        })) || []
+
+      setUpcomingGames(transformedGames)
+
+      const { data: futuresData } = await supabase
+        .from("betting_markets")
         .select("*")
-        .eq("active", true)
-        .order("odds", { ascending: true })
-        .limit(10)
+        .eq("market_type", "futures")
+        .eq("status", "active")
 
-      if (futuresError) throw futuresError
+      const transformedFutures =
+        futuresData?.map((future) => ({
+          market: future.description || "Season Winner",
+          team: future.description?.includes("Team") ? "TBD" : undefined,
+          player: future.description?.includes("Player") ? "TBD" : undefined,
+          odds: future.odds_home ? `+${future.odds_home}` : "TBD",
+          probability: "TBD",
+        })) || []
 
-      setUpcomingGames(gamesData || [])
-      setFutures(futuresData || [])
+      setFutures(transformedFutures)
     } catch (error) {
       console.error("Error loading betting data:", error)
       setUpcomingGames([])
@@ -82,7 +120,12 @@ export function UpcomingBets() {
   }
 
   if (loading) {
-    return <div className="text-center py-8">Loading betting markets...</div>
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading betting markets...</p>
+      </div>
+    )
   }
 
   return (
@@ -92,6 +135,7 @@ export function UpcomingBets() {
         <h3 className="text-lg font-semibold">Upcoming Games</h3>
         {upcomingGames.length === 0 ? (
           <div className="text-center py-8">
+            <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-lg font-medium mb-2">No Upcoming Games</h3>
             <p className="text-muted-foreground">No games are currently scheduled for betting.</p>
           </div>
@@ -110,8 +154,7 @@ export function UpcomingBets() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={game.away_team.avatar || "/placeholder.svg"} alt={game.away_team.name} />
-                      <AvatarFallback>{game.away_team.name.slice(0, 2)}</AvatarFallback>
+                      <AvatarFallback>{game.away_team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div>
                       <p className="font-medium text-sm">{game.away_team.name}</p>
@@ -120,7 +163,7 @@ export function UpcomingBets() {
                   </div>
 
                   <div className="text-center">
-                    <p className="text-sm font-medium">@</p>
+                    <p className="text-sm font-medium">vs</p>
                   </div>
 
                   <div className="flex items-center space-x-3">
@@ -129,8 +172,7 @@ export function UpcomingBets() {
                       <p className="text-xs text-muted-foreground">{game.home_team.record}</p>
                     </div>
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={game.home_team.avatar || "/placeholder.svg"} alt={game.home_team.name} />
-                      <AvatarFallback>{game.home_team.name.slice(0, 2)}</AvatarFallback>
+                      <AvatarFallback>{game.home_team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </div>
                 </div>
@@ -193,6 +235,7 @@ export function UpcomingBets() {
         <h3 className="text-lg font-semibold">Futures & Specials</h3>
         {futures.length === 0 ? (
           <div className="text-center py-8">
+            <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-lg font-medium mb-2">No Futures Available</h3>
             <p className="text-muted-foreground">No futures markets are currently active.</p>
           </div>

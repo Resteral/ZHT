@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Crown, Trophy, Medal, Star, TrendingUp, TrendingDown, Zap, Target } from "lucide-react"
 import { ProfileNameLink } from "@/components/profile/profile-name-link"
 import { createClient } from "@/lib/supabase/client"
+import { csvCoordinationService } from "@/lib/services/csv-coordination-service"
 
 interface Player {
   id: string
@@ -62,19 +63,7 @@ export default function LeaderboardPage() {
         .order("elo_rating", { ascending: false })
         .limit(50)
 
-      const { data: csvStats } = await supabase
-        .from("match_results")
-        .select(`
-          csv_code,
-          match_id,
-          matches!inner(
-            match_participants!inner(
-              user_id,
-              users!inner(username)
-            )
-          )
-        `)
-        .not("csv_code", "is", null)
+      const csvStatsMap = await csvCoordinationService.getAllCSVStatsForLeaderboards()
 
       const { data: recentChanges } = await supabase
         .from("elo_history")
@@ -96,30 +85,12 @@ export default function LeaderboardPage() {
         const formattedPlayers = players.map((player, index) => {
           const recentChange = recentChanges?.find((change) => change.user_id === player.id)?.rating_change || 0
 
-          let totalGoals = 0,
-            totalAssists = 0,
-            totalSaves = 0,
-            totalShots = 0,
-            gameCount = 0
-
-          csvStats?.forEach((match) => {
-            if (match.csv_code) {
-              const lines = match.csv_code.split("\n").filter((line) => line.trim())
-              lines.forEach((line) => {
-                const values = line.split(",")
-                if (values.length >= 14) {
-                  const playerId = values[1]?.split("-").pop()
-                  if (playerId && player.username.toLowerCase().includes(playerId.slice(-4))) {
-                    totalGoals += Number.parseInt(values[3]) || 0
-                    totalAssists += Number.parseInt(values[4]) || 0
-                    totalSaves += Number.parseInt(values[6]) || 0
-                    totalShots += Number.parseInt(values[7]) || 0
-                    gameCount++
-                  }
-                }
-              })
-            }
-          })
+          const csvStats = csvStatsMap.get(player.id) || {
+            totalGoals: 0,
+            totalAssists: 0,
+            totalSaves: 0,
+            totalGames: 0,
+          }
 
           return {
             id: player.id,
@@ -132,11 +103,14 @@ export default function LeaderboardPage() {
             rank: index + 1,
             badge: getELOBadge(player.elo_rating || 1200),
             tier: getELOTier(player.elo_rating || 1200),
-            goals: totalGoals,
-            assists: totalAssists,
-            saves: totalSaves,
-            shots: totalShots,
-            avg_rating: gameCount > 0 ? ((totalGoals + totalAssists) / gameCount).toFixed(1) : 0,
+            goals: csvStats.totalGoals,
+            assists: csvStats.totalAssists,
+            saves: csvStats.totalSaves,
+            shots: 0, // Would need to be added to coordination service
+            avg_rating:
+              csvStats.totalGames > 0
+                ? ((csvStats.totalGoals + csvStats.totalAssists) / csvStats.totalGames).toFixed(1)
+                : 0,
           }
         })
         setEloPlayers(formattedPlayers)

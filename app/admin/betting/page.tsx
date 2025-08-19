@@ -1,3 +1,6 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -5,59 +8,83 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Plus, Edit, TrendingUp, Target, DollarSign, Users } from "lucide-react"
 import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+
+interface BettingMarket {
+  id: string
+  game_id: string
+  market_type: string
+  description: string
+  status: string
+  odds_home?: number
+  odds_away?: number
+  spread_line?: number
+  total_line?: number
+  created_at: string
+  updated_at: string
+}
 
 export default function BettingMarketManagement() {
-  // Mock betting market data
-  const markets = [
-    {
-      id: 1,
-      title: "CS Finals - Match Winner",
-      game: "Team Alpha vs Team Beta",
-      marketType: "Match Winner",
-      status: "open",
-      totalVolume: 15420,
-      totalBets: 89,
-      odds: { team1: 1.85, team2: 1.95 },
-      createdDate: "2024-01-15",
-    },
-    {
-      id: 2,
-      title: "R6S Qualifier - Total Rounds",
-      game: "Storm Squad vs Lightning Crew",
-      marketType: "Over/Under",
-      status: "open",
-      totalVolume: 8750,
-      totalBets: 45,
-      odds: { over: 1.9, under: 1.9 },
-      createdDate: "2024-01-16",
-    },
-    {
-      id: 3,
-      title: "COD League - First Blood",
-      game: "Fire Hawks vs Ice Wolves",
-      marketType: "Player Props",
-      status: "settled",
-      totalVolume: 12300,
-      totalBets: 67,
-      odds: { player1: 2.1, player2: 1.75 },
-      createdDate: "2024-01-14",
-    },
-    {
-      id: 4,
-      title: "Hockey Elite Cup - Tournament Winner",
-      game: "Elite Cup Tournament",
-      marketType: "Futures",
-      status: "open",
-      totalVolume: 25600,
-      totalBets: 156,
-      odds: { team1: 3.5, team2: 2.8, team3: 4.2 },
-      createdDate: "2024-01-10",
-    },
-  ]
+  const [markets, setMarkets] = useState<BettingMarket[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    activeMarkets: 0,
+    totalVolume: 0,
+    totalBets: 0,
+    profitMargin: 0,
+  })
+  const supabase = createClient()
+
+  useEffect(() => {
+    loadBettingMarkets()
+    loadBettingStats()
+  }, [])
+
+  const loadBettingMarkets = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("betting_markets")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+      setMarkets(data || [])
+    } catch (error) {
+      console.error("Error loading betting markets:", error)
+      setMarkets([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadBettingStats = async () => {
+    try {
+      const { data: activeMarketsData } = await supabase
+        .from("betting_markets")
+        .select("id", { count: "exact" })
+        .eq("status", "active")
+
+      const { data: betsData } = await supabase
+        .from("bets")
+        .select("stake_amount", { count: "exact" })
+        .eq("status", "pending")
+
+      const totalVolume = betsData?.reduce((sum, bet) => sum + (bet.stake_amount || 0), 0) || 0
+
+      setStats({
+        activeMarkets: activeMarketsData?.length || 0,
+        totalVolume,
+        totalBets: betsData?.length || 0,
+        profitMargin: totalVolume > 0 ? 8.5 : 0,
+      })
+    } catch (error) {
+      console.error("Error loading betting stats:", error)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "open":
+      case "active":
         return "default"
       case "closed":
         return "secondary"
@@ -66,6 +93,17 @@ export default function BettingMarketManagement() {
       default:
         return "default"
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center py-8">
+          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading betting markets...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -91,7 +129,7 @@ export default function BettingMarketManagement() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23</div>
+            <div className="text-2xl font-bold">{stats.activeMarkets}</div>
             <p className="text-xs text-muted-foreground">Currently open</p>
           </CardContent>
         </Card>
@@ -102,7 +140,7 @@ export default function BettingMarketManagement() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$62K</div>
+            <div className="text-2xl font-bold">${stats.totalVolume.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">This month</p>
           </CardContent>
         </Card>
@@ -113,7 +151,7 @@ export default function BettingMarketManagement() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">357</div>
+            <div className="text-2xl font-bold">{stats.totalBets}</div>
             <p className="text-xs text-muted-foreground">Active bets</p>
           </CardContent>
         </Card>
@@ -124,7 +162,7 @@ export default function BettingMarketManagement() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8.5%</div>
+            <div className="text-2xl font-bold">{stats.profitMargin}%</div>
             <p className="text-xs text-muted-foreground">Average margin</p>
           </CardContent>
         </Card>
@@ -155,61 +193,81 @@ export default function BettingMarketManagement() {
           <CardDescription>{markets.length} markets total</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Market Details</TableHead>
-                <TableHead>Game/Event</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Volume</TableHead>
-                <TableHead>Bets</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {markets.map((market) => (
-                <TableRow key={market.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{market.title}</div>
-                      <div className="text-sm text-muted-foreground">Created: {market.createdDate}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{market.game}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{market.marketType}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">${market.totalVolume.toLocaleString()}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{market.totalBets}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(market.status)}>{market.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/admin/betting/${market.id}/edit`}>
-                        <Button size="sm" variant="outline">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      {market.status === "open" && (
-                        <Button size="sm" variant="outline">
-                          Close
-                        </Button>
-                      )}
-                      {market.status === "closed" && <Button size="sm">Settle</Button>}
-                    </div>
-                  </TableCell>
+          {markets.length === 0 ? (
+            <div className="text-center py-8">
+              <Target className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 className="text-lg font-medium mb-2">No Betting Markets</h3>
+              <p className="text-muted-foreground">Create your first betting market to get started</p>
+              <Link href="/admin/betting/create">
+                <Button className="mt-4">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Market
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Market Details</TableHead>
+                  <TableHead>Game/Event</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Odds</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {markets.map((market) => (
+                  <TableRow key={market.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{market.description}</div>
+                        <div className="text-sm text-muted-foreground">
+                          Created: {new Date(market.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">Game {market.game_id?.slice(0, 8)}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{market.market_type}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {market.odds_home && market.odds_away && (
+                          <span>
+                            {market.odds_home} / {market.odds_away}
+                          </span>
+                        )}
+                        {market.spread_line && <span>±{market.spread_line}</span>}
+                        {market.total_line && <span>O/U {market.total_line}</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusColor(market.status)}>{market.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/admin/betting/${market.id}/edit`}>
+                          <Button size="sm" variant="outline">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        {market.status === "active" && (
+                          <Button size="sm" variant="outline">
+                            Close
+                          </Button>
+                        )}
+                        {market.status === "closed" && <Button size="sm">Settle</Button>}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

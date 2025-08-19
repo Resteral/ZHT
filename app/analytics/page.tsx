@@ -10,8 +10,7 @@ import { MatchStatsViewer } from "@/components/analytics/match-stats-viewer"
 import { HockeyStatsTable } from "@/components/stats/hockey-stats-table"
 import { createClient } from "@/lib/supabase/client"
 import { analyticsService, type PlayerAnalytics, type TeamAnalytics } from "@/lib/services/analytics-service"
-import { parseHockeyCSV } from "@/lib/services/csv-hockey-parser"
-import { csvIdMapping } from "@/lib/services/csv-id-mapping"
+import { csvCoordinationService } from "@/lib/services/csv-coordination-service"
 import { Search, TrendingUp, Users, Target, Upload, Download, Trophy } from "lucide-react"
 
 interface Match {
@@ -133,20 +132,33 @@ export default function AnalyticsPage() {
 
     setCsvProcessing(true)
     try {
-      const parsedStats = parseHockeyCSV(csvInput)
-      console.log(`[v0] Parsed ${parsedStats.length} hockey stats from CSV data`)
+      const result = await csvCoordinationService.processAndCoordinateCSV(csvInput, selectedMatch || undefined)
 
-      const statsWithNames = await Promise.all(
-        parsedStats.map(async (stat) => {
-          const userId = await csvIdMapping.mapCSVIdToUserId(stat.playerId)
-          return {
-            ...stat,
-            playerName: userId || `Player ${stat.playerId}`,
-          }
-        }),
-      )
-
-      setHockeyStats(statsWithNames)
+      if (result.success) {
+        console.log(`[v0] Successfully coordinated ${result.processedStats.length} hockey stats across all systems`)
+        setHockeyStats(
+          result.processedStats.map((stat) => ({
+            playerId: stat.playerId,
+            playerName: stat.actualUsername || `Player ${stat.playerId}`,
+            team: stat.team,
+            steals: stat.stealsPlus,
+            goals: stat.goals,
+            assists: stat.assists,
+            saves: stat.saves,
+            shotsOnGoal: stat.shots,
+            shotsBlocked: 0,
+            checks: 0,
+            faceoffWinPercentage: 0,
+            interceptions: stat.pickups,
+            passes: stat.passes,
+            faceoffs: 0,
+            goalieMinutes: stat.goaltenderMinutes,
+            skaterMinutes: stat.skaterMinutes,
+          })),
+        )
+      } else {
+        console.error("CSV coordination errors:", result.errors)
+      }
     } catch (error) {
       console.error("Error processing hockey CSV:", error)
     } finally {
