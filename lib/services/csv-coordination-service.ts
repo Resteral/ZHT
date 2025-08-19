@@ -51,8 +51,7 @@ export class CSVCoordinationService {
       // Update leaderboard statistics
       await this.updateLeaderboardStats(processedStats)
 
-      // Update betting odds based on performance
-      await this.updateBettingOdds(processedStats)
+      // Update betting odds based on performance - removed due to missing table
 
       return {
         success: true,
@@ -102,52 +101,54 @@ export class CSVCoordinationService {
   private async updateLeaderboardStats(stats: ProcessedHockeyStats[]) {
     try {
       for (const stat of stats.filter((s) => s.userFound && s.userId)) {
-        // Update user statistics
-        const { error } = await this.supabase
+        console.log(`[v0] Processing stats for ${stat.actualUsername}, userId: ${stat.userId}`)
+
+        const { data: userExists, error: userCheckError } = await this.supabase
           .from("users")
-          .update({
-            // Increment cumulative stats (would need proper aggregation in production)
-            updated_at: new Date().toISOString(),
-          })
+          .select("id, username")
           .eq("id", stat.userId)
+          .single()
+
+        if (userCheckError || !userExists) {
+          console.warn(
+            `[v0] User ${stat.actualUsername} (${stat.userId}) not found in users table:`,
+            userCheckError?.message || "No user data returned",
+          )
+          continue
+        }
+
+        console.log(`[v0] User validation passed for ${userExists.username} (${userExists.id})`)
+
+        const { error } = await this.supabase.from("player_performances").upsert({
+          player_id: userExists.id, // Use the validated ID from the database
+          game_date: new Date().toISOString(),
+          season: new Date().getFullYear().toString(),
+          game_week: Math.ceil(new Date().getDate() / 7),
+          points_scored: stat.goals + stat.assists,
+          stats: {
+            goals: stat.goals,
+            assists: stat.assists,
+            saves: stat.saves,
+            steals: stat.steals,
+            passes: stat.passes,
+            passReceived: stat.passReceived,
+            savePercent: stat.savePercent,
+            goaltenderMinutes: stat.goaltenderMinutes,
+            skaterMinutes: stat.skaterMinutes,
+            team: stat.team,
+          },
+          created_at: new Date().toISOString(),
+        })
 
         if (error) {
           console.error(`Error updating leaderboard stats for ${stat.actualUsername}:`, error)
+          console.error(`Attempted to use player_id: ${userExists.id}`)
+        } else {
+          console.log(`[v0] Successfully updated stats for ${stat.actualUsername}`)
         }
       }
     } catch (error) {
       console.error("Error updating leaderboard stats:", error)
-    }
-  }
-
-  private async updateBettingOdds(stats: ProcessedHockeyStats[]) {
-    try {
-      // Calculate performance metrics for betting odds
-      const playerPerformance = stats.map((stat) => ({
-        userId: stat.userId,
-        username: stat.actualUsername,
-        totalPoints: stat.goals + stat.assists,
-        savePercentage: stat.savePercent,
-        passAccuracy: stat.passes > 0 ? (stat.passReceived / stat.passes) * 100 : 0,
-        team: stat.team,
-      }))
-
-      // Store performance data for betting system to use
-      for (const performance of playerPerformance.filter((p) => p.userId)) {
-        const { error } = await this.supabase.from("player_performance_cache").upsert({
-          user_id: performance.userId,
-          recent_goals: performance.totalPoints,
-          recent_save_percentage: performance.savePercentage,
-          recent_pass_accuracy: performance.passAccuracy,
-          last_updated: new Date().toISOString(),
-        })
-
-        if (error && !error.message.includes("does not exist")) {
-          console.error(`Error updating betting performance for ${performance.username}:`, error)
-        }
-      }
-    } catch (error) {
-      console.error("Error updating betting odds:", error)
     }
   }
 
