@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Eye, Crown, Users } from "lucide-react"
+import { ArrowLeft, Eye, Crown, Users, DollarSign, TrendingUp } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
 
@@ -44,6 +44,8 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [draftState, setDraftState] = useState<DraftState | null>(null)
   const [spectatorCount, setSpectatorCount] = useState(0)
+  const [showBettingLobby, setShowBettingLobby] = useState(false)
+  const [bettingMarkets, setBettingMarkets] = useState<any[]>([])
 
   useEffect(() => {
     initializeDraft()
@@ -60,15 +62,99 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
   }, [params.id])
 
   useEffect(() => {
-    if (draftState?.status === "completed" && isParticipant) {
-      // Redirect to score screen after 3 seconds
-      const timer = setTimeout(() => {
-        router.push(`/draft/score/${params.id}`)
-      }, 3000)
+    if (draftState?.status === "completed") {
+      setShowBettingLobby(true)
+      loadBettingMarkets()
 
-      return () => clearTimeout(timer)
+      if (isParticipant) {
+        const timer = setTimeout(() => {
+          router.push(`/draft/score/${params.id}`)
+        }, 30000) // 30 seconds to place bets
+
+        return () => clearTimeout(timer)
+      }
     }
   }, [draftState?.status, isParticipant, params.id, router])
+
+  const loadBettingMarkets = async () => {
+    if (!draftState) return
+
+    const team1Players = draftState.team1_players.map((id) => getPlayerByUserId(id)).filter(Boolean)
+    const team2Players = draftState.team2_players.map((id) => getPlayerByUserId(id)).filter(Boolean)
+
+    const team1AvgElo = team1Players.reduce((sum, p) => sum + (p?.elo_rating || 0), 0) / team1Players.length
+    const team2AvgElo = team2Players.reduce((sum, p) => sum + (p?.elo_rating || 0), 0) / team2Players.length
+
+    // Calculate odds based on ELO difference
+    const eloDiff = team1AvgElo - team2AvgElo
+    const team1WinProb = 1 / (1 + Math.pow(10, -eloDiff / 400))
+    const team2WinProb = 1 - team1WinProb
+
+    const markets = [
+      {
+        id: "match_winner",
+        title: "Match Winner",
+        options: [
+          {
+            id: "team1",
+            name: `Team 1 (Avg ELO: ${Math.round(team1AvgElo)})`,
+            odds: (1 / team1WinProb).toFixed(2),
+            probability: (team1WinProb * 100).toFixed(1),
+          },
+          {
+            id: "team2",
+            name: `Team 2 (Avg ELO: ${Math.round(team2AvgElo)})`,
+            odds: (1 / team2WinProb).toFixed(2),
+            probability: (team2WinProb * 100).toFixed(1),
+          },
+        ],
+      },
+      {
+        id: "total_goals",
+        title: "Total Goals Over/Under",
+        options: [
+          { id: "over_5", name: "Over 5.5 Goals", odds: "1.85", probability: "54.1" },
+          { id: "under_5", name: "Under 5.5 Goals", odds: "1.95", probability: "51.3" },
+        ],
+      },
+    ]
+
+    setBettingMarkets(markets)
+  }
+
+  const placeBet = async (marketId: string, optionId: string, amount: number) => {
+    if (!user) return
+
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase.from("betting_slips").insert({
+        user_id: user.id,
+        match_id: params.id,
+        market_type: marketId,
+        selection: optionId,
+        stake: amount,
+        status: "pending",
+        placed_at: new Date().toISOString(),
+      })
+
+      if (error) throw error
+
+      // Update user balance
+      const { error: balanceError } = await supabase
+        .from("users")
+        .update({
+          account_balance: supabase.raw(`account_balance - ${amount}`),
+        })
+        .eq("id", user.id)
+
+      if (balanceError) throw balanceError
+
+      console.log(`[v0] Bet placed: ${marketId} - ${optionId} for $${amount}`)
+    } catch (error) {
+      console.error("[v0] Error placing bet:", error)
+    }
+  }
 
   const setupRealTimeSubscriptions = () => {
     const supabase = createClient()
@@ -502,7 +588,78 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
         </Card>
       )}
 
-      {draftState?.status === "completed" && (
+      {draftState?.status === "completed" && showBettingLobby && (
+        <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-800">
+              <DollarSign className="h-5 w-5" />
+              Betting Lobby - Place Your Bets!
+              <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                30 seconds remaining
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center mb-4">
+              <p className="text-green-700 font-medium">Draft completed! Place your bets before the match begins.</p>
+              <p className="text-sm text-green-600">Betting closes when you're redirected to the score screen.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {bettingMarkets.map((market) => (
+                <Card key={market.id} className="border-blue-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      {market.title}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {market.options.map((option: any) => (
+                      <div key={option.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{option.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {option.probability}% chance • {option.odds}x payout
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => placeBet(market.id, option.id, 5)}
+                            className="text-xs px-2 py-1"
+                          >
+                            Bet $5
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => placeBet(market.id, option.id, 10)}
+                            className="text-xs px-2 py-1"
+                          >
+                            Bet $10
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="text-center">
+              <Button
+                onClick={() => router.push(`/draft/score/${params.id}`)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Skip Betting & Continue to Match
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {draftState?.status === "completed" && !showBettingLobby && (
         <Card className="bg-green-50 border-green-200">
           <CardContent className="pt-6">
             <div className="text-center">

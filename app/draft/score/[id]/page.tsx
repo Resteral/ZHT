@@ -15,7 +15,6 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { MatchStatsViewer } from "@/components/analytics/match-stats-viewer"
 import { loadMatchResult as loadMatchResultUtil } from "@/lib/supabase/match-result"
-import { csvCoordinationService } from "@/lib/csv-coordination-service" // Import CSV coordination service
 import type { Match } from "@/lib/types/match" // Import Match type
 
 interface ScoreScreenPageProps {
@@ -663,20 +662,27 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         console.log("[v0] Parsing CSV data for hockey analytics:", csvCode.trim())
 
         try {
-          const result = await csvCoordinationService.processAndCoordinateCSV(csvCode.trim(), params.id)
+          const { parseHockeyCSV } = await import("@/lib/services/csv-hockey-parser")
+          const parsedStats = parseHockeyCSV(csvCode.trim())
 
-          if (result.success) {
-            console.log(
-              `[v0] Successfully coordinated ${result.processedStats.length} hockey stats across analytics, betting, and leaderboards`,
-            )
-            toast.success("Score and hockey statistics recorded and coordinated!")
+          console.log(`[v0] Successfully parsed ${parsedStats.length} hockey stats`)
+
+          // Store in match results for analytics
+          const { error: updateError } = await supabase.from("match_results").upsert({
+            match_id: params.id,
+            csv_data: csvCode.trim(),
+            hockey_stats: parsedStats,
+            updated_at: new Date().toISOString(),
+          })
+
+          if (updateError) {
+            console.error("[v0] Error storing CSV data:", updateError)
           } else {
-            console.error("[v0] CSV coordination errors:", result.errors)
-            toast.error("Score submitted but some hockey statistics failed to process")
+            console.log("[v0] CSV data stored successfully")
           }
         } catch (parseError) {
-          console.error("[v0] Error in CSV coordination:", parseError)
-          toast.error("Score submitted but failed to coordinate hockey statistics")
+          console.error("[v0] Error in CSV parsing:", parseError)
+          toast.error("Score submitted but failed to parse hockey statistics")
         }
       }
 
