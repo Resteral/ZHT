@@ -139,7 +139,7 @@ export default function Draft4v4Page() {
 
         if (newCountdown <= 3 && newCountdown > 0 && typeof window !== "undefined") {
           try {
-            const tickAudio = new Audio("/tick-sound.mp3")
+            const tickAudio = new Audio("https://hebbkx1anhila5yf.public.blob.vercel-storage.com/git-blob/prj_Hkk0uJRpKMBGA3jp9MMzdlH0Z2Hz/pyYSBHYyq_Xh6kezcibOTW/public/tick-sound.mp3")
             tickAudio.volume = 0.3
             tickAudio.play().catch((e) => console.log("[v0] Could not play tick sound:", e))
           } catch (e) {

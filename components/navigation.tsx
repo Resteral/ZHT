@@ -26,12 +26,12 @@ import {
   Settings,
   Menu,
   DollarSign,
-  Zap,
   TrendingUp,
   Swords,
   Gavel,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import Image from "next/image"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
@@ -69,10 +69,10 @@ export function Navigation() {
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link href="/" className="flex items-center space-x-2">
-                <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                  <Zap className="h-5 w-5 text-primary-foreground" />
-                </div>
-                <span className="font-bold text-xl">FantasyPro</span>
+                <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
+                <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                  TugLobbies
+                </span>
               </Link>
             </div>
             <div className="text-sm text-muted-foreground">Loading...</div>
@@ -89,10 +89,10 @@ export function Navigation() {
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link href="/" className="flex items-center space-x-2">
-                <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                  <Zap className="h-5 w-5 text-primary-foreground" />
-                </div>
-                <span className="font-bold text-xl">FantasyPro</span>
+                <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
+                <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                  TugLobbies
+                </span>
               </Link>
             </div>
             <div className="flex items-center space-x-2">
@@ -116,10 +116,10 @@ export function Navigation() {
           {/* Logo */}
           <div className="flex items-center space-x-4">
             <Link href="/" className="flex items-center space-x-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <Zap className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="font-bold text-xl">FantasyPro</span>
+              <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
+              <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                TugLobbies
+              </span>
             </Link>
           </div>
 

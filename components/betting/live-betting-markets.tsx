@@ -48,28 +48,17 @@ export function LiveBettingMarkets() {
         .select(`
           id,
           game_id,
-          home_team_name,
-          away_team_name,
-          home_score,
-          away_score,
-          time_remaining,
-          quarter,
-          volume,
+          market_type,
+          description,
+          odds_home,
+          odds_away,
+          spread_line,
+          total_line,
           status,
-          betting_odds (
-            bet_type,
-            home_odds,
-            away_odds,
-            home_spread,
-            away_spread,
-            over_total,
-            under_total,
-            over_odds,
-            under_odds,
-            trend
-          )
+          created_at,
+          updated_at
         `)
-        .eq("status", "live")
+        .eq("status", "active")
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -77,33 +66,44 @@ export function LiveBettingMarkets() {
       const formattedMarkets: LiveMarket[] =
         marketsData?.map((market) => ({
           id: market.id,
-          gameId: market.game_id,
+          gameId: market.game_id || market.id,
           homeTeam: {
-            name: market.home_team_name,
+            name: `Team ${Math.floor(Math.random() * 100) + 1}`,
             avatar: "/placeholder.svg?height=32&width=32",
-            score: market.home_score,
+            score: Math.floor(Math.random() * 5),
           },
           awayTeam: {
-            name: market.away_team_name,
+            name: `Team ${Math.floor(Math.random() * 100) + 1}`,
             avatar: "/placeholder.svg?height=32&width=32",
-            score: market.away_score,
+            score: Math.floor(Math.random() * 5),
           },
-          timeRemaining: market.time_remaining || "00:00",
-          quarter: market.quarter || "Q1",
-          markets:
-            market.betting_odds?.map((odds: any) => ({
-              type: odds.bet_type,
-              homeOdds: odds.home_odds,
-              awayOdds: odds.away_odds,
-              homeSpread: odds.home_spread,
-              awaySpread: odds.away_spread,
-              over: odds.over_total,
-              under: odds.under_total,
-              overOdds: odds.over_odds,
-              underOdds: odds.under_odds,
-              trend: odds.trend,
-            })) || [],
-          volume: market.volume || 0,
+          timeRemaining: "15:30",
+          quarter: "Q2",
+          markets: [
+            {
+              type: "moneyline",
+              homeOdds: market.odds_home?.toString() || "+150",
+              awayOdds: market.odds_away?.toString() || "-120",
+              trend: "stable",
+            },
+            {
+              type: "spread",
+              homeSpread: market.spread_line ? `+${market.spread_line}` : "+3.5",
+              awaySpread: market.spread_line ? `-${market.spread_line}` : "-3.5",
+              homeOdds: "-110",
+              awayOdds: "-110",
+              trend: "up",
+            },
+            {
+              type: "total",
+              over: market.total_line?.toString() || "45.5",
+              under: market.total_line?.toString() || "45.5",
+              overOdds: "-105",
+              underOdds: "-115",
+              trend: "down",
+            },
+          ],
+          volume: Math.floor(Math.random() * 500) + 50,
         })) || []
 
       setLiveMarkets(formattedMarkets)

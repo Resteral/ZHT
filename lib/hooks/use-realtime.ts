@@ -131,21 +131,14 @@ export function useRealtimeBetting() {
         (payload) => {
           if (payload.eventType === "UPDATE") {
             setMarkets((current) => current.map((market) => (market.id === payload.new.id ? payload.new : market)))
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "betting_odds",
-        },
-        (payload) => {
-          if (payload.eventType === "UPDATE") {
             setOdds((current) => ({
               ...current,
-              [payload.new.market_id]: payload.new,
+              [payload.new.id]: {
+                home_odds: payload.new.odds_home,
+                away_odds: payload.new.odds_away,
+                spread_line: payload.new.spread_line,
+                total_line: payload.new.total_line,
+              },
             }))
           }
         },

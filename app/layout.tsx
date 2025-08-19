@@ -13,8 +13,8 @@ import { ActiveDraftTracker } from "@/components/navigation/active-draft-tracker
 import ActiveMatchNotification from "@/components/navigation/active-match-notification"
 
 export const metadata: Metadata = {
-  title: "Fantasy Sports Platform",
-  description: "Complete fantasy sports platform with drafts, betting, and analytics",
+  title: "TUG E-Sports Lobbies",
+  description: "Premier ELO-based e-sports lobbies with competitive gaming, betting, and analytics",
   generator: "v0.app",
 }
 

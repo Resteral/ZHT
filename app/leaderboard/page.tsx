@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Crown, Trophy, Medal, Star, TrendingUp, TrendingDown } from "lucide-react"
+import { Crown, Trophy, Medal, Star, TrendingUp, TrendingDown, Zap, Target } from "lucide-react"
 import { ProfileNameLink } from "@/components/profile/profile-name-link"
 import { createClient } from "@/lib/supabase/client"
 
@@ -13,12 +13,13 @@ interface Player {
   id: string
   username: string
   elo_rating: number
-  games_played: number
+  total_games: number
   wins: number
   losses: number
   recent_change: number
   rank: number
   badge: string
+  tier: string
 }
 
 interface Earner {
@@ -48,17 +49,18 @@ export default function LeaderboardPage() {
           id,
           username,
           elo_rating,
-          games_played,
+          total_games,
           wins,
-          losses,
-          elo_history!inner(
-            elo_change,
-            created_at
-          )
+          losses
         `)
         .not("elo_rating", "is", null)
         .order("elo_rating", { ascending: false })
-        .limit(20)
+        .limit(50)
+
+      const { data: recentChanges } = await supabase
+        .from("elo_history")
+        .select("user_id, rating_change, created_at")
+        .order("created_at", { ascending: false })
 
       const { data: earners } = await supabase
         .from("financial_transactions")
@@ -72,22 +74,26 @@ export default function LeaderboardPage() {
         .order("amount", { ascending: false })
 
       if (players) {
-        const formattedPlayers = players.map((player, index) => ({
-          id: player.id,
-          username: player.username,
-          elo_rating: player.elo_rating || 1000,
-          games_played: player.games_played || 0,
-          wins: player.wins || 0,
-          losses: player.losses || 0,
-          recent_change: player.elo_history?.[0]?.elo_change || 0,
-          rank: index + 1,
-          badge: getELOBadge(player.elo_rating || 1000),
-        }))
+        const formattedPlayers = players.map((player, index) => {
+          const recentChange = recentChanges?.find((change) => change.user_id === player.id)?.rating_change || 0
+
+          return {
+            id: player.id,
+            username: player.username,
+            elo_rating: player.elo_rating || 1200,
+            total_games: player.total_games || 0,
+            wins: player.wins || 0,
+            losses: player.losses || 0,
+            recent_change: recentChange,
+            rank: index + 1,
+            badge: getELOBadge(player.elo_rating || 1200),
+            tier: getELOTier(player.elo_rating || 1200),
+          }
+        })
         setEloPlayers(formattedPlayers)
       }
 
       if (earners) {
-        // Group earnings by user
         const earningsMap = new Map()
         earners.forEach((transaction) => {
           const userId = transaction.user_id
@@ -99,7 +105,6 @@ export default function LeaderboardPage() {
           }
           existing.total_earnings += transaction.amount
 
-          // Check if transaction is from this month
           const transactionDate = new Date(transaction.created_at)
           const now = new Date()
           if (transactionDate.getMonth() === now.getMonth() && transactionDate.getFullYear() === now.getFullYear()) {
@@ -124,39 +129,134 @@ export default function LeaderboardPage() {
   }
 
   const getELOBadge = (elo: number) => {
-    if (elo >= 2000) return "Grandmaster"
-    if (elo >= 1800) return "Master"
-    if (elo >= 1600) return "Diamond"
-    if (elo >= 1400) return "Platinum"
-    if (elo >= 1200) return "Gold"
-    return "Silver"
+    if (elo >= 2400) return "Legendary"
+    if (elo >= 2200) return "Grandmaster"
+    if (elo >= 2000) return "Master"
+    if (elo >= 1800) return "Diamond"
+    if (elo >= 1600) return "Platinum"
+    if (elo >= 1400) return "Gold"
+    if (elo >= 1200) return "Silver"
+    return "Bronze"
+  }
+
+  const getELOTier = (elo: number) => {
+    if (elo >= 2400) return "legendary"
+    if (elo >= 2200) return "grandmaster"
+    if (elo >= 2000) return "master"
+    if (elo >= 1800) return "diamond"
+    if (elo >= 1600) return "platinum"
+    if (elo >= 1400) return "gold"
+    if (elo >= 1200) return "silver"
+    return "bronze"
+  }
+
+  const getBadgeColor = (tier: string) => {
+    switch (tier) {
+      case "legendary":
+        return "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+      case "grandmaster":
+        return "bg-gradient-to-r from-red-500 to-orange-500 text-white"
+      case "master":
+        return "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+      case "diamond":
+        return "bg-gradient-to-r from-cyan-400 to-blue-400 text-white"
+      case "platinum":
+        return "bg-gradient-to-r from-gray-400 to-gray-500 text-white"
+      case "gold":
+        return "bg-gradient-to-r from-yellow-400 to-yellow-500 text-black"
+      case "silver":
+        return "bg-gradient-to-r from-gray-300 to-gray-400 text-black"
+      default:
+        return "bg-gradient-to-r from-amber-600 to-amber-700 text-white"
+    }
   }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Leaderboards</h1>
-          <p className="text-muted-foreground">Top performers across all categories</p>
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <Zap className="h-8 w-8 text-primary" />
+            TugLobbies Rankings
+          </h1>
+          <p className="text-muted-foreground">Elite ELO-based competitive rankings and leaderboards</p>
         </div>
       </div>
 
       <Tabs defaultValue="elo" className="space-y-4">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="elo">ELO Rankings</TabsTrigger>
+          <TabsTrigger value="elo" className="flex items-center gap-2">
+            <Crown className="h-4 w-4" />
+            ELO Rankings
+          </TabsTrigger>
           <TabsTrigger value="earnings">Top Earners</TabsTrigger>
           <TabsTrigger value="tournaments">Tournament Winners</TabsTrigger>
           <TabsTrigger value="betting">Betting Leaders</TabsTrigger>
         </TabsList>
 
         <TabsContent value="elo" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-purple-500" />
+                  <div>
+                    <div className="text-2xl font-bold">{eloPlayers.filter((p) => p.elo_rating >= 2200).length}</div>
+                    <div className="text-sm text-muted-foreground">Grandmaster+</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Medal className="h-5 w-5 text-blue-500" />
+                  <div>
+                    <div className="text-2xl font-bold">
+                      {eloPlayers.filter((p) => p.elo_rating >= 1800 && p.elo_rating < 2200).length}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Master/Diamond</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-yellow-500" />
+                  <div>
+                    <div className="text-2xl font-bold">
+                      {eloPlayers.filter((p) => p.elo_rating >= 1400 && p.elo_rating < 1800).length}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Plat/Gold</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-green-500" />
+                  <div>
+                    <div className="text-2xl font-bold">
+                      {eloPlayers.length > 0
+                        ? Math.round(eloPlayers.reduce((sum, p) => sum + p.elo_rating, 0) / eloPlayers.length)
+                        : 1200}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Average ELO</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Crown className="h-5 w-5 text-yellow-500" />
                 ELO Rankings
               </CardTitle>
-              <CardDescription>Highest rated players in the system</CardDescription>
+              <CardDescription>Elite competitive rankings based on skill rating</CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -217,26 +317,14 @@ export default function LeaderboardPage() {
                             />
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {player.games_played} games •{" "}
-                            {player.games_played > 0 ? Math.round((player.wins / player.games_played) * 100) : 0}% win
+                            {player.total_games} games •{" "}
+                            {player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0}% win
                             rate
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <Badge
-                          variant={
-                            player.badge === "Grandmaster"
-                              ? "default"
-                              : player.badge === "Master"
-                                ? "secondary"
-                                : player.badge === "Diamond"
-                                  ? "outline"
-                                  : "secondary"
-                          }
-                        >
-                          {player.badge}
-                        </Badge>
+                        <Badge className={`${getBadgeColor(player.tier)} border-0`}>{player.badge}</Badge>
                         <div className="text-right">
                           <div className="font-bold text-lg">{player.elo_rating}</div>
                           <div

@@ -37,19 +37,18 @@ export function AnnouncementsList() {
           id,
           title,
           content,
-          published_at,
+          created_at,
           status,
           priority,
-          views,
-          comments,
-          pinned,
+          view_count,
+          is_pinned,
           users!announcements_author_id_fkey (
             username,
-            avatar_url
+            display_name
           )
         `)
-        .order("pinned", { ascending: false })
-        .order("published_at", { ascending: false })
+        .order("is_pinned", { ascending: false })
+        .order("created_at", { ascending: false })
 
       if (error) throw error
 
@@ -59,15 +58,15 @@ export function AnnouncementsList() {
           title: announcement.title,
           content: announcement.content,
           author: {
-            name: announcement.users?.username || "Unknown",
-            avatar: announcement.users?.avatar_url,
+            name: announcement.users?.display_name || announcement.users?.username || "Unknown",
+            avatar: undefined,
           },
-          published_at: announcement.published_at,
+          published_at: announcement.created_at,
           status: announcement.status,
           priority: announcement.priority,
-          views: announcement.views || 0,
-          comments: announcement.comments || 0,
-          pinned: announcement.pinned || false,
+          views: announcement.view_count || 0,
+          comments: 0,
+          pinned: announcement.is_pinned || false,
         })) || []
 
       setAnnouncements(formattedAnnouncements)

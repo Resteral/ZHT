@@ -85,3 +85,27 @@ export class CSVHockeyParser {
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
   }
 }
+
+export function parseHockeyCSV(csvText: string) {
+  const parsedStats = CSVHockeyParser.parseCSVData(csvText)
+
+  // Convert to the format expected by the analytics page
+  return parsedStats.map((stat) => ({
+    playerId: stat.playerId,
+    playerName: stat.username || `Player ${stat.playerId}`,
+    team: stat.team,
+    steals: stat.stealsPlus,
+    goals: stat.goals,
+    assists: stat.assists,
+    saves: stat.saves,
+    shotsOnGoal: stat.shots,
+    shotsBlocked: 0, // Not available in current CSV format
+    checks: 0, // Not available in current CSV format
+    faceoffWinPercentage: 0, // Not available in current CSV format
+    interceptions: stat.pickups,
+    passes: stat.passes,
+    faceoffs: 0, // Not available in current CSV format
+    goalieMinutes: stat.goaltenderMinutes,
+    skaterMinutes: stat.skaterMinutes,
+  }))
+}
