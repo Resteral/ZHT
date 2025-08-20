@@ -561,12 +561,16 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           voteCounts[vote.mvp_player_id] = (voteCounts[vote.mvp_player_id] || 0) + 1
         })
 
-        // Award MVP to players with 5+ votes
+        // Get total participants to calculate majority
+        const totalParticipants = participants.length
+        const majorityThreshold = Math.ceil(totalParticipants / 2)
+
+        // Award MVP to players with majority votes
         for (const [playerId, voteCount] of Object.entries(voteCounts)) {
-          if (voteCount >= 5) {
+          if (voteCount >= majorityThreshold) {
             const { error: mvpAwardError } = await supabase.from("player_mvp_awards").upsert(
               {
-                player_id: playerId, // Fixed: use player_id instead of user_id
+                player_id: playerId,
                 match_id: params.id,
                 awarded_at: new Date().toISOString(),
               },
@@ -578,7 +582,15 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             if (mvpAwardError) {
               console.error("[v0] Error awarding MVP:", mvpAwardError)
             } else {
-              console.log("[v0] MVP awarded to player:", playerId, "with", voteCount, "votes")
+              console.log(
+                "[v0] MVP awarded to player:",
+                playerId,
+                "with",
+                voteCount,
+                "votes (majority of",
+                totalParticipants,
+                ")",
+              )
             }
           }
         }
@@ -600,13 +612,17 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           flagCounts[key] = (flagCounts[key] || 0) + 1
         })
 
-        // Record flags for players with 3+ reports of the same type
+        // Get total participants to calculate threshold (25% of participants)
+        const totalParticipants = participants.length
+        const flagThreshold = Math.max(2, Math.ceil(totalParticipants * 0.25))
+
+        // Record flags for players with threshold+ reports of the same type
         for (const [key, reportCount] of Object.entries(flagCounts)) {
-          if (reportCount >= 3) {
+          if (reportCount >= flagThreshold) {
             const [playerId, flagType] = key.split("-")
             const { error: flagRecordError } = await supabase.from("player_flag_summary").upsert(
               {
-                player_id: playerId, // Fixed: use correct table and field names
+                player_id: playerId,
                 flag_type: flagType,
                 flag_count: reportCount,
                 last_flagged: new Date().toISOString(),
@@ -619,7 +635,17 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             if (flagRecordError) {
               console.error("[v0] Error recording flag:", flagRecordError)
             } else {
-              console.log("[v0] Flag recorded for player:", playerId, "type:", flagType, "with", reportCount, "reports")
+              console.log(
+                "[v0] Flag recorded for player:",
+                playerId,
+                "type:",
+                flagType,
+                "with",
+                reportCount,
+                "reports (threshold:",
+                flagThreshold,
+                ")",
+              )
             }
           }
         }
@@ -1094,10 +1120,10 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             </div>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { value: "unsportsmanlike", label: "Unsportsmanlike" },
+                { value: "toxicity", label: "Toxicity" },
                 { value: "cheating", label: "Cheating" },
-                { value: "harassment", label: "Harassment" },
                 { value: "griefing", label: "Griefing" },
+                { value: "afk", label: "AFK/Inactive" },
               ].map((option) => (
                 <Button
                   key={option.value}
