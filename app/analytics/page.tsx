@@ -773,7 +773,7 @@ export default function AnalyticsPage() {
               <CardHeader className="bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 text-white">
                 <CardTitle className="flex items-center gap-3 text-xl">
                   <TrendingUp className="h-6 w-6" />
-                  ELO Rankings & Player Statistics
+                  ELO Rankings & Player Statistics Spreadsheet
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-8">
@@ -788,84 +788,177 @@ export default function AnalyticsPage() {
                     <p>Player rankings will appear here once games are completed</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-4 gap-6 mb-8">
-                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                        <div className="text-3xl font-bold text-purple-400 mb-2">
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-5 gap-4 mb-8">
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-purple-400 mb-1">
                           {Math.round(eloStats.reduce((sum, p) => sum + (p.elo_rating || 1200), 0) / eloStats.length)}
                         </div>
-                        <div className="text-sm font-semibold text-slate-300">Average ELO</div>
+                        <div className="text-xs font-semibold text-slate-300">Average ELO</div>
                       </div>
-                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                        <div className="text-3xl font-bold text-green-400 mb-2">
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-green-400 mb-1">
                           {Math.max(...eloStats.map((p) => p.elo_rating || 1200))}
                         </div>
-                        <div className="text-sm font-semibold text-slate-300">Highest ELO</div>
+                        <div className="text-xs font-semibold text-slate-300">Highest ELO</div>
                       </div>
-                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                        <div className="text-3xl font-bold text-blue-400 mb-2">
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-blue-400 mb-1">
                           {eloStats.reduce((sum, p) => sum + (p.total_games || 0), 0)}
                         </div>
-                        <div className="text-sm font-semibold text-slate-300">Total Games</div>
+                        <div className="text-xs font-semibold text-slate-300">Total Games</div>
                       </div>
-                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                        <div className="text-3xl font-bold text-orange-400 mb-2">{eloStats.length}</div>
-                        <div className="text-sm font-semibold text-slate-300">Active Players</div>
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-orange-400 mb-1">{eloStats.length}</div>
+                        <div className="text-xs font-semibold text-slate-300">Active Players</div>
+                      </div>
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-cyan-400 mb-1">
+                          {eloStats.filter((p) => p.account_id).length}
+                        </div>
+                        <div className="text-xs font-semibold text-slate-300">CSV Mapped</div>
                       </div>
                     </div>
 
-                    <div className="space-y-3">
-                      {eloStats.map((player, index) => (
-                        <div
-                          key={player.id}
-                          className="flex items-center justify-between p-6 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border border-slate-600 rounded-xl hover:shadow-lg hover:border-purple-500 transition-all duration-300"
-                        >
-                          <div className="flex items-center gap-6">
-                            <div className="text-2xl font-bold text-slate-400 min-w-[3rem]">#{index + 1}</div>
-                            <div className="flex flex-col">
-                              <div className="text-lg font-bold text-slate-200">
-                                {player.display_name || player.username || "Unknown Player"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-8">
-                            <div className="text-center">
-                              <div className="text-2xl font-bold text-purple-400">{player.elo_rating || 1200}</div>
-                              <div className="text-xs text-slate-400 font-medium">ELO Rating</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-semibold text-green-400">{player.wins || 0}W</div>
-                              <div className="text-xs text-slate-400 font-medium">Wins</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-semibold text-red-400">{player.losses || 0}L</div>
-                              <div className="text-xs text-slate-400 font-medium">Losses</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-semibold text-blue-400">
-                                {player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0}%
-                              </div>
-                              <div className="text-xs text-slate-400 font-medium">Win Rate</div>
-                            </div>
-                            <Badge
-                              variant="outline"
-                              className={`font-semibold ${
+                    <div className="bg-slate-900/50 rounded-xl border border-slate-600 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gradient-to-r from-purple-700 via-violet-700 to-indigo-700 text-white">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-sm font-semibold">Rank</th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold">Player Name</th>
+                              <th className="px-4 py-3 text-left text-sm font-semibold">Account ID</th>
+                              <th className="px-4 py-3 text-center text-sm font-semibold">ELO Rating</th>
+                              <th className="px-4 py-3 text-center text-sm font-semibold">Wins</th>
+                              <th className="px-4 py-3 text-center text-sm font-semibold">Losses</th>
+                              <th className="px-4 py-3 text-center text-sm font-semibold">Total Games</th>
+                              <th className="px-4 py-3 text-center text-sm font-semibold">Win Rate</th>
+                              <th className="px-4 py-3 text-center text-sm font-semibold">CSV Status</th>
+                              <th className="px-4 py-3 text-center text-sm font-semibold">Tier</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-700">
+                            {eloStats.map((player, index) => {
+                              const winRate =
+                                player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0
+                              const tier =
                                 (player.elo_rating || 1200) >= 1400
-                                  ? "border-yellow-500 text-yellow-400 bg-yellow-900/30"
+                                  ? "Elite"
                                   : (player.elo_rating || 1200) >= 1300
-                                    ? "border-purple-500 text-purple-400 bg-purple-900/30"
-                                    : "border-slate-500 text-slate-400 bg-slate-900/30"
-                              }`}
-                            >
-                              {(player.elo_rating || 1200) >= 1400
-                                ? "Elite"
-                                : (player.elo_rating || 1200) >= 1300
-                                  ? "Advanced"
-                                  : "Standard"}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
+                                    ? "Advanced"
+                                    : "Standard"
+                              const hasCsvMapping = !!player.account_id
+
+                              return (
+                                <tr key={player.id} className="hover:bg-slate-800/50 transition-colors duration-200">
+                                  <td className="px-4 py-4">
+                                    <div className="flex items-center">
+                                      <div className="text-lg font-bold text-slate-300 min-w-[2rem]">#{index + 1}</div>
+                                      {index < 3 && (
+                                        <div className="ml-2">
+                                          {index === 0 && <span className="text-yellow-400">🥇</span>}
+                                          {index === 1 && <span className="text-gray-400">🥈</span>}
+                                          {index === 2 && <span className="text-amber-600">🥉</span>}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="font-semibold text-slate-200">
+                                      {player.display_name || player.username || "Unknown Player"}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="font-mono text-sm text-slate-400">
+                                      {player.account_id || "Not Mapped"}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <div className="text-xl font-bold text-purple-400">{player.elo_rating || 1200}</div>
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <div className="text-lg font-semibold text-green-400">{player.wins || 0}</div>
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <div className="text-lg font-semibold text-red-400">{player.losses || 0}</div>
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <div className="text-lg font-semibold text-blue-400">{player.total_games || 0}</div>
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <div className="text-lg font-semibold text-cyan-400">{winRate}%</div>
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <Badge
+                                      variant="outline"
+                                      className={`font-semibold text-xs ${
+                                        hasCsvMapping
+                                          ? "border-green-500 text-green-400 bg-green-900/30"
+                                          : "border-red-500 text-red-400 bg-red-900/30"
+                                      }`}
+                                    >
+                                      {hasCsvMapping ? "✓ Mapped" : "✗ Not Found"}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <Badge
+                                      variant="outline"
+                                      className={`font-semibold text-xs ${
+                                        tier === "Elite"
+                                          ? "border-yellow-500 text-yellow-400 bg-yellow-900/30"
+                                          : tier === "Advanced"
+                                            ? "border-purple-500 text-purple-400 bg-purple-900/30"
+                                            : "border-slate-500 text-slate-400 bg-slate-900/30"
+                                      }`}
+                                    >
+                                      {tier}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-4">
+                      <div className="text-sm text-slate-400">
+                        Showing {eloStats.length} players with ELO ratings and CSV account ID mapping status
+                      </div>
+                      <Button
+                        onClick={() => {
+                          const csvContent = [
+                            "Rank,Player Name,Account ID,ELO Rating,Wins,Losses,Total Games,Win Rate,CSV Status,Tier",
+                            ...eloStats.map((player, index) => {
+                              const winRate =
+                                player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0
+                              const tier =
+                                (player.elo_rating || 1200) >= 1400
+                                  ? "Elite"
+                                  : (player.elo_rating || 1200) >= 1300
+                                    ? "Advanced"
+                                    : "Standard"
+                              const hasCsvMapping = !!player.account_id
+
+                              return `${index + 1},"${player.display_name || player.username || "Unknown Player"}","${player.account_id || "Not Mapped"}",${player.elo_rating || 1200},${player.wins || 0},${player.losses || 0},${player.total_games || 0},${winRate}%,${hasCsvMapping ? "Mapped" : "Not Found"},${tier}`
+                            }),
+                          ].join("\n")
+
+                          const blob = new Blob([csvContent], { type: "text/csv" })
+                          const url = window.URL.createObjectURL(blob)
+                          const a = document.createElement("a")
+                          a.href = url
+                          a.download = `elo-stats-spreadsheet-${new Date().toISOString().split("T")[0]}.csv`
+                          a.click()
+                          window.URL.revokeObjectURL(url)
+                        }}
+                        variant="outline"
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-slate-800 shadow-md"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Export Spreadsheet
+                      </Button>
                     </div>
                   </div>
                 )}

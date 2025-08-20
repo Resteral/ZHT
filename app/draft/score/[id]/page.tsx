@@ -675,30 +675,32 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
       }
 
       if (csvCode.trim()) {
-        console.log("[v0] Parsing CSV data for hockey analytics:", csvCode.trim())
+        console.log("[v0] Processing CSV data with coordination service:", csvCode.trim())
 
         try {
-          const { parseHockeyCSV } = await import("@/lib/services/csv-hockey-parser")
-          const parsedStats = parseHockeyCSV(csvCode.trim())
-
-          console.log(`[v0] Successfully parsed ${parsedStats.length} hockey stats`)
-
-          // Store in match results for analytics
-          const { error: updateError } = await supabase.from("match_results").upsert({
-            match_id: params.id,
-            csv_data: csvCode.trim(),
-            hockey_stats: parsedStats,
-            updated_at: new Date().toISOString(),
+          const { csvCoordinationService } = await import("@/lib/services/csv-coordination-service")
+          const result = await csvCoordinationService.processAndCoordinateCSV(csvCode.trim(), params.id, {
+            matchName: matchData?.name || "Unknown Match",
+            gameNumber: 1,
+            matchDate: new Date().toISOString(),
           })
 
-          if (updateError) {
-            console.error("[v0] Error storing CSV data:", updateError)
+          if (result.success) {
+            console.log(`[v0] Successfully coordinated ${result.processedStats.length} hockey stats across all systems`)
+
+            // Log account ID to username mappings
+            result.processedStats.forEach((stat) => {
+              if (stat.userFound) {
+                console.log(`[v0] Mapped Account ID "${stat.playerId}" → "${stat.actualUsername}" (${stat.userId})`)
+              } else {
+                console.log(`[v0] Account ID "${stat.playerId}" not found in database`)
+              }
+            })
           } else {
-            console.log("[v0] CSV data stored successfully")
+            console.error("[v0] CSV coordination failed:", result.errors)
           }
         } catch (parseError) {
-          console.error("[v0] Error in CSV parsing:", parseError)
-          toast.error("Score submitted but failed to parse hockey statistics")
+          console.error("[v0] Error in CSV coordination:", parseError)
         }
       }
 
@@ -946,19 +948,29 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
                       />
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor="csvCode">Hockey Stats CSV (Optional)</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="csvCode">Hockey Stats CSV</Label>
                     <Textarea
                       id="csvCode"
                       value={csvCode}
                       onChange={(e) => setCsvCode(e.target.value)}
-                      placeholder="ID,steals,goals,assists,shots,pickups,passes,passes_received,save_%,shots_on_goalie,shots_saved,goalie_minutes,skater_minutes&#10;player1,2,1,3,8,5,12,10,85.5,4,3,0,15.2"
-                      rows={4}
+                      placeholder="1,1-S2-1-5822233,-6,1,0,5,34,9,22,1.02,0,0,0,539&#10;2,1-S2-1-1839314,1,3,1,4,34,14,13,1.07,0,0,0,716"
+                      rows={6}
+                      className="font-mono text-sm"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      CSV format: ID, steals, goals, assists, shots, pickups, passes, passes received, save %, shots on
-                      goalie, shots saved, goalie minutes, skater minutes
-                    </p>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>
+                        <strong>Format:</strong>{" "}
+                        team,account_id,steals,goals,assists,shots,pickups,passes,passes_received,save_%,shots_on_goalie,shots_saved,goalie_minutes,skater_minutes
+                      </p>
+                      <p>
+                        <strong>Account ID:</strong> Use format like "1-S2-1-5822233" where the last part (5822233) is
+                        the player's account ID
+                      </p>
+                      <p>
+                        <strong>Team:</strong> 1 or 2 (ignored for team assignment, used only for statistics)
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex gap-2">
