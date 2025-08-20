@@ -53,7 +53,6 @@ export function MVPBettingMarkets() {
           )
         `)
         .in("status", ["waiting", "active", "drafting"])
-        .gte("start_date", new Date().toISOString())
         .order("start_date", { ascending: true })
 
       if (error) throw error
@@ -75,7 +74,7 @@ export function MVPBettingMarkets() {
             status: match.status,
             participants,
             total_bets: 0,
-            closes_at: match.start_date,
+            closes_at: match.start_date || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
           }
         }) || []
 
@@ -125,17 +124,34 @@ export function MVPBettingMarkets() {
 
       if (betError) throw betError
 
-      const { error: walletError } = await supabase
+      const { data: wallet, error: walletCheckError } = await supabase
         .from("user_wallets")
-        .update({
-          balance: supabase.raw("balance - ?", [stake]),
-          total_wagered: supabase.raw("total_wagered + ?", [stake]),
-        })
+        .select("balance")
         .eq("user_id", user.user.id)
+        .single()
 
-      if (walletError) throw walletError
+      if (walletCheckError && walletCheckError.code !== "PGRST116") {
+        throw walletCheckError
+      }
 
-      // Remove from selected bets
+      if (!wallet) {
+        await supabase.from("user_wallets").insert({
+          user_id: user.user.id,
+          balance: 1000 - stake,
+          total_wagered: stake,
+        })
+      } else {
+        const { error: walletError } = await supabase
+          .from("user_wallets")
+          .update({
+            balance: wallet.balance - stake,
+            total_wagered: supabase.raw("total_wagered + ?", [stake]),
+          })
+          .eq("user_id", user.user.id)
+
+        if (walletError) throw walletError
+      }
+
       setSelectedBets((prev) => {
         const newBets = { ...prev }
         delete newBets[`${matchId}-${playerId}`]
@@ -143,6 +159,7 @@ export function MVPBettingMarkets() {
       })
 
       alert("MVP bet placed successfully!")
+      loadMVPMarkets()
     } catch (error) {
       console.error("Error placing MVP bet:", error)
       alert("Failed to place bet. Please try again.")

@@ -7,9 +7,22 @@ export const isSupabaseConfigured =
   typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === "string" &&
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length > 0
 
-const supabase = isSupabaseConfigured
-  ? createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-  : ({
+// Singleton instance to prevent multiple GoTrueClient instances
+let supabaseInstance: any = null
+
+const createSupabaseClient = () => {
+  if (supabaseInstance) {
+    return supabaseInstance
+  }
+
+  if (isSupabaseConfigured) {
+    supabaseInstance = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    )
+  } else {
+    // Dummy client for development
+    supabaseInstance = {
       auth: {
         getUser: () => Promise.resolve({ data: { user: null }, error: null }),
         getSession: () => Promise.resolve({ data: { session: null }, error: null }),
@@ -56,10 +69,14 @@ const supabase = isSupabaseConfigured
         subscribe: () => Promise.resolve(),
         unsubscribe: () => Promise.resolve(),
       }),
-    } as any)
+    } as any
+  }
 
-// Export the createClient function for consistency with tournament service
-export const createClient = () => supabase
+  return supabaseInstance
+}
+
+// Export the createClient function for consistency
+export const createClient = () => createSupabaseClient()
 
 // Also export the supabase instance directly
-export { supabase }
+export const supabase = createSupabaseClient()

@@ -40,7 +40,6 @@ export function LobbyAlertSystem() {
             created_at
           `)
           .eq("status", "waiting")
-          .neq("status", "completed")
 
         if (error) {
           console.error("[v0] Database error:", error)
