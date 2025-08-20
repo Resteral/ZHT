@@ -28,8 +28,6 @@ export function LobbyAlertSystem() {
   useEffect(() => {
     const checkAndCleanupLobbies = async () => {
       try {
-        console.log("[v0] Checking for active lobbies...")
-
         const { data: matches, error } = await supabase
           .from("matches")
           .select(`
@@ -42,18 +40,17 @@ export function LobbyAlertSystem() {
             created_at
           `)
           .eq("status", "waiting")
+          .neq("status", "completed")
 
         if (error) {
           console.error("[v0] Database error:", error)
           throw error
         }
 
-        if (!matches || matches.length === 0) {
-          console.log("[v0] No waiting lobbies found - this is normal when no games are being created")
+        if (!matches) {
+          console.log("[v0] No matches found")
           return
         }
-
-        console.log(`[v0] Found ${matches.length} waiting lobbies`)
 
         const now = new Date()
         const fullLobbies = []

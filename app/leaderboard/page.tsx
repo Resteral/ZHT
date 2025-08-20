@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Crown, Trophy, Medal, Star, TrendingUp, TrendingDown, Zap, Target } from "lucide-react"
 import { ProfileNameLink } from "@/components/profile/profile-name-link"
 import { createClient } from "@/lib/supabase/client"
+import { csvCoordinationService } from "@/lib/services/csv-coordination-service"
 
 interface Player {
   id: string
@@ -20,6 +21,11 @@ interface Player {
   rank: number
   badge: string
   tier: string
+  goals: number
+  assists: number
+  saves: number
+  shots: number
+  avg_rating: number
 }
 
 interface Earner {
@@ -57,7 +63,7 @@ export default function LeaderboardPage() {
         .order("elo_rating", { ascending: false })
         .limit(50)
 
-      const csvStatsMap = new Map()
+      const csvStatsMap = await csvCoordinationService.getAllCSVStatsForLeaderboards()
 
       const { data: recentChanges } = await supabase
         .from("elo_history")
@@ -79,7 +85,7 @@ export default function LeaderboardPage() {
         const formattedPlayers = players.map((player, index) => {
           const recentChange = recentChanges?.find((change) => change.user_id === player.id)?.rating_change || 0
 
-          const csvStats = {
+          const csvStats = csvStatsMap.get(player.id) || {
             totalGoals: 0,
             totalAssists: 0,
             totalSaves: 0,
@@ -100,7 +106,7 @@ export default function LeaderboardPage() {
             goals: csvStats.totalGoals,
             assists: csvStats.totalAssists,
             saves: csvStats.totalSaves,
-            shots: 0,
+            shots: 0, // Would need to be added to coordination service
             avg_rating:
               csvStats.totalGames > 0
                 ? ((csvStats.totalGoals + csvStats.totalAssists) / csvStats.totalGames).toFixed(1)
@@ -337,6 +343,11 @@ export default function LeaderboardPage() {
                             {player.total_games} games • {player.wins}W-{player.losses}L •{" "}
                             {player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0}% win
                             rate
+                            {player.goals > 0 && (
+                              <span className="ml-2">
+                                • {player.goals}G {player.assists}A {player.saves}S
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
