@@ -14,6 +14,12 @@ export interface CSVCoordinationResult {
   processedStats: ProcessedHockeyStats[]
   errors: string[]
   matchId?: string
+  consensusValidation?: {
+    isValid: boolean
+    submissionCount: number
+    requiredConsensus: number
+    conflictingSubmissions: string[]
+  }
 }
 
 export interface MatchContext {
@@ -37,6 +43,12 @@ export class CSVCoordinationService {
       const rawStats = CSVHockeyParser.parseCSVData(csvData)
       console.log(`[v0] Parsed ${rawStats.length} hockey stats from CSV data`)
 
+      const consensusValidation = await this.validateCSVConsensus(csvData, matchId)
+      if (!consensusValidation.isValid) {
+        errors.push(`CSV consensus validation failed: ${consensusValidation.conflictingSubmissions.join(", ")}`)
+        console.warn(`[v0] CSV consensus validation failed for match ${matchId}`)
+      }
+
       // Get user mappings for all players
       const csvIds = rawStats.map((stat) => stat.playerId)
       const userMap = await csvIdMappingService.getUsersBatchByCSVIds(csvIds)
@@ -58,13 +70,17 @@ export class CSVCoordinationService {
         await this.storeCSVDataForMatch(matchId, csvData, processedStats)
       }
 
-      await this.updateLeaderboardStats(processedStats, matchId, matchContext)
+      if (consensusValidation.isValid) {
+        await this.updateLeaderboardStats(processedStats, matchId, matchContext)
+        await this.syncWinLossAcrossSystems(processedStats)
+      }
 
       return {
-        success: true,
+        success: consensusValidation.isValid,
         processedStats,
         errors,
         matchId,
+        consensusValidation,
       }
     } catch (error) {
       console.error("Error in CSV coordination:", error)
@@ -131,7 +147,9 @@ export class CSVCoordinationService {
 
         if (existingMatch) {
           validMatchId = existingMatch.id
-          console.log(`[v0] Using existing match ID for ELO history: ${validMatchId}`)
+          console.log(
+            `[v0] Using existing match for ELO history: ${matchContext?.matchName || "Match"} #${matchContext?.gameNumber || 1}`,
+          )
         }
       }
 
@@ -145,7 +163,9 @@ export class CSVCoordinationService {
       }
 
       for (const stat of stats.filter((s) => s.userFound && s.userId)) {
-        console.log(`[v0] Processing stats for ${stat.actualUsername}, userId: ${stat.userId}`)
+        console.log(
+          `[v0] Processing stats for ${stat.actualUsername} in ${matchContext?.matchName || "Match"} #${matchContext?.gameNumber || 1}`,
+        )
 
         const { data: userExists, error: userCheckError } = await this.supabase
           .from("users")
@@ -155,13 +175,13 @@ export class CSVCoordinationService {
 
         if (userCheckError || !userExists) {
           console.warn(
-            `[v0] User ${stat.actualUsername} (${stat.userId}) not found in users table:`,
+            `[v0] Player ${stat.actualUsername} not found in database`,
             userCheckError?.message || "No user data returned",
           )
           continue
         }
 
-        console.log(`[v0] User validation passed for ${userExists.username} (${userExists.id})`)
+        console.log(`[v0] User validation passed for ${userExists.username}`)
 
         let eloChange = 0
         let isWinner = false
@@ -216,11 +236,9 @@ export class CSVCoordinationService {
             goaltender_minutes: stat.goaltenderMinutes,
             skater_minutes: stat.skaterMinutes,
             team: stat.team,
-            match_id: validMatchId || "unknown",
             match_name: matchContext?.matchName || "Unknown Match",
             game_number: matchContext?.gameNumber || 1,
             match_date: matchContext?.matchDate || new Date().toISOString(),
-            // Include analytics data in performance stats
             kills: stat.goals, // Map goals to kills
             deaths: 0,
             damage_dealt: stat.shots, // Map shots to damage_dealt
@@ -270,7 +288,7 @@ export class CSVCoordinationService {
         }
 
         console.log(
-          `[v0] Game data stored directly in performance stats for ${stat.actualUsername} (Game #${matchContext?.gameNumber || 1})`,
+          `[v0] Game data stored for ${stat.actualUsername} in ${matchContext?.matchName || "Match"} #${matchContext?.gameNumber || 1}`,
         )
 
         await this.updateCumulativeStats(userExists.id, stat)
@@ -285,8 +303,7 @@ export class CSVCoordinationService {
       const { data: existing } = await this.supabase.from("users").select("id").eq("id", userId).single()
 
       if (existing) {
-        // Update user's cumulative stats - this could be expanded to a separate stats table
-        console.log(`[v0] Updated cumulative stats for user ${userId}`)
+        console.log(`[v0] Updated cumulative stats for ${stat.actualUsername}`)
       }
     } catch (error) {
       console.error("Error updating cumulative stats:", error)
@@ -354,6 +371,155 @@ export class CSVCoordinationService {
     }
 
     return statsMap
+  }
+
+  private async validateCSVConsensus(
+    csvData: string,
+    matchId?: string,
+  ): Promise<{
+    isValid: boolean
+    submissionCount: number
+    requiredConsensus: number
+    conflictingSubmissions: string[]
+  }> {
+    if (!matchId) {
+      return { isValid: true, submissionCount: 1, requiredConsensus: 1, conflictingSubmissions: [] }
+    }
+
+    try {
+      // Check for existing CSV submissions for this match
+      const { data: existingSubmissions } = await this.supabase
+        .from("csv_submissions")
+        .select("csv_data, submitter_id, created_at")
+        .eq("match_id", matchId)
+
+      const submissionCount = (existingSubmissions?.length || 0) + 1
+      const requiredConsensus = Math.max(2, Math.ceil(submissionCount * 0.6)) // At least 60% consensus
+
+      if (!existingSubmissions || existingSubmissions.length === 0) {
+        // First submission - store it
+        await this.supabase.from("csv_submissions").insert({
+          match_id: matchId,
+          csv_data: csvData,
+          submitter_id: "system", // Could be actual user ID
+          created_at: new Date().toISOString(),
+        })
+        return { isValid: true, submissionCount, requiredConsensus, conflictingSubmissions: [] }
+      }
+
+      // Compare with existing submissions
+      const conflictingSubmissions: string[] = []
+      const currentStats = CSVHockeyParser.parseCSVData(csvData)
+
+      for (const submission of existingSubmissions) {
+        const existingStats = CSVHockeyParser.parseCSVData(submission.csv_data)
+
+        // Check for significant statistical differences that might indicate stat padding
+        const conflicts = this.detectStatPaddingConflicts(currentStats, existingStats)
+        if (conflicts.length > 0) {
+          conflictingSubmissions.push(`Submission from ${submission.created_at}: ${conflicts.join(", ")}`)
+        }
+      }
+
+      const isValid = conflictingSubmissions.length === 0 || submissionCount >= requiredConsensus
+
+      return { isValid, submissionCount, requiredConsensus, conflictingSubmissions }
+    } catch (error) {
+      console.error("Error validating CSV consensus:", error)
+      return { isValid: false, submissionCount: 0, requiredConsensus: 2, conflictingSubmissions: ["Validation error"] }
+    }
+  }
+
+  private detectStatPaddingConflicts(currentStats: HockeyStats[], existingStats: HockeyStats[]): string[] {
+    const conflicts: string[] = []
+
+    // Check for unrealistic stat differences between submissions
+    for (const currentStat of currentStats) {
+      const existingStat = existingStats.find((s) => s.playerId === currentStat.playerId)
+      if (existingStat) {
+        // Flag suspicious differences (>50% variance in key stats)
+        const goalsDiff = Math.abs(currentStat.goals - existingStat.goals)
+        const assistsDiff = Math.abs(currentStat.assists - existingStat.assists)
+        const savesDiff = Math.abs(currentStat.saves - existingStat.saves)
+
+        if (goalsDiff > Math.max(1, existingStat.goals * 0.5)) {
+          conflicts.push(
+            `Goals mismatch for player ${currentStat.playerId}: ${currentStat.goals} vs ${existingStat.goals}`,
+          )
+        }
+        if (assistsDiff > Math.max(1, existingStat.assists * 0.5)) {
+          conflicts.push(
+            `Assists mismatch for player ${currentStat.playerId}: ${currentStat.assists} vs ${existingStat.assists}`,
+          )
+        }
+        if (savesDiff > Math.max(2, existingStat.saves * 0.3)) {
+          conflicts.push(
+            `Saves mismatch for player ${currentStat.playerId}: ${currentStat.saves} vs ${existingStat.saves}`,
+          )
+        }
+      }
+    }
+
+    return conflicts
+  }
+
+  private async syncWinLossAcrossSystems(stats: ProcessedHockeyStats[]) {
+    try {
+      for (const stat of stats.filter((s) => s.userFound && s.userId)) {
+        const { data: userData } = await this.supabase
+          .from("users")
+          .select("id, wins, losses, elo_rating")
+          .eq("id", stat.userId)
+          .single()
+
+        if (!userData) continue
+
+        await this.supabase.from("leaderboards").upsert({
+          user_id: userData.id,
+          wins: userData.wins,
+          losses: userData.losses,
+          elo_rating: userData.elo_rating,
+          updated_at: new Date().toISOString(),
+        })
+
+        await this.supabase.from("player_analytics").upsert({
+          player_id: userData.id,
+          total_wins: userData.wins,
+          total_losses: userData.losses,
+          current_elo: userData.elo_rating,
+          win_rate: userData.wins / Math.max(1, userData.wins + userData.losses),
+          updated_at: new Date().toISOString(),
+        })
+
+        await this.updateBettingOdds(userData.id, userData.elo_rating, userData.wins, userData.losses)
+      }
+
+      console.log(`[v0] Successfully synchronized win/loss ratios across all systems`)
+    } catch (error) {
+      console.error("Error syncing win/loss across systems:", error)
+    }
+  }
+
+  private async updateBettingOdds(userId: string, eloRating: number, wins: number, losses: number) {
+    try {
+      const winRate = wins / Math.max(1, wins + losses)
+      const performanceMultiplier = Math.max(0.5, Math.min(2.0, eloRating / 1200)) // Scale based on ELO
+
+      await this.supabase
+        .from("betting_markets")
+        .update({
+          odds: Math.round((2.0 / Math.max(0.1, winRate)) * 100) / 100, // Convert win rate to odds
+          performance_multiplier: performanceMultiplier,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("player_id", userId)
+
+      console.log(
+        `[v0] Updated betting odds: Win rate ${(winRate * 100).toFixed(1)}%, Multiplier ${performanceMultiplier.toFixed(2)}`,
+      )
+    } catch (error) {
+      console.error("Error updating betting odds:", error)
+    }
   }
 }
 

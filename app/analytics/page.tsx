@@ -1,17 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input, Textarea } from "@/components/ui/input"
+import { Input } from "@/components/ui/input"
 import { MatchStatsViewer } from "@/components/analytics/match-stats-viewer"
-import { HockeyStatsTable } from "@/components/stats/hockey-stats-table"
 import { createClient } from "@/lib/supabase/client"
 import { analyticsService, type PlayerAnalytics, type TeamAnalytics } from "@/lib/services/analytics-service"
 import { csvCoordinationService } from "@/lib/services/csv-coordination-service"
-import { Search, TrendingUp, Users, Target, Upload, Download } from "lucide-react"
+import { Search, TrendingUp, Users, Target, Download } from "lucide-react"
 
 interface Match {
   id: string
@@ -76,21 +75,25 @@ export default function AnalyticsPage() {
 
   const supabase = createClient()
 
-  useEffect(() => {
-    fetchMatches()
-    loadAnalyticsData()
-    loadEloStats()
-    processCompletedMatches()
+  const loadEloStats = async () => {
+    setLoadingEloStats(true)
+    try {
+      const { data: users } = await supabase
+        .from("users")
+        .select("id, username, display_name, elo_rating, wins, losses, total_games, account_id")
+        .not("elo_rating", "is", null)
+        .order("elo_rating", { ascending: false })
+        .limit(50)
 
-    const interval = setInterval(() => {
-      processCompletedMatches()
-      loadEloStats()
-    }, 30000)
+      setEloStats(users || [])
+    } catch (error) {
+      console.error("Error loading ELO stats:", error)
+    } finally {
+      setLoadingEloStats(false)
+    }
+  }
 
-    return () => clearInterval(interval)
-  }, [])
-
-  const processCompletedMatches = async () => {
+  const processCompletedMatches = useCallback(async () => {
     setAutoProcessing(true)
     try {
       console.log("[v0] Processing completed matches for hockey stats...")
@@ -208,7 +211,46 @@ export default function AnalyticsPage() {
     } finally {
       setAutoProcessing(false)
     }
+  }, [supabase])
+
+  const refreshStatsAfterCSV = useCallback(async () => {
+    console.log("[v0] Refreshing stats after CSV submission...")
+    await Promise.all([loadEloStats(), processCompletedMatches()])
+  }, [processCompletedMatches])
+
+  const processHockeyCSV = async () => {
+    if (!csvInput.trim()) return
+
+    setCsvProcessing(true)
+    try {
+      console.log("[v0] Processing CSV data...")
+      const result = await csvCoordinationService.processAndCoordinateCSV(csvInput.trim())
+
+      if (result.success) {
+        console.log("[v0] CSV processed successfully, refreshing stats...")
+        await refreshStatsAfterCSV()
+        setCsvInput("")
+      }
+    } catch (error) {
+      console.error("[v0] Error processing CSV:", error)
+    } finally {
+      setCsvProcessing(false)
+    }
   }
+
+  useEffect(() => {
+    fetchMatches()
+    loadAnalyticsData()
+    loadEloStats()
+    processCompletedMatches()
+
+    const interval = setInterval(() => {
+      processCompletedMatches()
+      loadEloStats()
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [processCompletedMatches])
 
   const fetchMatches = async () => {
     try {
@@ -285,87 +327,6 @@ export default function AnalyticsPage() {
           player.username.toLowerCase().includes(searchTerm.toLowerCase()),
       ),
   )
-
-  const processHockeyCSV = async () => {
-    if (!csvInput.trim()) return
-
-    setCsvProcessing(true)
-    try {
-      const selectedMatchData = matches.find((m) => m.id === selectedMatch)
-      const matchContext = selectedMatchData
-        ? {
-            matchName: selectedMatchData.name,
-            gameNumber: selectedMatchData.game_number || 1,
-            matchDate: selectedMatchData.created_at,
-          }
-        : undefined
-
-      const result = await csvCoordinationService.processAndCoordinateCSV(
-        csvInput,
-        selectedMatch || undefined,
-        matchContext,
-      )
-
-      if (result.success) {
-        console.log(`[v0] Successfully coordinated ${result.processedStats.length} hockey stats across all systems`)
-
-        const processedGameStats = result.processedStats
-          .filter((stat) => stat.userFound && stat.userId && stat.actualUsername)
-          .map((stat) => ({
-            playerId: stat.userId!,
-            playerName: stat.actualUsername!,
-            team: stat.team,
-            steals: stat.stealsPlus,
-            goals: stat.goals,
-            assists: stat.assists,
-            saves: stat.saves,
-            shotsOnGoal: stat.shots,
-            shotsBlocked: 0,
-            checks: 0,
-            faceoffWinPercentage: 0,
-            interceptions: stat.pickups,
-            passes: stat.passes,
-            faceoffs: 0,
-            goalieMinutes: stat.goaltenderMinutes,
-            skaterMinutes: stat.skaterMinutes,
-            gameNumber: matchContext?.gameNumber || 1,
-            matchName: matchContext?.matchName || "Manual Entry",
-          }))
-
-        setHockeyStats(processedGameStats)
-        await loadEloStats()
-
-        const unmappedCount = result.processedStats.length - processedGameStats.length
-        if (unmappedCount > 0) {
-          console.log(`[v0] Skipped ${unmappedCount} unmapped players from CSV processing`)
-        }
-      } else {
-        console.error("CSV coordination errors:", result.errors)
-      }
-    } catch (error) {
-      console.error("Error processing hockey CSV:", error)
-    } finally {
-      setCsvProcessing(false)
-    }
-  }
-
-  const loadEloStats = async () => {
-    setLoadingEloStats(true)
-    try {
-      const { data: users } = await supabase
-        .from("users")
-        .select("id, username, display_name, elo_rating, wins, losses, total_games, account_id")
-        .not("elo_rating", "is", null)
-        .order("elo_rating", { ascending: false })
-        .limit(50)
-
-      setEloStats(users || [])
-    } catch (error) {
-      console.error("Error loading ELO stats:", error)
-    } finally {
-      setLoadingEloStats(false)
-    }
-  }
 
   const exportHockeyStats = () => {
     if (hockeyStats.length === 0) return
@@ -453,7 +414,7 @@ export default function AnalyticsPage() {
         </div>
 
         <Tabs defaultValue="match-analytics" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 bg-slate-800/90 backdrop-blur-sm border border-slate-700 shadow-lg rounded-xl p-1">
+          <TabsList className="grid w-full grid-cols-4 bg-slate-800/90 backdrop-blur-sm border border-slate-700 shadow-lg rounded-xl p-1">
             <TabsTrigger
               value="match-analytics"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
@@ -461,22 +422,16 @@ export default function AnalyticsPage() {
               Match Analytics
             </TabsTrigger>
             <TabsTrigger
-              value="hockey-stats"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
-            >
-              Hockey Stats
-            </TabsTrigger>
-            <TabsTrigger
-              value="elo-stats"
+              value="performance"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
             >
-              ELO Stats
+              Performance
             </TabsTrigger>
             <TabsTrigger
-              value="player-performance"
+              value="stats"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-600 data-[state=active]:to-amber-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
             >
-              Performance
+              Stats
             </TabsTrigger>
             <TabsTrigger
               value="team-comparison"
@@ -646,134 +601,12 @@ export default function AnalyticsPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="hockey-stats" className="space-y-8">
-            <div className="grid gap-8 lg:grid-cols-3">
-              <Card className="lg:col-span-1 bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 text-white">
-                  <CardTitle className="flex items-center gap-3 text-xl">
-                    <Upload className="h-6 w-6" />
-                    CSV Input & Game Processing
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6 p-8">
-                  <Textarea
-                    placeholder="Paste your hockey CSV data here...&#10;Format: ID,steals,goals,assists,shots,pickups,passes,passes_received,save_%,shots_on_goalie,shots_saved,goalie_minutes,skater_minutes"
-                    value={csvInput}
-                    onChange={(e) => setCsvInput(e.target.value)}
-                    rows={10}
-                    className="font-mono text-sm border-slate-600 focus:border-blue-500 focus:ring-blue-500 rounded-xl bg-slate-700 text-slate-200 placeholder:text-slate-400"
-                  />
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={processHockeyCSV}
-                      disabled={!csvInput.trim() || csvProcessing}
-                      className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-md"
-                    >
-                      {csvProcessing ? "Processing..." : "Process & Coordinate CSV"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={exportHockeyStats}
-                      disabled={hockeyStats.length === 0}
-                      className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-slate-800 shadow-md"
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="secondary"
-                      onClick={processCompletedMatches}
-                      disabled={autoProcessing}
-                      className="flex-1 bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 text-slate-200 shadow-md"
-                    >
-                      {autoProcessing ? "Auto-Processing..." : "Refresh from Completed Matches"}
-                    </Button>
-                  </div>
-                  <div className="text-sm text-slate-300 bg-slate-700 p-4 rounded-xl border border-slate-600">
-                    CSV data is automatically processed from completed matches using account IDs to correctly map
-                    players to their usernames. Statistics are coordinated across analytics, ELO ratings, and
-                    leaderboards in real-time.
-                    {hockeyStats.length > 0 && (
-                      <div className="mt-3 p-3 bg-green-900/30 border border-green-700 rounded-lg text-green-400 font-medium">
-                        ✓ Auto-processing: {hockeyStats.length} game records from {cumulativeStats.size} players with
-                        correct Account ID → Player Name mapping
-                      </div>
-                    )}
-                    {autoProcessing && (
-                      <div className="mt-3 p-3 bg-blue-900/30 border border-blue-700 rounded-lg text-blue-400 font-medium animate-pulse">
-                        🔄 Automatically processing CSV data from completed matches...
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="lg:col-span-2">
-                {hockeyStats.length > 0 ? (
-                  <div className="space-y-6">
-                    <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
-                      <CardHeader className="bg-gradient-to-r from-blue-600 via-teal-600 to-cyan-600 text-white">
-                        <CardTitle className="flex items-center gap-3 text-xl">
-                          <TrendingUp className="h-6 w-6" />
-                          Hockey Statistics by Game
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-8">
-                        <div className="grid grid-cols-4 gap-6 mb-6">
-                          <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                            <div className="text-3xl font-bold text-blue-400 mb-2">
-                              {hockeyStats.reduce((sum, s) => sum + s.goals, 0)}
-                            </div>
-                            <div className="text-sm font-semibold text-slate-300">Total Goals</div>
-                          </div>
-                          <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                            <div className="text-3xl font-bold text-green-400 mb-2">
-                              {hockeyStats.reduce((sum, s) => sum + s.assists, 0)}
-                            </div>
-                            <div className="text-sm font-semibold text-slate-300">Total Assists</div>
-                          </div>
-                          <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                            <div className="text-3xl font-bold text-purple-400 mb-2">
-                              {hockeyStats.reduce((sum, s) => sum + s.saves, 0)}
-                            </div>
-                            <div className="text-sm font-semibold text-slate-300">Total Saves</div>
-                          </div>
-                          <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                            <div className="text-3xl font-bold text-orange-400 mb-2">{hockeyStats.length}</div>
-                            <div className="text-sm font-semibold text-slate-300">Game Records</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <HockeyStatsTable stats={hockeyStats} />
-                  </div>
-                ) : (
-                  <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl">
-                    <CardContent className="p-16">
-                      <div className="text-center space-y-6">
-                        <Upload className="h-16 w-16 mx-auto text-slate-500" />
-                        <div>
-                          <h3 className="text-2xl font-bold text-slate-200 mb-2">No Hockey Stats</h3>
-                          <p className="text-slate-400 text-lg">
-                            Process CSV data manually or click "Refresh from Completed Matches" to automatically load
-                            statistics from all completed games with game numbers and match context
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="elo-stats" className="space-y-8">
+          <TabsContent value="performance" className="space-y-8">
             <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
               <CardHeader className="bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 text-white">
                 <CardTitle className="flex items-center gap-3 text-xl">
                   <TrendingUp className="h-6 w-6" />
-                  ELO Rankings & Player Statistics Spreadsheet
+                  ELO Rankings & Player Performance
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-8">
@@ -966,93 +799,188 @@ export default function AnalyticsPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="player-performance" className="space-y-8">
+          <TabsContent value="stats" className="space-y-8">
             <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
               <CardHeader className="bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 text-white">
                 <CardTitle className="flex items-center gap-3 text-xl">
                   <Users className="h-6 w-6" />
-                  Player Performance Analytics
+                  CSV Hockey Statistics Spreadsheet
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-8">
                 {cumulativeStats.size > 0 ? (
                   <div className="space-y-6">
-                    <div className="grid grid-cols-4 gap-6 mb-8">
-                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                        <div className="text-3xl font-bold text-orange-400 mb-2">{cumulativeStats.size}</div>
-                        <div className="text-sm font-semibold text-slate-300">Active Players</div>
+                    <div className="grid grid-cols-6 gap-4 mb-8">
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-orange-400 mb-1">{cumulativeStats.size}</div>
+                        <div className="text-xs font-semibold text-slate-300">Active Players</div>
                       </div>
-                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                        <div className="text-3xl font-bold text-blue-400 mb-2">
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-blue-400 mb-1">
                           {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalGoals, 0)}
                         </div>
-                        <div className="text-sm font-semibold text-slate-300">Total Goals</div>
+                        <div className="text-xs font-semibold text-slate-300">Total Goals</div>
                       </div>
-                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                        <div className="text-3xl font-bold text-green-400 mb-2">
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-green-400 mb-1">
                           {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalAssists, 0)}
                         </div>
-                        <div className="text-sm font-semibold text-slate-300">Total Assists</div>
+                        <div className="text-xs font-semibold text-slate-300">Total Assists</div>
                       </div>
-                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                        <div className="text-3xl font-bold text-purple-400 mb-2">
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-purple-400 mb-1">
                           {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalSaves, 0)}
                         </div>
-                        <div className="text-sm font-semibold text-slate-300">Total Saves</div>
+                        <div className="text-xs font-semibold text-slate-300">Total Saves</div>
+                      </div>
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-cyan-400 mb-1">
+                          {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalShots, 0)}
+                        </div>
+                        <div className="text-xs font-semibold text-slate-300">Total Shots</div>
+                      </div>
+                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
+                        <div className="text-2xl font-bold text-yellow-400 mb-1">
+                          {Array.from(cumulativeStats.values()).reduce(
+                            (sum, p) => sum + p.totalGoals + p.totalAssists,
+                            0,
+                          )}
+                        </div>
+                        <div className="text-xs font-semibold text-slate-300">Total Points</div>
                       </div>
                     </div>
 
-                    <div className="space-y-4">
-                      {Array.from(cumulativeStats.entries())
-                        .sort(([, a], [, b]) => b.totalGoals + b.totalAssists - (a.totalGoals + a.totalAssists))
-                        .slice(0, 20)
-                        .map(([playerId, stats]) => (
-                          <div
-                            key={playerId}
-                            className="p-6 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border border-slate-600 rounded-xl hover:shadow-lg hover:border-orange-500 transition-all duration-300"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex flex-col">
-                                <div className="text-lg font-bold text-slate-200">{stats.playerName}</div>
-                                <div className="text-sm text-slate-400">{stats.totalGames} games played</div>
-                              </div>
-                              <div className="flex items-center gap-8">
-                                <div className="text-center">
-                                  <div className="text-xl font-bold text-blue-400">{stats.totalGoals}</div>
-                                  <div className="text-xs text-slate-400 font-medium">Goals</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-xl font-bold text-green-400">{stats.totalAssists}</div>
-                                  <div className="text-xs text-slate-400 font-medium">Assists</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-xl font-bold text-purple-400">{stats.totalSaves}</div>
-                                  <div className="text-xs text-slate-400 font-medium">Saves</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-xl font-bold text-orange-400">
-                                    {Math.round(stats.totalMinutes)}
-                                  </div>
-                                  <div className="text-xs text-slate-400 font-medium">Minutes</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-xl font-bold text-yellow-400">
-                                    {stats.totalGoals + stats.totalAssists}
-                                  </div>
-                                  <div className="text-xs text-slate-400 font-medium">Points</div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                    <div className="bg-slate-900/50 rounded-xl border border-slate-600 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gradient-to-r from-orange-700 via-amber-700 to-yellow-700 text-white">
+                            <tr>
+                              <th className="px-3 py-3 text-left text-sm font-semibold">Rank</th>
+                              <th className="px-3 py-3 text-left text-sm font-semibold">Player Name</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Games</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Goals</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Assists</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Points</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Saves</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Shots</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Shot %</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Minutes</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">PPG</th>
+                              <th className="px-3 py-3 text-center text-sm font-semibold">Account ID</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-700">
+                            {Array.from(cumulativeStats.entries())
+                              .sort(([, a], [, b]) => b.totalGoals + b.totalAssists - (a.totalGoals + a.totalAssists))
+                              .map(([playerId, stats], index) => {
+                                const points = stats.totalGoals + stats.totalAssists
+                                const shotPercentage =
+                                  stats.totalShots > 0 ? Math.round((stats.totalGoals / stats.totalShots) * 100) : 0
+                                const pointsPerGame =
+                                  stats.totalGames > 0 ? (points / stats.totalGames).toFixed(2) : "0.00"
+
+                                return (
+                                  <tr key={playerId} className="hover:bg-slate-800/50 transition-colors duration-200">
+                                    <td className="px-3 py-4">
+                                      <div className="flex items-center">
+                                        <div className="text-lg font-bold text-slate-300 min-w-[2rem]">
+                                          #{index + 1}
+                                        </div>
+                                        {index < 3 && (
+                                          <div className="ml-2">
+                                            {index === 0 && <span className="text-yellow-400">🥇</span>}
+                                            {index === 1 && <span className="text-gray-400">🥈</span>}
+                                            {index === 2 && <span className="text-amber-600">🥉</span>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-4">
+                                      <div className="font-semibold text-slate-200">{stats.playerName}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-sm font-semibold text-slate-300">{stats.totalGames}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-lg font-bold text-blue-400">{stats.totalGoals}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-lg font-bold text-green-400">{stats.totalAssists}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-lg font-bold text-yellow-400">{points}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-lg font-bold text-purple-400">{stats.totalSaves}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-sm font-semibold text-cyan-400">{stats.totalShots}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-sm font-semibold text-orange-400">{shotPercentage}%</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-sm font-semibold text-pink-400">
+                                        {Math.round(stats.totalMinutes)}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="text-sm font-semibold text-indigo-400">{pointsPerGame}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                      <div className="font-mono text-xs text-slate-400">{stats.accountId || "N/A"}</div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-4">
+                      <div className="text-sm text-slate-400">
+                        Showing {cumulativeStats.size} players with CSV hockey statistics from processed matches
+                      </div>
+                      <Button
+                        onClick={() => {
+                          const csvContent = [
+                            "Rank,Player Name,Games,Goals,Assists,Points,Saves,Shots,Shot %,Minutes,PPG,Account ID",
+                            ...Array.from(cumulativeStats.entries())
+                              .sort(([, a], [, b]) => b.totalGoals + b.totalAssists - (a.totalGoals + a.totalAssists))
+                              .map(([playerId, stats], index) => {
+                                const points = stats.totalGoals + stats.totalAssists
+                                const shotPercentage =
+                                  stats.totalShots > 0 ? Math.round((stats.totalGoals / stats.totalShots) * 100) : 0
+                                const pointsPerGame =
+                                  stats.totalGames > 0 ? (points / stats.totalGames).toFixed(2) : "0.00"
+
+                                return `${index + 1},"${stats.playerName}",${stats.totalGames},${stats.totalGoals},${stats.totalAssists},${points},${stats.totalSaves},${stats.totalShots},${shotPercentage}%,${Math.round(stats.totalMinutes)},${pointsPerGame},"${stats.accountId || "N/A"}"`
+                              }),
+                          ].join("\n")
+
+                          const blob = new Blob([csvContent], { type: "text/csv" })
+                          const url = window.URL.createObjectURL(blob)
+                          const a = document.createElement("a")
+                          a.href = url
+                          a.download = `csv-hockey-stats-${new Date().toISOString().split("T")[0]}.csv`
+                          a.click()
+                          window.URL.revokeObjectURL(url)
+                        }}
+                        variant="outline"
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-slate-800 shadow-md"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Export CSV Stats
+                      </Button>
                     </div>
                   </div>
                 ) : (
                   <div className="text-center py-16 text-slate-400">
                     <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-2xl font-bold text-slate-200 mb-2">No Performance Data</h3>
+                    <h3 className="text-2xl font-bold text-slate-200 mb-2">No CSV Statistics Available</h3>
                     <p className="text-lg">
-                      Player performance statistics will appear here once hockey stats are processed
+                      Hockey statistics from CSV processing will appear here once matches are completed and processed
                     </p>
                   </div>
                 )}
