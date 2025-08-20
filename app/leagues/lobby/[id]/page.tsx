@@ -317,42 +317,6 @@ export default function MatchLobbyPage() {
     }
   }
 
-  const handleLeaveLobby = async () => {
-    console.log("[v0] Leave lobby button clicked")
-
-    if (!isAuthenticated || !user || !lobby) {
-      toast.error("Unable to leave lobby")
-      return
-    }
-
-    setIsProcessing(true)
-
-    try {
-      const { error } = await supabase
-        .from("match_participants")
-        .delete()
-        .eq("match_id", lobby.id)
-        .eq("user_id", user.id)
-
-      if (error) {
-        console.error("[v0] Database error leaving lobby:", error)
-        toast.error(`Failed to leave lobby: ${error.message || "Database error"}`)
-        return
-      }
-
-      console.log("[v0] Successfully left lobby")
-      toast.success("Left lobby successfully!")
-
-      await loadLobbyData()
-      setTimeout(() => loadLobbyData(), 500)
-    } catch (error) {
-      console.error("[v0] Error leaving lobby:", error)
-      toast.error(`Failed to leave lobby: ${error.message || "Unknown error"}`)
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
   const handleLobbyActivation = async () => {
     if (!lobby || isProcessing) return
 
@@ -572,17 +536,6 @@ export default function MatchLobbyPage() {
                         {isProcessing ? "Joining..." : "Join Lobby"}
                       </Button>
                     )}
-                    {isUserInLobby && isAuthenticated && lobby.status === "waiting" && (
-                      <Button
-                        onClick={handleLeaveLobby}
-                        size="sm"
-                        disabled={isProcessing}
-                        variant="outline"
-                        className="border-red-500 text-red-500 hover:bg-red-50 bg-transparent"
-                      >
-                        {isProcessing ? "Leaving..." : "Leave Lobby"}
-                      </Button>
-                    )}
                     {!isFull && !isUserInLobby && !isAuthenticated && (
                       <Button
                         onClick={() => {
@@ -595,7 +548,7 @@ export default function MatchLobbyPage() {
                         Login to Join
                       </Button>
                     )}
-                    {(isFull || (isUserInLobby && lobby.status !== "waiting")) && (
+                    {(isFull || isUserInLobby) && (
                       <div className="text-xs text-muted-foreground">{isFull ? "Lobby Full" : "Already Joined"}</div>
                     )}
                   </div>

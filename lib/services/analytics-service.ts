@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client"
+import { csvIdMappingService } from "./csv-id-mapping"
 
 export interface PlayerAnalytics {
   id: string
@@ -200,9 +201,9 @@ export class AnalyticsService {
       .from("matches")
       .select(`
         *,
-        match_analytics!match_analytics_match_id_fkey(*),
-        match_results!match_results_match_id_fkey(team1_score, team2_score, winning_team, validated_at)
+        match_analytics!match_analytics_match_id_fkey(*)
       `)
+      .not("match_analytics.match_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(limit)
 
@@ -210,10 +211,7 @@ export class AnalyticsService {
       console.error("Error fetching matches with analytics:", error)
       const { data: fallbackData, error: fallbackError } = await this.supabase
         .from("matches")
-        .select(`
-          *,
-          match_results!match_results_match_id_fkey(team1_score, team2_score, winning_team, validated_at)
-        `)
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(limit)
 
@@ -222,30 +220,10 @@ export class AnalyticsService {
         return []
       }
 
-      return (fallbackData || []).map((match) => ({
-        ...match,
-        team1_score: match.match_results?.[0]?.team1_score || 0,
-        team2_score: match.match_results?.[0]?.team2_score || 0,
-        winning_team: match.match_results?.[0]?.winning_team || null,
-        total_goals: 0,
-        total_assists: 0,
-        total_saves: 0,
-        avg_elo: 0,
-        all_players: [],
-      }))
+      return fallbackData || []
     }
 
-    return (data || []).map((match) => ({
-      ...match,
-      team1_score: match.match_results?.[0]?.team1_score || 0,
-      team2_score: match.match_results?.[0]?.team2_score || 0,
-      winning_team: match.match_results?.[0]?.winning_team || null,
-      total_goals: match.match_analytics?.[0]?.total_kills || 0,
-      total_assists: 0,
-      total_saves: 0,
-      avg_elo: 0,
-      all_players: [],
-    }))
+    return data || []
   }
 
   async calculatePlayerAverages(userId: string): Promise<{
@@ -731,11 +709,75 @@ export class AnalyticsService {
   }
 
   async getStackedCSVStats(): Promise<CSVPlayerStats[]> {
-    return []
+    const allCSVData = await this.getAllCSVData()
+
+    if (allCSVData.length === 0) {
+      return []
+    }
+
+    const playerStatsMap = new Map<string, CSVPlayerStats>()
+
+    for (const playerData of allCSVData) {
+      const csvId = playerData.id
+      if (!csvId) continue
+
+      if (!playerStatsMap.has(csvId)) {
+        const userData = await csvIdMappingService.getUserByCSVId(csvId)
+
+        playerStatsMap.set(csvId, {
+          id: csvId, // Keep CSV ID as the identifier
+          user: userData, // Add actual user data for display
+          steals: 0,
+          goals: 0,
+          assists: 0,
+          points: 0,
+          shots: 0,
+          shootingPercentage: 0,
+          pickups: 0,
+          passes: 0,
+          passesReceived: 0,
+          savePercentage: 0,
+          shotsOnGoalie: 0,
+          shotsSaved: 0,
+          goalieMinutes: 0,
+          skaterMinutes: 0,
+          gamesPlayed: 0,
+        })
+      }
+
+      const stats = playerStatsMap.get(csvId)!
+
+      // Stack/accumulate the stats
+      stats.steals += playerData.steals || 0
+      stats.goals += playerData.goals || 0
+      stats.assists += playerData.assists || 0
+      stats.points += playerData.points || 0
+      stats.shots += playerData.shots || 0
+      stats.pickups += playerData.pickups || 0
+      stats.passes += playerData.passes || 0
+      stats.passesReceived += playerData.passesReceived || 0
+      stats.shotsOnGoalie += playerData.shotsOnGoalie || 0
+      stats.shotsSaved += playerData.shotsSaved || 0
+      stats.goalieMinutes += playerData.goalieMinutes || 0
+      stats.skaterMinutes += playerData.skaterMinutes || 0
+      stats.gamesPlayed += 1
+
+      // Calculate averages for percentage stats
+      const totalShootingPercentage =
+        stats.shootingPercentage * (stats.gamesPlayed - 1) + (playerData.shootingPercentage || 0)
+      stats.shootingPercentage = totalShootingPercentage / stats.gamesPlayed
+
+      const totalSavePercentage = stats.savePercentage * (stats.gamesPlayed - 1) + (playerData.savePercentage || 0)
+      stats.savePercentage = totalSavePercentage / stats.gamesPlayed
+    }
+
+    // Convert map to array and sort by points
+    return Array.from(playerStatsMap.values()).sort((a, b) => b.points - a.points)
   }
 
   async getPlayerStackedCSVStats(csvId: string): Promise<CSVPlayerStats | null> {
-    return null
+    const allStats = await this.getStackedCSVStats()
+    return allStats.find((stats) => stats.id === csvId) || null
   }
 
   async getCSVLeaderboards(): Promise<{
@@ -746,13 +788,18 @@ export class AnalyticsService {
     bestShootingPercentage: CSVPlayerStats[]
     mostSteals: CSVPlayerStats[]
   }> {
+    const allStats = await this.getStackedCSVStats()
+
     return {
-      topScorers: [],
-      topGoalScorers: [],
-      topAssists: [],
-      mostGamesPlayed: [],
-      bestShootingPercentage: [],
-      mostSteals: [],
+      topScorers: [...allStats].sort((a, b) => b.points - a.points).slice(0, 10),
+      topGoalScorers: [...allStats].sort((a, b) => b.goals - a.goals).slice(0, 10),
+      topAssists: [...allStats].sort((a, b) => b.assists - a.assists).slice(0, 10),
+      mostGamesPlayed: [...allStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed).slice(0, 10),
+      bestShootingPercentage: [...allStats]
+        .filter((s) => s.shots > 0)
+        .sort((a, b) => b.shootingPercentage - a.shootingPercentage)
+        .slice(0, 10),
+      mostSteals: [...allStats].sort((a, b) => b.steals - a.steals).slice(0, 10),
     }
   }
 }
