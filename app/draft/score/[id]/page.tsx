@@ -293,9 +293,9 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         `[v0] Consensus check: ${largestGroup.length}/${totalParticipants} submissions (need ${requiredConsensus})`,
       )
 
+      // Only log consensus status, don't auto-complete the match
       if (largestGroup.length >= requiredConsensus && !matchResult && matchData?.status !== "completed") {
-        console.log("[v0] Consensus reached with", largestGroup.length, "matching submissions")
-        await completeMatch(largestGroup[0])
+        console.log("[v0] Consensus threshold reached, but waiting for manual completion")
       }
 
       const userSubmission = data.find((s) => s.submitter_id === user?.id)
@@ -309,6 +309,26 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
       }
     } catch (error) {
       console.error("[v0] Error loading submissions:", error)
+    }
+  }
+
+  const handleCompleteMatch = async () => {
+    const largestGroup = Object.values(consensusGroups).reduce(
+      (max, current) => (current.length > max.length ? current : max),
+      [],
+    )
+
+    const totalParticipants = matchData?.match_participants?.length || 8
+    const requiredConsensus = Math.ceil(totalParticipants * 0.6)
+
+    if (largestGroup.length < requiredConsensus) {
+      toast.error(`Need ${requiredConsensus} matching submissions to complete match`)
+      return
+    }
+
+    if (largestGroup.length > 0) {
+      await completeMatch(largestGroup[0])
+      toast.success("Match completed successfully!")
     }
   }
 
@@ -719,33 +739,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
       }
 
       if (csvCode.trim()) {
-        console.log("[v0] Processing CSV data with coordination service:", csvCode.trim())
-
-        try {
-          const { csvCoordinationService } = await import("@/lib/services/csv-coordination-service")
-          const result = await csvCoordinationService.processAndCoordinateCSV(csvCode.trim(), params.id, {
-            matchName: matchData?.name || "Unknown Match",
-            gameNumber: 1,
-            matchDate: new Date().toISOString(),
-          })
-
-          if (result.success) {
-            console.log(`[v0] Successfully coordinated ${result.processedStats.length} hockey stats across all systems`)
-
-            // Log account ID to username mappings
-            result.processedStats.forEach((stat) => {
-              if (stat.userFound) {
-                console.log(`[v0] Mapped Account ID "${stat.playerId}" → "${stat.actualUsername}" (${stat.userId})`)
-              } else {
-                console.log(`[v0] Account ID "${stat.playerId}" not found in database`)
-              }
-            })
-          } else {
-            console.error("[v0] CSV coordination failed:", result.errors)
-          }
-        } catch (parseError) {
-          console.error("[v0] Error in CSV coordination:", parseError)
-        }
+        console.log("[v0] CSV data submitted:", csvCode.trim())
       }
 
       setHasSubmitted(true)
@@ -1081,6 +1075,9 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
                     <p className="text-sm text-muted-foreground">No submissions yet</p>
                   )}
                 </div>
+                <Button onClick={handleCompleteMatch} className="w-full bg-green-600 hover:bg-green-700">
+                  Complete Match
+                </Button>
               </div>
             </CardContent>
           </Card>

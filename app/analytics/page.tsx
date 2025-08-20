@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { MatchStatsViewer } from "@/components/analytics/match-stats-viewer"
 import { createClient } from "@/lib/supabase/client"
 import { analyticsService, type PlayerAnalytics, type TeamAnalytics } from "@/lib/services/analytics-service"
-import { csvCoordinationService } from "@/lib/services/csv-coordination-service"
 import { Search, TrendingUp, Users, Target, Download } from "lucide-react"
 
 interface Match {
@@ -120,96 +119,12 @@ export default function AnalyticsPage() {
       if (completedMatches && completedMatches.length > 0) {
         console.log(`[v0] Found ${completedMatches.length} completed matches with CSV data`)
 
-        // Process each match's CSV data and combine statistics
         const allStats = new Map<string, any>()
         const gameStats: HockeyStat[] = []
 
-        for (const match of completedMatches) {
-          if (match.csv_code) {
-            const result = await csvCoordinationService.processAndCoordinateCSV(match.csv_code, match.match_id, {
-              matchName: match.matches.name,
-              gameNumber: match.matches.game_number || 1,
-              matchDate: match.validated_at,
-            })
-
-            console.log(
-              `[v0] Processing match ${match.matches.name} - found ${result.processedStats.length} player records`,
-            )
-
-            result.processedStats.forEach((stat) => {
-              if (stat.userFound && stat.userId && stat.actualUsername) {
-                console.log(`[v0] Auto-mapped Account ID ${stat.accountId} → ${stat.actualUsername} (${stat.userId})`)
-
-                // Add to individual game stats with proper account ID mapping
-                gameStats.push({
-                  playerId: stat.userId,
-                  playerName: stat.actualUsername,
-                  team: stat.team,
-                  steals: stat.stealsPlus,
-                  goals: stat.goals,
-                  assists: stat.assists,
-                  saves: stat.saves,
-                  shotsOnGoal: stat.shots,
-                  shotsBlocked: 0,
-                  checks: 0,
-                  faceoffWinPercentage: 0,
-                  interceptions: stat.pickups,
-                  passes: stat.passes,
-                  faceoffs: 0,
-                  goalieMinutes: stat.goaltenderMinutes,
-                  skaterMinutes: stat.skaterMinutes,
-                  gameNumber: match.matches.game_number || 1,
-                  matchName: match.matches.name,
-                })
-
-                // Combine stats for cumulative view
-                const existing = allStats.get(stat.userId) || {
-                  playerId: stat.userId,
-                  playerName: stat.actualUsername,
-                  totalGames: 0,
-                  totalGoals: 0,
-                  totalAssists: 0,
-                  totalSaves: 0,
-                  totalShots: 0,
-                  totalSteals: 0,
-                  totalMinutes: 0,
-                  avgSavePercent: 0,
-                  team: stat.team,
-                  matches: [],
-                }
-
-                existing.totalGames += 1
-                existing.totalGoals += stat.goals
-                existing.totalAssists += stat.assists
-                existing.totalSaves += stat.saves
-                existing.totalShots += stat.shots
-                existing.totalSteals += stat.stealsPlus
-                existing.totalMinutes += stat.goaltenderMinutes + stat.skaterMinutes
-                existing.avgSavePercent =
-                  existing.totalSaves > 0 ? (existing.totalSaves / existing.totalShots) * 100 : 0
-                existing.matches.push({
-                  matchId: match.match_id,
-                  matchName: match.matches.name,
-                  gameNumber: match.matches.game_number || 1,
-                  date: match.validated_at,
-                  goals: stat.goals,
-                  assists: stat.assists,
-                  saves: stat.saves,
-                })
-
-                allStats.set(stat.userId, existing)
-              } else {
-                console.log(`[v0] Skipping unmapped player with Account ID: ${stat.accountId}`)
-              }
-            })
-          }
-        }
-
-        setHockeyStats(gameStats.sort((a, b) => (b.gameNumber || 0) - (a.gameNumber || 0)))
+        setHockeyStats(gameStats)
         setCumulativeStats(allStats)
-        console.log(
-          `[v0] Auto-processed ${gameStats.length} individual game records with correct account ID → player name mapping`,
-        )
+        console.log("[v0] CSV processing functionality has been removed")
       } else {
         console.log("[v0] No completed matches with CSV data found")
       }
@@ -230,14 +145,8 @@ export default function AnalyticsPage() {
 
     setCsvProcessing(true)
     try {
-      console.log("[v0] Processing CSV data...")
-      const result = await csvCoordinationService.processAndCoordinateCSV(csvInput.trim())
-
-      if (result.success) {
-        console.log("[v0] CSV processed successfully, refreshing stats...")
-        await refreshStatsAfterCSV()
-        setCsvInput("")
-      }
+      console.log("[v0] CSV processing functionality has been removed")
+      setCsvInput("")
     } catch (error) {
       console.error("[v0] Error processing CSV:", error)
     } finally {
@@ -254,18 +163,31 @@ export default function AnalyticsPage() {
 
   const fetchMatches = async () => {
     try {
-      const { data } = await supabase
+      console.log("[v0] Fetching matches from database...")
+
+      const { data, error } = await supabase
         .from("matches")
         .select(
           "id, name, match_type, status, created_at, max_participants, team1_name, team2_name, team1_score, team2_score, winning_team, duration, total_goals, total_assists, total_saves, avg_elo, all_players, game_number",
         )
-        .in("status", ["completed", "finished"])
         .order("created_at", { ascending: false })
         .limit(50)
 
+      if (error) {
+        console.error("[v0] Error fetching matches:", error)
+        throw error
+      }
+
+      console.log(`[v0] Found ${data?.length || 0} matches in database`)
       setMatches(data || [])
+
+      // If no matches exist, log helpful information
+      if (!data || data.length === 0) {
+        console.log("[v0] No matches found - this is normal for a new installation")
+        console.log("[v0] Matches will appear here once games are created and completed")
+      }
     } catch (error) {
-      console.error("Error fetching matches:", error)
+      console.error("[v0] Error fetching matches:", error)
     } finally {
       setLoading(false)
     }
