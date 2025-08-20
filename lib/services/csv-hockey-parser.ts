@@ -28,43 +28,66 @@ export class CSVHockeyParser {
       .filter((line) => line.trim().length > 0) // Remove empty lines
 
     const stats: HockeyStats[] = []
+    const processedPlayers = new Set<string>()
 
     for (const line of lines) {
       if (!line.trim()) continue
 
-      const values = line.split(",").map((v) => v.trim().replace(/^,+|,+$/g, "")) // Remove leading/trailing commas
-      if (values.length < 14) {
-        console.log(`[v0] Skipping invalid CSV line (${values.length} fields): ${line}`)
+      const values = line.split(",").map((v) => v.trim())
+
+      // Remove empty leading values and adjust indices accordingly
+      let startIndex = 0
+      while (startIndex < values.length && (!values[startIndex] || values[startIndex] === "")) {
+        startIndex++
+      }
+
+      const adjustedValues = values.slice(startIndex)
+
+      if (adjustedValues.length < 14) {
+        console.log(`[v0] Skipping invalid CSV line (${adjustedValues.length} fields after adjustment): ${line}`)
         continue
       }
 
-      const fullIdentifier = values[1] || ""
-      const playerIdMatch = fullIdentifier.match(/-(\d+)$/) // Extract the last numeric part after the final dash
-      const extractedPlayerId = playerIdMatch ? playerIdMatch[1] : fullIdentifier
+      const fullIdentifier = adjustedValues[1] || ""
 
-      const teamMatch = fullIdentifier.match(/^(\d+)-/) // Extract the first number before the first dash
-      const extractedTeam = teamMatch ? Number.parseInt(teamMatch[1]) : Number.parseInt(values[0]) || 0
+      // Skip empty or invalid player identifiers
+      if (!fullIdentifier || fullIdentifier.length < 3) {
+        console.log(`[v0] Skipping line with empty or invalid player identifier: ${line}`)
+        continue
+      }
+
+      let accountId = fullIdentifier
+      if (fullIdentifier.includes("-")) {
+        const accountIdMatch = fullIdentifier.match(/-(\d+)$/) // Extract the last numeric part after the final dash
+        accountId = accountIdMatch ? accountIdMatch[1] : fullIdentifier
+      }
+
+      if (processedPlayers.has(accountId)) {
+        console.log(`[v0] Skipping duplicate account ID "${accountId}"`)
+        continue
+      }
+      processedPlayers.add(accountId)
 
       const stat: HockeyStats = {
-        team: extractedTeam, // Use extracted team from identifier
-        matchId: fullIdentifier,
-        playerId: extractedPlayerId, // Use extracted player ID instead of values[2]
-        stealsPlus: Number.parseInt(values[2]) || 0,
-        goals: Number.parseInt(values[3]) || 0,
-        assists: Number.parseInt(values[4]) || 0,
-        shots: Number.parseInt(values[5]) || 0,
-        pickups: Number.parseInt(values[6]) || 0,
-        passes: Number.parseInt(values[7]) || 0,
-        passReceived: Number.parseInt(values[8]) || 0,
-        savePercent: Number.parseFloat(values[9]) || 0,
-        saves: Number.parseInt(values[10]) || 0,
-        allowed: Number.parseInt(values[11]) || 0,
-        goaltenderMinutes: Number.parseInt(values[12]) || 0,
-        skaterMinutes: Number.parseInt(values[13]) || 0,
+        team: 0, // Set neutral team (0) instead of using CSV team data
+        matchId: `match-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        playerId: accountId, // Use Account ID as primary identifier
+        stealsPlus: Number.parseInt(adjustedValues[2]) || 0,
+        goals: Number.parseInt(adjustedValues[3]) || 0,
+        assists: Number.parseInt(adjustedValues[4]) || 0,
+        shots: Number.parseInt(adjustedValues[5]) || 0,
+        pickups: Number.parseInt(adjustedValues[6]) || 0,
+        passes: Number.parseInt(adjustedValues[7]) || 0,
+        passReceived: Number.parseInt(adjustedValues[8]) || 0,
+        savePercent: Number.parseFloat(adjustedValues[9]) || 0,
+        saves: Number.parseInt(adjustedValues[10]) || 0,
+        allowed: Number.parseInt(adjustedValues[11]) || 0,
+        goaltenderMinutes: Number.parseInt(adjustedValues[12]) || 0,
+        skaterMinutes: Number.parseInt(adjustedValues[13]) || 0,
       }
 
       console.log(
-        `[v0] Extracted team ${extractedTeam} and player ID "${extractedPlayerId}" from identifier "${fullIdentifier}"`,
+        `[v0] Processed account ID "${accountId}" from identifier "${fullIdentifier}" (team assignment ignored)`,
       )
       stats.push(stat)
     }
@@ -97,8 +120,8 @@ export function parseHockeyCSV(csvText: string) {
   // Convert to the format expected by the analytics page
   return parsedStats.map((stat) => ({
     playerId: stat.playerId,
-    playerName: stat.username || `Player ${stat.playerId}`,
-    team: stat.team,
+    playerName: stat.username || "Unknown Player",
+    team: stat.team, // Will now be 0 (neutral) for all players
     steals: stat.stealsPlus,
     goals: stat.goals,
     assists: stat.assists,

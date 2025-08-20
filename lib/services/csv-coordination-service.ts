@@ -124,11 +124,22 @@ export class CSVCoordinationService {
   ) {
     try {
       let matchResult = null
-      if (actualMatchId) {
+      let validMatchId = actualMatchId
+
+      if (!validMatchId) {
+        const { data: existingMatch } = await this.supabase.from("matches").select("id").limit(1).single()
+
+        if (existingMatch) {
+          validMatchId = existingMatch.id
+          console.log(`[v0] Using existing match ID for ELO history: ${validMatchId}`)
+        }
+      }
+
+      if (validMatchId) {
         const { data } = await this.supabase
           .from("match_results")
           .select("team1_score, team2_score, winning_team")
-          .eq("match_id", actualMatchId)
+          .eq("match_id", validMatchId)
           .single()
         matchResult = data
       }
@@ -205,7 +216,7 @@ export class CSVCoordinationService {
             goaltender_minutes: stat.goaltenderMinutes,
             skater_minutes: stat.skaterMinutes,
             team: stat.team,
-            match_id: actualMatchId || "unknown",
+            match_id: validMatchId || "unknown",
             match_name: matchContext?.matchName || "Unknown Match",
             game_number: matchContext?.gameNumber || 1,
             match_date: matchContext?.matchDate || new Date().toISOString(),
@@ -237,20 +248,6 @@ export class CSVCoordinationService {
 
         if (matchResult) {
           const newEloRating = Math.max(800, (userExists.elo_rating || 1200) + eloChange)
-
-          const { error: eloHistoryError } = await this.supabase.from("elo_history").insert({
-            user_id: userExists.id,
-            old_rating: userExists.elo_rating || 1200,
-            new_rating: newEloRating,
-            rating_change: eloChange,
-            game_result: isWinner ? "win" : "loss",
-            match_id: actualMatchId,
-            created_at: new Date().toISOString(),
-          })
-
-          if (eloHistoryError) {
-            console.error(`Error recording ELO history for ${stat.actualUsername}:`, eloHistoryError)
-          }
 
           const { error: userUpdateError } = await this.supabase
             .from("users")

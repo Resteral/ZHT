@@ -6,6 +6,9 @@ export class CSVIdMappingService {
   private userCache = new Map<string, { id: string; username: string; elo_rating: number }>()
 
   private specificMappings = new Map<string, string>([
+    ["1", "Resteral"],
+    ["2", "Eric"],
+    ["5822233", "Liltoo"],
     ["1839314", "adonis"],
     ["6156823", "rizzy"],
     ["6820063", "DavidPameten"],
@@ -16,6 +19,13 @@ export class CSVIdMappingService {
     ["4964615", "Cerv"],
     ["4096795", "EzHockey"],
     ["6218367", "Resteral"],
+    ["4858499", "Mythic"],
+    ["8559704", "Post"],
+    ["8310237", "Pirhana"],
+    ["1601907", "DavidPameten"],
+    ["8283067", "Cerv"],
+    ["823531", "Trench"],
+    ["9711096", "Rush"],
     // Add more mappings as needed
   ])
 

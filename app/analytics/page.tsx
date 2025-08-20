@@ -81,6 +81,13 @@ export default function AnalyticsPage() {
     loadAnalyticsData()
     loadEloStats()
     processCompletedMatches()
+
+    const interval = setInterval(() => {
+      processCompletedMatches()
+      loadEloStats()
+    }, 30000)
+
+    return () => clearInterval(interval)
   }, [])
 
   const processCompletedMatches = async () => {
@@ -117,12 +124,18 @@ export default function AnalyticsPage() {
               matchDate: match.validated_at,
             })
 
+            console.log(
+              `[v0] Processing match ${match.matches.name} - found ${result.processedStats.length} player records`,
+            )
+
             result.processedStats.forEach((stat) => {
-              if (stat.userFound && stat.userId) {
-                // Add to individual game stats
+              if (stat.userFound && stat.userId && stat.actualUsername) {
+                console.log(`[v0] Auto-mapped Account ID ${stat.accountId} → ${stat.actualUsername} (${stat.userId})`)
+
+                // Add to individual game stats with proper account ID mapping
                 gameStats.push({
                   playerId: stat.userId,
-                  playerName: stat.actualUsername || `Player ${stat.playerId}`,
+                  playerName: stat.actualUsername,
                   team: stat.team,
                   steals: stat.stealsPlus,
                   goals: stat.goals,
@@ -144,7 +157,7 @@ export default function AnalyticsPage() {
                 // Combine stats for cumulative view
                 const existing = allStats.get(stat.userId) || {
                   playerId: stat.userId,
-                  playerName: stat.actualUsername || `Player ${stat.playerId}`,
+                  playerName: stat.actualUsername,
                   totalGames: 0,
                   totalGoals: 0,
                   totalAssists: 0,
@@ -177,6 +190,8 @@ export default function AnalyticsPage() {
                 })
 
                 allStats.set(stat.userId, existing)
+              } else {
+                console.log(`[v0] Skipping unmapped player with Account ID: ${stat.accountId}`)
               }
             })
           }
@@ -185,7 +200,7 @@ export default function AnalyticsPage() {
         setHockeyStats(gameStats.sort((a, b) => (b.gameNumber || 0) - (a.gameNumber || 0)))
         setCumulativeStats(allStats)
         console.log(
-          `[v0] Successfully processed ${gameStats.length} individual game records and ${allStats.size} players' cumulative stats`,
+          `[v0] Auto-processed ${gameStats.length} individual game records with correct account ID → player name mapping`,
         )
       }
     } catch (error) {
@@ -294,29 +309,36 @@ export default function AnalyticsPage() {
       if (result.success) {
         console.log(`[v0] Successfully coordinated ${result.processedStats.length} hockey stats across all systems`)
 
-        const processedGameStats = result.processedStats.map((stat) => ({
-          playerId: stat.playerId,
-          playerName: stat.actualUsername || `Player ${stat.playerId}`,
-          team: stat.team,
-          steals: stat.stealsPlus,
-          goals: stat.goals,
-          assists: stat.assists,
-          saves: stat.saves,
-          shotsOnGoal: stat.shots,
-          shotsBlocked: 0,
-          checks: 0,
-          faceoffWinPercentage: 0,
-          interceptions: stat.pickups,
-          passes: stat.passes,
-          faceoffs: 0,
-          goalieMinutes: stat.goaltenderMinutes,
-          skaterMinutes: stat.skaterMinutes,
-          gameNumber: matchContext?.gameNumber || 1,
-          matchName: matchContext?.matchName || "Manual Entry",
-        }))
+        const processedGameStats = result.processedStats
+          .filter((stat) => stat.userFound && stat.userId && stat.actualUsername)
+          .map((stat) => ({
+            playerId: stat.userId!,
+            playerName: stat.actualUsername!,
+            team: stat.team,
+            steals: stat.stealsPlus,
+            goals: stat.goals,
+            assists: stat.assists,
+            saves: stat.saves,
+            shotsOnGoal: stat.shots,
+            shotsBlocked: 0,
+            checks: 0,
+            faceoffWinPercentage: 0,
+            interceptions: stat.pickups,
+            passes: stat.passes,
+            faceoffs: 0,
+            goalieMinutes: stat.goaltenderMinutes,
+            skaterMinutes: stat.skaterMinutes,
+            gameNumber: matchContext?.gameNumber || 1,
+            matchName: matchContext?.matchName || "Manual Entry",
+          }))
 
         setHockeyStats(processedGameStats)
         await loadEloStats()
+
+        const unmappedCount = result.processedStats.length - processedGameStats.length
+        if (unmappedCount > 0) {
+          console.log(`[v0] Skipped ${unmappedCount} unmapped players from CSV processing`)
+        }
       } else {
         console.error("CSV coordination errors:", result.errors)
       }
@@ -332,7 +354,7 @@ export default function AnalyticsPage() {
     try {
       const { data: users } = await supabase
         .from("users")
-        .select("id, username, display_name, elo_rating, wins, losses, total_games")
+        .select("id, username, display_name, elo_rating, wins, losses, total_games, account_id")
         .not("elo_rating", "is", null)
         .order("elo_rating", { ascending: false })
         .limit(50)
@@ -411,19 +433,19 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="container mx-auto p-6 space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-700 via-teal-600 to-blue-600 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-400 via-teal-400 to-blue-400 bg-clip-text text-transparent">
               Analytics Dashboard
             </h1>
-            <p className="text-slate-600 text-lg mt-2">Comprehensive match analytics and performance insights</p>
+            <p className="text-slate-300 text-lg mt-2">Comprehensive match analytics and performance insights</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full border border-emerald-200 shadow-sm">
-              <TrendingUp className="h-5 w-5 text-emerald-600" />
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold">
+            <div className="flex items-center gap-3 bg-slate-800/80 backdrop-blur-sm px-4 py-2 rounded-full border border-slate-700 shadow-sm">
+              <TrendingUp className="h-5 w-5 text-emerald-400" />
+              <Badge variant="secondary" className="bg-slate-700 text-slate-200 border-slate-600 font-semibold">
                 {matches.length} Matches
               </Badge>
             </div>
@@ -431,34 +453,34 @@ export default function AnalyticsPage() {
         </div>
 
         <Tabs defaultValue="match-analytics" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 bg-white/90 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl p-1">
+          <TabsList className="grid w-full grid-cols-5 bg-slate-800/90 backdrop-blur-sm border border-slate-700 shadow-lg rounded-xl p-1">
             <TabsTrigger
               value="match-analytics"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
             >
               Match Analytics
             </TabsTrigger>
             <TabsTrigger
               value="hockey-stats"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
             >
               Hockey Stats
             </TabsTrigger>
             <TabsTrigger
               value="elo-stats"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-violet-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
             >
               ELO Stats
             </TabsTrigger>
             <TabsTrigger
               value="player-performance"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-600 data-[state=active]:to-amber-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
             >
               Performance
             </TabsTrigger>
             <TabsTrigger
               value="team-comparison"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500 data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-600 data-[state=active]:to-pink-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
             >
               Teams
             </TabsTrigger>
@@ -466,8 +488,8 @@ export default function AnalyticsPage() {
 
           <TabsContent value="match-analytics" className="space-y-8">
             <div className="space-y-8">
-              <Card className="bg-white/90 backdrop-blur-sm border-emerald-200 shadow-xl rounded-2xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white">
+              <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white">
                   <CardTitle className="flex items-center gap-3 text-xl">
                     <TrendingUp className="h-6 w-6" />
                     Match Analytics Overview
@@ -483,33 +505,33 @@ export default function AnalyticsPage() {
                 </CardHeader>
                 <CardContent className="p-8">
                   <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-                    <div className="text-center p-6 bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 rounded-2xl border border-blue-300 shadow-lg">
-                      <div className="text-3xl font-bold text-blue-700 mb-2">
+                    <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                      <div className="text-3xl font-bold text-blue-400 mb-2">
                         {matchesWithAnalytics.reduce((sum, m) => sum + (m.total_goals || 0), 0)}
                       </div>
-                      <div className="text-sm font-semibold text-blue-600">Total Goals</div>
+                      <div className="text-sm font-semibold text-slate-300">Total Goals</div>
                     </div>
-                    <div className="text-center p-6 bg-gradient-to-br from-green-50 via-green-100 to-green-200 rounded-2xl border border-green-300 shadow-lg">
-                      <div className="text-3xl font-bold text-green-700 mb-2">
+                    <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                      <div className="text-3xl font-bold text-green-400 mb-2">
                         {matchesWithAnalytics.reduce((sum, m) => sum + (m.total_assists || 0), 0)}
                       </div>
-                      <div className="text-sm font-semibold text-green-600">Total Assists</div>
+                      <div className="text-sm font-semibold text-slate-300">Total Assists</div>
                     </div>
-                    <div className="text-center p-6 bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 rounded-2xl border border-purple-300 shadow-lg">
-                      <div className="text-3xl font-bold text-purple-700 mb-2">
+                    <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                      <div className="text-3xl font-bold text-purple-400 mb-2">
                         {matchesWithAnalytics.reduce((sum, m) => sum + (m.total_saves || 0), 0)}
                       </div>
-                      <div className="text-sm font-semibold text-purple-600">Total Saves</div>
+                      <div className="text-sm font-semibold text-slate-300">Total Saves</div>
                     </div>
-                    <div className="text-center p-6 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-200 rounded-2xl border border-orange-300 shadow-lg">
-                      <div className="text-3xl font-bold text-orange-700 mb-2">{matchesWithAnalytics.length}</div>
-                      <div className="text-sm font-semibold text-orange-600">Completed Matches</div>
+                    <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                      <div className="text-3xl font-bold text-orange-400 mb-2">{matchesWithAnalytics.length}</div>
+                      <div className="text-sm font-semibold text-slate-300">Completed Matches</div>
                     </div>
                   </div>
 
                   <div className="space-y-4">
                     {filteredMatchStats.length === 0 ? (
-                      <div className="text-center py-12 text-slate-500">
+                      <div className="text-center py-12 text-slate-400">
                         <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <h3 className="text-lg font-semibold mb-2">No matches found</h3>
                         <p>Try adjusting your search criteria</p>
@@ -518,20 +540,20 @@ export default function AnalyticsPage() {
                       filteredMatchStats.slice(0, 10).map((match) => (
                         <div
                           key={match.id}
-                          className="p-6 bg-gradient-to-r from-white via-slate-50 to-white border border-slate-200 rounded-xl hover:shadow-lg hover:border-emerald-300 transition-all duration-300"
+                          className="p-6 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border border-slate-600 rounded-xl hover:shadow-lg hover:border-emerald-500 transition-all duration-300"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
-                              <div className="font-bold text-slate-800 mb-2 text-lg">{match.name}</div>
-                              <div className="flex items-center gap-6 text-sm text-slate-600">
+                              <div className="font-bold text-slate-200 mb-2 text-lg">{match.name}</div>
+                              <div className="flex items-center gap-6 text-sm text-slate-400">
                                 <Badge
                                   variant="outline"
-                                  className="border-emerald-300 text-emerald-700 bg-emerald-50 font-semibold"
+                                  className="border-emerald-500 text-emerald-400 bg-emerald-900/30 font-semibold"
                                 >
                                   {match.match_type}
                                 </Badge>
                                 <span className="font-medium">{new Date(match.created_at).toLocaleDateString()}</span>
-                                <span className="font-bold text-lg text-slate-800">
+                                <span className="font-bold text-lg text-slate-200">
                                   {match.team1_score || 0} - {match.team2_score || 0}
                                 </span>
                               </div>
@@ -540,7 +562,7 @@ export default function AnalyticsPage() {
                               <Button
                                 size="sm"
                                 onClick={() => handleMatchChange(match.id)}
-                                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md"
+                                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md"
                               >
                                 View Details
                               </Button>
@@ -555,17 +577,17 @@ export default function AnalyticsPage() {
 
               {/* Detailed Match Viewer */}
               <div className="grid gap-8 md:grid-cols-3">
-                <Card className="md:col-span-1 bg-white/90 backdrop-blur-sm border-slate-200 shadow-xl rounded-2xl overflow-hidden">
-                  <CardHeader className="bg-gradient-to-r from-slate-50 via-slate-100 to-slate-50 border-b border-slate-200">
-                    <CardTitle className="flex items-center gap-3 text-slate-800 text-lg">
-                      <Search className="h-5 w-5 text-slate-600" />
+                <Card className="md:col-span-1 bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-slate-700 via-slate-600 to-slate-700 border-b border-slate-600">
+                    <CardTitle className="flex items-center gap-3 text-slate-200 text-lg">
+                      <Search className="h-5 w-5 text-slate-400" />
                       Quick Match Selector
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6 p-6">
                     <div className="space-y-4 max-h-96 overflow-y-auto">
                       {filteredMatches.length === 0 ? (
-                        <div className="text-center text-slate-500 py-8">
+                        <div className="text-center text-slate-400 py-8">
                           <Search className="h-10 w-10 mx-auto mb-3 opacity-50" />
                           No matches found
                         </div>
@@ -577,12 +599,12 @@ export default function AnalyticsPage() {
                             className={`w-full justify-start text-left h-auto p-4 rounded-xl transition-all duration-200 ${
                               selectedMatch === match.id
                                 ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
-                                : "border-slate-300 hover:bg-slate-50"
+                                : "border-slate-600 hover:bg-slate-700 bg-slate-800 text-slate-200"
                             }`}
                             onClick={() => setSelectedMatch(match.id)}
                           >
                             <div className="space-y-2">
-                              <div className="font-medium truncate text-slate-800">{match.name}</div>
+                              <div className="font-medium truncate">{match.name}</div>
                               <div className="flex items-center gap-3 text-xs opacity-75">
                                 <Badge variant="outline" className="text-xs border-current font-medium">
                                   {match.match_type}
@@ -605,13 +627,13 @@ export default function AnalyticsPage() {
                   {selectedMatch ? (
                     <MatchStatsViewer matchId={selectedMatch} />
                   ) : (
-                    <Card className="bg-white/90 backdrop-blur-sm border-slate-200 shadow-xl rounded-2xl overflow-hidden">
+                    <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
                       <CardContent className="p-16">
                         <div className="text-center space-y-6">
-                          <Target className="h-16 w-16 mx-auto text-slate-400" />
+                          <Target className="h-16 w-16 mx-auto text-slate-500" />
                           <div>
-                            <h3 className="text-2xl font-bold text-slate-800">Select a Match</h3>
-                            <p className="text-slate-600 text-lg">
+                            <h3 className="text-2xl font-bold text-slate-200">Select a Match</h3>
+                            <p className="text-slate-400 text-lg">
                               Choose a completed match to view detailed analytics
                             </p>
                           </div>
@@ -626,8 +648,8 @@ export default function AnalyticsPage() {
 
           <TabsContent value="hockey-stats" className="space-y-8">
             <div className="grid gap-8 lg:grid-cols-3">
-              <Card className="lg:col-span-1 bg-white/90 backdrop-blur-sm border-blue-200 shadow-xl rounded-2xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-500 text-white">
+              <Card className="lg:col-span-1 bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 text-white">
                   <CardTitle className="flex items-center gap-3 text-xl">
                     <Upload className="h-6 w-6" />
                     CSV Input & Game Processing
@@ -639,13 +661,13 @@ export default function AnalyticsPage() {
                     value={csvInput}
                     onChange={(e) => setCsvInput(e.target.value)}
                     rows={10}
-                    className="font-mono text-sm border-blue-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                    className="font-mono text-sm border-slate-600 focus:border-blue-500 focus:ring-blue-500 rounded-xl bg-slate-700 text-slate-200 placeholder:text-slate-400"
                   />
                   <div className="flex gap-3">
                     <Button
                       onClick={processHockeyCSV}
                       disabled={!csvInput.trim() || csvProcessing}
-                      className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 shadow-md"
+                      className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-md"
                     >
                       {csvProcessing ? "Processing..." : "Process & Coordinate CSV"}
                     </Button>
@@ -653,7 +675,7 @@ export default function AnalyticsPage() {
                       variant="outline"
                       onClick={exportHockeyStats}
                       disabled={hockeyStats.length === 0}
-                      className="border-blue-300 text-blue-700 hover:bg-blue-50 bg-white/80 shadow-md"
+                      className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-slate-800 shadow-md"
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -663,18 +685,24 @@ export default function AnalyticsPage() {
                       variant="secondary"
                       onClick={processCompletedMatches}
                       disabled={autoProcessing}
-                      className="flex-1 bg-gradient-to-r from-slate-100 to-slate-200 hover:from-slate-200 hover:to-slate-300 text-slate-700 shadow-md"
+                      className="flex-1 bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 text-slate-200 shadow-md"
                     >
                       {autoProcessing ? "Auto-Processing..." : "Refresh from Completed Matches"}
                     </Button>
                   </div>
-                  <div className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    CSV data is processed by individual game with game numbers and match context. Statistics are
-                    automatically coordinated across analytics and leaderboards.
+                  <div className="text-sm text-slate-300 bg-slate-700 p-4 rounded-xl border border-slate-600">
+                    CSV data is automatically processed from completed matches using account IDs to correctly map
+                    players to their usernames. Statistics are coordinated across analytics, ELO ratings, and
+                    leaderboards in real-time.
                     {hockeyStats.length > 0 && (
-                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 font-medium">
-                        ✓ Showing {hockeyStats.length} individual game records from {cumulativeStats.size} players
-                        across multiple completed matches
+                      <div className="mt-3 p-3 bg-green-900/30 border border-green-700 rounded-lg text-green-400 font-medium">
+                        ✓ Auto-processing: {hockeyStats.length} game records from {cumulativeStats.size} players with
+                        correct Account ID → Player Name mapping
+                      </div>
+                    )}
+                    {autoProcessing && (
+                      <div className="mt-3 p-3 bg-blue-900/30 border border-blue-700 rounded-lg text-blue-400 font-medium animate-pulse">
+                        🔄 Automatically processing CSV data from completed matches...
                       </div>
                     )}
                   </div>
@@ -684,8 +712,8 @@ export default function AnalyticsPage() {
               <div className="lg:col-span-2">
                 {hockeyStats.length > 0 ? (
                   <div className="space-y-6">
-                    <Card className="bg-white/90 backdrop-blur-sm border-blue-200 shadow-xl rounded-2xl overflow-hidden">
-                      <CardHeader className="bg-gradient-to-r from-blue-500 via-teal-500 to-cyan-500 text-white">
+                    <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
+                      <CardHeader className="bg-gradient-to-r from-blue-600 via-teal-600 to-cyan-600 text-white">
                         <CardTitle className="flex items-center gap-3 text-xl">
                           <TrendingUp className="h-6 w-6" />
                           Hockey Statistics by Game
@@ -693,27 +721,27 @@ export default function AnalyticsPage() {
                       </CardHeader>
                       <CardContent className="p-8">
                         <div className="grid grid-cols-4 gap-6 mb-6">
-                          <div className="text-center p-6 bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 rounded-2xl border border-blue-300 shadow-lg">
-                            <div className="text-3xl font-bold text-blue-700 mb-2">
+                          <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                            <div className="text-3xl font-bold text-blue-400 mb-2">
                               {hockeyStats.reduce((sum, s) => sum + s.goals, 0)}
                             </div>
-                            <div className="text-sm font-semibold text-blue-600">Total Goals</div>
+                            <div className="text-sm font-semibold text-slate-300">Total Goals</div>
                           </div>
-                          <div className="text-center p-6 bg-gradient-to-br from-green-50 via-green-100 to-green-200 rounded-2xl border border-green-300 shadow-lg">
-                            <div className="text-3xl font-bold text-green-700 mb-2">
+                          <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                            <div className="text-3xl font-bold text-green-400 mb-2">
                               {hockeyStats.reduce((sum, s) => sum + s.assists, 0)}
                             </div>
-                            <div className="text-sm font-semibold text-green-600">Total Assists</div>
+                            <div className="text-sm font-semibold text-slate-300">Total Assists</div>
                           </div>
-                          <div className="text-center p-6 bg-gradient-to-br from-purple-50 via-purple-100 to-purple-200 rounded-2xl border border-purple-300 shadow-lg">
-                            <div className="text-3xl font-bold text-purple-700 mb-2">
+                          <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                            <div className="text-3xl font-bold text-purple-400 mb-2">
                               {hockeyStats.reduce((sum, s) => sum + s.saves, 0)}
                             </div>
-                            <div className="text-sm font-semibold text-purple-600">Total Saves</div>
+                            <div className="text-sm font-semibold text-slate-300">Total Saves</div>
                           </div>
-                          <div className="text-center p-6 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-200 rounded-2xl border border-orange-300 shadow-lg">
-                            <div className="text-3xl font-bold text-orange-700 mb-2">{hockeyStats.length}</div>
-                            <div className="text-sm font-semibold text-orange-600">Game Records</div>
+                          <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                            <div className="text-3xl font-bold text-orange-400 mb-2">{hockeyStats.length}</div>
+                            <div className="text-sm font-semibold text-slate-300">Game Records</div>
                           </div>
                         </div>
                       </CardContent>
@@ -721,13 +749,13 @@ export default function AnalyticsPage() {
                     <HockeyStatsTable stats={hockeyStats} />
                   </div>
                 ) : (
-                  <Card className="bg-white/90 backdrop-blur-sm border-blue-200 shadow-xl rounded-2xl">
+                  <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl">
                     <CardContent className="p-16">
                       <div className="text-center space-y-6">
-                        <Upload className="h-16 w-16 mx-auto text-blue-400" />
+                        <Upload className="h-16 w-16 mx-auto text-slate-500" />
                         <div>
-                          <h3 className="text-2xl font-bold text-slate-800 mb-2">No Hockey Stats</h3>
-                          <p className="text-slate-600 text-lg">
+                          <h3 className="text-2xl font-bold text-slate-200 mb-2">No Hockey Stats</h3>
+                          <p className="text-slate-400 text-lg">
                             Process CSV data manually or click "Refresh from Completed Matches" to automatically load
                             statistics from all completed games with game numbers and match context
                           </p>
@@ -740,7 +768,224 @@ export default function AnalyticsPage() {
             </div>
           </TabsContent>
 
-          {/* ... existing other TabsContent components ... */}
+          <TabsContent value="elo-stats" className="space-y-8">
+            <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 text-white">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <TrendingUp className="h-6 w-6" />
+                  ELO Rankings & Player Statistics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8">
+                {loadingEloStats ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-slate-400">Loading ELO statistics...</div>
+                  </div>
+                ) : eloStats.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-semibold mb-2">No ELO data found</h3>
+                    <p>Player rankings will appear here once games are completed</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-4 gap-6 mb-8">
+                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                        <div className="text-3xl font-bold text-purple-400 mb-2">
+                          {Math.round(eloStats.reduce((sum, p) => sum + (p.elo_rating || 1200), 0) / eloStats.length)}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-300">Average ELO</div>
+                      </div>
+                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                        <div className="text-3xl font-bold text-green-400 mb-2">
+                          {Math.max(...eloStats.map((p) => p.elo_rating || 1200))}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-300">Highest ELO</div>
+                      </div>
+                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                        <div className="text-3xl font-bold text-blue-400 mb-2">
+                          {eloStats.reduce((sum, p) => sum + (p.total_games || 0), 0)}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-300">Total Games</div>
+                      </div>
+                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                        <div className="text-3xl font-bold text-orange-400 mb-2">{eloStats.length}</div>
+                        <div className="text-sm font-semibold text-slate-300">Active Players</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {eloStats.map((player, index) => (
+                        <div
+                          key={player.id}
+                          className="flex items-center justify-between p-6 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border border-slate-600 rounded-xl hover:shadow-lg hover:border-purple-500 transition-all duration-300"
+                        >
+                          <div className="flex items-center gap-6">
+                            <div className="text-2xl font-bold text-slate-400 min-w-[3rem]">#{index + 1}</div>
+                            <div className="flex flex-col">
+                              <div className="text-lg font-bold text-slate-200">
+                                {player.display_name || player.username || "Unknown Player"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-8">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-purple-400">{player.elo_rating || 1200}</div>
+                              <div className="text-xs text-slate-400 font-medium">ELO Rating</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-lg font-semibold text-green-400">{player.wins || 0}W</div>
+                              <div className="text-xs text-slate-400 font-medium">Wins</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-lg font-semibold text-red-400">{player.losses || 0}L</div>
+                              <div className="text-xs text-slate-400 font-medium">Losses</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-lg font-semibold text-blue-400">
+                                {player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0}%
+                              </div>
+                              <div className="text-xs text-slate-400 font-medium">Win Rate</div>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={`font-semibold ${
+                                (player.elo_rating || 1200) >= 1400
+                                  ? "border-yellow-500 text-yellow-400 bg-yellow-900/30"
+                                  : (player.elo_rating || 1200) >= 1300
+                                    ? "border-purple-500 text-purple-400 bg-purple-900/30"
+                                    : "border-slate-500 text-slate-400 bg-slate-900/30"
+                              }`}
+                            >
+                              {(player.elo_rating || 1200) >= 1400
+                                ? "Elite"
+                                : (player.elo_rating || 1200) >= 1300
+                                  ? "Advanced"
+                                  : "Standard"}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="player-performance" className="space-y-8">
+            <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 text-white">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <Users className="h-6 w-6" />
+                  Player Performance Analytics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8">
+                {cumulativeStats.size > 0 ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-4 gap-6 mb-8">
+                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                        <div className="text-3xl font-bold text-orange-400 mb-2">{cumulativeStats.size}</div>
+                        <div className="text-sm font-semibold text-slate-300">Active Players</div>
+                      </div>
+                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                        <div className="text-3xl font-bold text-blue-400 mb-2">
+                          {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalGoals, 0)}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-300">Total Goals</div>
+                      </div>
+                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                        <div className="text-3xl font-bold text-green-400 mb-2">
+                          {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalAssists, 0)}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-300">Total Assists</div>
+                      </div>
+                      <div className="text-center p-6 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                        <div className="text-3xl font-bold text-purple-400 mb-2">
+                          {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalSaves, 0)}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-300">Total Saves</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {Array.from(cumulativeStats.entries())
+                        .sort(([, a], [, b]) => b.totalGoals + b.totalAssists - (a.totalGoals + a.totalAssists))
+                        .slice(0, 20)
+                        .map(([playerId, stats]) => (
+                          <div
+                            key={playerId}
+                            className="p-6 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border border-slate-600 rounded-xl hover:shadow-lg hover:border-orange-500 transition-all duration-300"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex flex-col">
+                                <div className="text-lg font-bold text-slate-200">{stats.playerName}</div>
+                                <div className="text-sm text-slate-400">{stats.totalGames} games played</div>
+                              </div>
+                              <div className="flex items-center gap-8">
+                                <div className="text-center">
+                                  <div className="text-xl font-bold text-blue-400">{stats.totalGoals}</div>
+                                  <div className="text-xs text-slate-400 font-medium">Goals</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xl font-bold text-green-400">{stats.totalAssists}</div>
+                                  <div className="text-xs text-slate-400 font-medium">Assists</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xl font-bold text-purple-400">{stats.totalSaves}</div>
+                                  <div className="text-xs text-slate-400 font-medium">Saves</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xl font-bold text-orange-400">
+                                    {Math.round(stats.totalMinutes)}
+                                  </div>
+                                  <div className="text-xs text-slate-400 font-medium">Minutes</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xl font-bold text-yellow-400">
+                                    {stats.totalGoals + stats.totalAssists}
+                                  </div>
+                                  <div className="text-xs text-slate-400 font-medium">Points</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-16 text-slate-400">
+                    <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-2xl font-bold text-slate-200 mb-2">No Performance Data</h3>
+                    <p className="text-lg">
+                      Player performance statistics will appear here once hockey stats are processed
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="team-comparison" className="space-y-8">
+            <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 text-white">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <Target className="h-6 w-6" />
+                  Team Comparison & Analytics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8">
+                <div className="text-center py-16 text-slate-400">
+                  <Target className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <h3 className="text-2xl font-bold text-slate-200 mb-2">Team Analytics Coming Soon</h3>
+                  <p className="text-lg">
+                    Comprehensive team comparison and performance analytics will be available here
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
     </div>

@@ -322,7 +322,6 @@ export default function Draft4v4Page() {
           status: "waiting",
           creator_id: user.id,
           game: "Omega Strikers",
-          game_number: gameNumber,
         })
         .select()
         .single()
