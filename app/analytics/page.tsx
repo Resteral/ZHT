@@ -244,12 +244,12 @@ export default function AnalyticsPage() {
     loadEloStats()
     processCompletedMatches()
 
-    const interval = setInterval(() => {
-      processCompletedMatches()
-      loadEloStats()
-    }, 60000) // Increased to 60 seconds to reduce spam
+    // const interval = setInterval(() => {
+    //   processCompletedMatches()
+    //   loadEloStats()
+    // }, 60000)
 
-    return () => clearInterval(interval)
+    // return () => clearInterval(interval)
   }, []) // Removed processCompletedMatches from dependency array to prevent infinite loop
 
   const fetchMatches = async () => {
@@ -808,180 +808,106 @@ export default function AnalyticsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-8">
-                {cumulativeStats.size > 0 ? (
+                {hockeyStats.length > 0 ? (
                   <div className="space-y-6">
-                    <div className="grid grid-cols-6 gap-4 mb-8">
-                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
-                        <div className="text-2xl font-bold text-orange-400 mb-1">{cumulativeStats.size}</div>
-                        <div className="text-xs font-semibold text-slate-300">Active Players</div>
-                      </div>
-                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
-                        <div className="text-2xl font-bold text-blue-400 mb-1">
-                          {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalGoals, 0)}
-                        </div>
-                        <div className="text-xs font-semibold text-slate-300">Total Goals</div>
-                      </div>
-                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
-                        <div className="text-2xl font-bold text-green-400 mb-1">
-                          {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalAssists, 0)}
-                        </div>
-                        <div className="text-xs font-semibold text-slate-300">Total Assists</div>
-                      </div>
-                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
-                        <div className="text-2xl font-bold text-purple-400 mb-1">
-                          {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalSaves, 0)}
-                        </div>
-                        <div className="text-xs font-semibold text-slate-300">Total Saves</div>
-                      </div>
-                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
-                        <div className="text-2xl font-bold text-cyan-400 mb-1">
-                          {Array.from(cumulativeStats.values()).reduce((sum, p) => sum + p.totalShots, 0)}
-                        </div>
-                        <div className="text-xs font-semibold text-slate-300">Total Shots</div>
-                      </div>
-                      <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
-                        <div className="text-2xl font-bold text-yellow-400 mb-1">
-                          {Array.from(cumulativeStats.values()).reduce(
-                            (sum, p) => sum + p.totalGoals + p.totalAssists,
-                            0,
-                          )}
-                        </div>
-                        <div className="text-xs font-semibold text-slate-300">Total Points</div>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-900/50 rounded-xl border border-slate-600 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className="bg-gradient-to-r from-orange-700 via-amber-700 to-yellow-700 text-white">
-                            <tr>
-                              <th className="px-3 py-3 text-left text-sm font-semibold">Rank</th>
-                              <th className="px-3 py-3 text-left text-sm font-semibold">Player Name</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Games</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Goals</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Assists</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Points</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Saves</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Shots</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Shot %</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Minutes</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">PPG</th>
-                              <th className="px-3 py-3 text-center text-sm font-semibold">Account ID</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-700">
-                            {Array.from(cumulativeStats.entries())
-                              .sort(([, a], [, b]) => b.totalGoals + b.totalAssists - (a.totalGoals + a.totalAssists))
-                              .map(([playerId, stats], index) => {
-                                const points = stats.totalGoals + stats.totalAssists
-                                const shotPercentage =
-                                  stats.totalShots > 0 ? Math.round((stats.totalGoals / stats.totalShots) * 100) : 0
-                                const pointsPerGame =
-                                  stats.totalGames > 0 ? (points / stats.totalGames).toFixed(2) : "0.00"
-
-                                return (
-                                  <tr key={playerId} className="hover:bg-slate-800/50 transition-colors duration-200">
-                                    <td className="px-3 py-4">
-                                      <div className="flex items-center">
-                                        <div className="text-lg font-bold text-slate-300 min-w-[2rem]">
-                                          #{index + 1}
-                                        </div>
-                                        {index < 3 && (
-                                          <div className="ml-2">
-                                            {index === 0 && <span className="text-yellow-400">🥇</span>}
-                                            {index === 1 && <span className="text-gray-400">🥈</span>}
-                                            {index === 2 && <span className="text-amber-600">🥉</span>}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-3 py-4">
-                                      <div className="font-semibold text-slate-200">{stats.playerName}</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-sm font-semibold text-slate-300">{stats.totalGames}</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-lg font-bold text-blue-400">{stats.totalGoals}</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-lg font-bold text-green-400">{stats.totalAssists}</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-lg font-bold text-yellow-400">{points}</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-lg font-bold text-purple-400">{stats.totalSaves}</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-sm font-semibold text-cyan-400">{stats.totalShots}</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-sm font-semibold text-orange-400">{shotPercentage}%</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-sm font-semibold text-pink-400">
-                                        {Math.round(stats.totalMinutes)}
-                                      </div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="text-sm font-semibold text-indigo-400">{pointsPerGame}</div>
-                                    </td>
-                                    <td className="px-3 py-4 text-center">
-                                      <div className="font-mono text-xs text-slate-400">{stats.accountId || "N/A"}</div>
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-4">
-                      <div className="text-sm text-slate-400">
-                        Showing {cumulativeStats.size} players with CSV hockey statistics from processed matches
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-slate-300">
+                        Showing {hockeyStats.length} player records from completed matches
+                      </p>
                       <Button
-                        onClick={() => {
-                          const csvContent = [
-                            "Rank,Player Name,Games,Goals,Assists,Points,Saves,Shots,Shot %,Minutes,PPG,Account ID",
-                            ...Array.from(cumulativeStats.entries())
-                              .sort(([, a], [, b]) => b.totalGoals + b.totalAssists - (a.totalGoals + a.totalAssists))
-                              .map(([playerId, stats], index) => {
-                                const points = stats.totalGoals + stats.totalAssists
-                                const shotPercentage =
-                                  stats.totalShots > 0 ? Math.round((stats.totalGoals / stats.totalShots) * 100) : 0
-                                const pointsPerGame =
-                                  stats.totalGames > 0 ? (points / stats.totalGames).toFixed(2) : "0.00"
-
-                                return `${index + 1},"${stats.playerName}",${stats.totalGames},${stats.totalGoals},${stats.totalAssists},${points},${stats.totalSaves},${stats.totalShots},${shotPercentage}%,${Math.round(stats.totalMinutes)},${pointsPerGame},"${stats.accountId || "N/A"}"`
-                              }),
-                          ].join("\n")
-
-                          const blob = new Blob([csvContent], { type: "text/csv" })
-                          const url = window.URL.createObjectURL(blob)
-                          const a = document.createElement("a")
-                          a.href = url
-                          a.download = `csv-hockey-stats-${new Date().toISOString().split("T")[0]}.csv`
-                          a.click()
-                          window.URL.revokeObjectURL(url)
-                        }}
+                        onClick={exportHockeyStats}
                         variant="outline"
                         className="border-slate-600 text-slate-300 hover:bg-slate-700 bg-slate-800 shadow-md"
                       >
                         <Download className="h-4 w-4 mr-2" />
-                        Export CSV Stats
+                        Export CSV
+                      </Button>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border border-slate-600">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-700">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Game #</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Match</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Account ID</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Name</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Team</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Steals</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Goals</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Assists</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Saves</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Shots</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Pickups</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Passes</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Goalie Min</th>
+                            <th className="px-4 py-3 text-left text-slate-200 font-semibold">Skater Min</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-slate-800">
+                          {hockeyStats.map((stat, index) => (
+                            <tr
+                              key={`${stat.playerId}-${stat.gameNumber}-${index}`}
+                              className="border-t border-slate-600 hover:bg-slate-700/50"
+                            >
+                              <td className="px-4 py-3 text-slate-300 font-mono">{stat.gameNumber || "N/A"}</td>
+                              <td className="px-4 py-3 text-slate-300">{stat.matchName || "Unknown Match"}</td>
+                              <td className="px-4 py-3 text-slate-400 font-mono text-xs">
+                                {stat.playerId?.slice(-8) || "N/A"}
+                              </td>
+                              <td className="px-4 py-3 text-white font-semibold">{stat.playerName}</td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`px-2 py-1 rounded text-xs font-medium ${
+                                    stat.team === 1
+                                      ? "bg-blue-600 text-white"
+                                      : stat.team === 2
+                                        ? "bg-red-600 text-white"
+                                        : "bg-slate-600 text-slate-300"
+                                  }`}
+                                >
+                                  Team {stat.team || "N/A"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.steals || 0}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center font-semibold">{stat.goals || 0}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.assists || 0}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.saves || 0}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.shotsOnGoal || 0}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.interceptions || 0}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.passes || 0}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.goalieMinutes || 0}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.skaterMinutes || 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="text-center">
+                      <Button
+                        onClick={processCompletedMatches}
+                        disabled={autoProcessing}
+                        className="bg-orange-600 hover:bg-orange-700 text-white"
+                      >
+                        {autoProcessing ? "Processing..." : "Refresh Match Results"}
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-16 text-slate-400">
-                    <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-2xl font-bold text-slate-200 mb-2">No CSV Statistics Available</h3>
-                    <p className="text-lg">
-                      Hockey statistics from CSV processing will appear here once matches are completed and processed
+                  <div className="text-center py-12">
+                    <Users className="h-16 w-16 text-slate-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-slate-300 mb-2">No Match Results Found</h3>
+                    <p className="text-slate-400 mb-6">
+                      Complete matches with CSV data will appear here automatically.
                     </p>
+                    <Button
+                      onClick={processCompletedMatches}
+                      disabled={autoProcessing}
+                      className="bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      {autoProcessing ? "Processing..." : "Check for Match Results"}
+                    </Button>
                   </div>
                 )}
               </CardContent>
