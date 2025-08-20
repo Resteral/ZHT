@@ -94,6 +94,8 @@ export default function AnalyticsPage() {
   }
 
   const processCompletedMatches = useCallback(async () => {
+    if (autoProcessing) return // Prevent multiple simultaneous processing calls
+
     setAutoProcessing(true)
     try {
       console.log("[v0] Processing completed matches for hockey stats...")
@@ -211,7 +213,7 @@ export default function AnalyticsPage() {
     } finally {
       setAutoProcessing(false)
     }
-  }, [supabase])
+  }, [supabase, autoProcessing]) // Added autoProcessing to dependencies to prevent loops
 
   const refreshStatsAfterCSV = useCallback(async () => {
     console.log("[v0] Refreshing stats after CSV submission...")
@@ -244,12 +246,7 @@ export default function AnalyticsPage() {
     loadEloStats()
     processCompletedMatches()
 
-    // const interval = setInterval(() => {
-    //   processCompletedMatches()
-    //   loadEloStats()
-    // }, 60000)
-
-    // return () => clearInterval(interval)
+    // Manual refresh button is available instead
   }, []) // Removed processCompletedMatches from dependency array to prevent infinite loop
 
   const fetchMatches = async () => {
