@@ -286,10 +286,16 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         [],
       )
 
-      if (largestGroup.length >= 6 && !matchResult && matchData?.status !== "completed") {
-        // Use matchData here
-        console.log("[v0] Consensus reached with", largestGroup.length, "matching submissions")
-        await completeMatch(largestGroup[0])
+      const totalParticipants = matchData?.match_participants?.length || 8
+      const requiredConsensus = Math.ceil(totalParticipants * 0.6) // 60% consensus required
+
+      console.log(
+        `[v0] Consensus check: ${largestGroup.length}/${totalParticipants} submissions (need ${requiredConsensus})`,
+      )
+
+      // Only log consensus status, don't auto-complete the match
+      if (largestGroup.length >= requiredConsensus && !matchResult && matchData?.status !== "completed") {
+        console.log("[v0] Consensus threshold reached, but waiting for manual completion")
       }
 
       const userSubmission = data.find((s) => s.submitter_id === user?.id)
@@ -306,11 +312,43 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
     }
   }
 
+  const handleCompleteMatch = async () => {
+    const largestGroup = Object.values(consensusGroups).reduce(
+      (max, current) => (current.length > max.length ? current : max),
+      [],
+    )
+
+    const totalParticipants = matchData?.match_participants?.length || 8
+    const requiredConsensus = Math.ceil(totalParticipants * 0.6)
+
+    if (largestGroup.length < requiredConsensus) {
+      toast.error(`Need ${requiredConsensus} matching submissions to complete match`)
+      return
+    }
+
+    if (largestGroup.length > 0) {
+      await completeMatch(largestGroup[0])
+      toast.success("Match completed successfully!")
+    }
+  }
+
   const completeMatch = async (consensusSubmission: ScoreSubmission) => {
     const supabase = createClient()
 
     try {
       console.log("[v0] Completing match with consensus submission:", consensusSubmission)
+
+      const totalParticipants = matchData?.match_participants?.length || 8
+      const currentSubmissions = submissions.filter(
+        (s) => s.team1_score === consensusSubmission.team1_score && s.team2_score === consensusSubmission.team2_score,
+      ).length
+
+      const requiredConsensus = Math.ceil(totalParticipants * 0.6)
+
+      if (currentSubmissions < requiredConsensus) {
+        console.log(`[v0] Insufficient consensus: ${currentSubmissions}/${requiredConsensus} required`)
+        return
+      }
 
       const winningTeam =
         consensusSubmission.team1_score > consensusSubmission.team2_score
@@ -390,97 +428,82 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
 
       if (participantsError) {
         console.error("[v0] Error fetching participants:", participantsError)
-      } else if (participants && participants.length > 0) {
-        console.log("[v0] Updating player statistics for", participants.length, "participants")
+        throw participantsError
+      }
 
-        // Update player statistics for each participant
+      if (participants && participants.length > 0) {
+        console.log("[v0] Updating ELO ratings and win/loss records for participants")
+
+        // Calculate ELO changes for each participant
         for (const participant of participants) {
-          const isWinner =
-            (winningTeam === 1 && participant.team_assignment === 1) ||
-            (winningTeam === 2 && participant.team_assignment === 2)
+          const user = participant.users
+          if (!user) continue
 
-          const currentElo = participant.users?.elo_rating || 1200
-          const currentWins = participant.users?.wins || 0
-          const currentLosses = participant.users?.losses || 0
-          const currentTotalGames = participant.users?.total_games || 0
-          const kFactor = 32
-          const expectedScore = 0.5 // Simplified - assumes equal opponents
-          const actualScore = isWinner ? 1 : 0
-          const eloChange = Math.round(kFactor * (actualScore - expectedScore))
-          const newElo = Math.max(800, currentElo + eloChange)
+          const isWinner = participant.team_assignment === winningTeam
+          const isDraw = winningTeam === null
 
-          // Update user statistics
-          const { error: statsError } = await supabase
+          // Calculate ELO change (simplified K-factor of 32)
+          const K = 32
+          const currentElo = user.elo_rating || 1200
+
+          // For team games, calculate average opponent ELO
+          const opponents = participants.filter((p) => p.team_assignment !== participant.team_assignment && p.users)
+          const avgOpponentElo =
+            opponents.length > 0
+              ? opponents.reduce((sum, opp) => sum + (opp.users?.elo_rating || 1200), 0) / opponents.length
+              : 1200
+
+          // Expected score calculation
+          const expectedScore = 1 / (1 + Math.pow(10, (avgOpponentElo - currentElo) / 400))
+
+          // Actual score (1 for win, 0.5 for draw, 0 for loss)
+          const actualScore = isWinner ? 1 : isDraw ? 0.5 : 0
+
+          // ELO change
+          const eloChange = Math.round(K * (actualScore - expectedScore))
+          const newElo = Math.max(100, currentElo + eloChange) // Minimum ELO of 100
+
+          // Update user stats
+          const newWins = user.wins + (isWinner ? 1 : 0)
+          const newLosses = user.losses + (!isWinner && !isDraw ? 1 : 0)
+          const newTotalGames = (user.total_games || 0) + 1
+
+          const { error: updateError } = await supabase
             .from("users")
             .update({
               elo_rating: newElo,
-              wins: isWinner ? currentWins + 1 : currentWins,
-              losses: isWinner ? currentLosses : currentLosses + 1,
-              total_games: currentTotalGames + 1,
+              wins: newWins,
+              losses: newLosses,
+              total_games: newTotalGames,
               updated_at: new Date().toISOString(),
             })
-            .eq("id", participant.user_id)
+            .eq("id", user.id)
 
-          if (statsError) {
-            console.error("[v0] Error updating player stats for", participant.user_id, ":", statsError)
+          if (updateError) {
+            console.error(`[v0] Error updating user ${user.username}:`, updateError)
           } else {
             console.log(
-              "[v0] Updated stats for",
-              participant.users?.username,
-              "- ELO:",
-              currentElo,
-              "→",
-              newElo,
-              "Result:",
-              isWinner ? "WIN" : "LOSS",
+              `[v0] Updated ${user.username}: ELO ${currentElo} → ${newElo} (${eloChange > 0 ? "+" : ""}${eloChange}), Record: ${newWins}W-${newLosses}L`,
             )
           }
 
-          // Record match history
-          const { error: historyError } = await supabase.from("match_history").insert({
-            player_id: participant.user_id,
-            game: "hockey",
-            match_type: "4v4_draft",
-            result: isWinner ? "win" : "loss",
-            player_score: isWinner
-              ? participant.team_assignment === 1
-                ? consensusSubmission.team1_score
-                : consensusSubmission.team2_score
-              : participant.team_assignment === 1
-                ? consensusSubmission.team2_score
-                : consensusSubmission.team1_score,
-            opponent_score: isWinner
-              ? participant.team_assignment === 1
-                ? consensusSubmission.team2_score
-                : consensusSubmission.team1_score
-              : participant.team_assignment === 1
-                ? consensusSubmission.team2_score
-                : consensusSubmission.team1_score,
-            elo_before: currentElo,
-            elo_after: newElo,
-            elo_change: eloChange,
-            match_date: new Date().toISOString(),
-          })
-
-          if (historyError) {
-            console.error("[v0] Error recording match history for", participant.user_id, ":", historyError)
-          }
-
           // Record ELO history
-          const { error: eloHistoryError } = await supabase.from("elo_history").insert({
-            user_id: participant.user_id,
+          const { error: historyError } = await supabase.from("elo_history").insert({
+            user_id: user.id,
+            game_id: params.id,
             old_rating: currentElo,
             new_rating: newElo,
             rating_change: eloChange,
-            game_result: isWinner ? "win" : "loss",
-            match_id: params.id,
-            created_at: new Date().toISOString(),
+            game_result: isWinner ? "win" : isDraw ? "draw" : "loss",
+            opponent_id: opponents[0]?.users?.id || null, // First opponent for history
           })
 
-          if (eloHistoryError) {
-            console.error("[v0] Error recording ELO history:", eloHistoryError)
+          if (historyError) {
+            console.error(`[v0] Error recording ELO history for ${user.username}:`, historyError)
           }
         }
+
+        console.log("[v0] Successfully updated all participant ELO ratings and records")
       }
 
       const consensusSubmissions =
@@ -561,12 +584,16 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           voteCounts[vote.mvp_player_id] = (voteCounts[vote.mvp_player_id] || 0) + 1
         })
 
-        // Award MVP to players with 5+ votes
+        // Get total participants to calculate majority
+        const totalParticipants = participants.length
+        const majorityThreshold = Math.ceil(totalParticipants / 2)
+
+        // Award MVP to players with majority votes
         for (const [playerId, voteCount] of Object.entries(voteCounts)) {
-          if (voteCount >= 5) {
+          if (voteCount >= majorityThreshold) {
             const { error: mvpAwardError } = await supabase.from("player_mvp_awards").upsert(
               {
-                player_id: playerId, // Fixed: use player_id instead of user_id
+                player_id: playerId,
                 match_id: params.id,
                 awarded_at: new Date().toISOString(),
               },
@@ -578,7 +605,15 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             if (mvpAwardError) {
               console.error("[v0] Error awarding MVP:", mvpAwardError)
             } else {
-              console.log("[v0] MVP awarded to player:", playerId, "with", voteCount, "votes")
+              console.log(
+                "[v0] MVP awarded to player:",
+                playerId,
+                "with",
+                voteCount,
+                "votes (majority of",
+                totalParticipants,
+                ")",
+              )
             }
           }
         }
@@ -600,13 +635,17 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           flagCounts[key] = (flagCounts[key] || 0) + 1
         })
 
-        // Record flags for players with 3+ reports of the same type
+        // Get total participants to calculate threshold (25% of participants)
+        const totalParticipants = participants.length
+        const flagThreshold = Math.max(2, Math.ceil(totalParticipants * 0.25))
+
+        // Record flags for players with threshold+ reports of the same type
         for (const [key, reportCount] of Object.entries(flagCounts)) {
-          if (reportCount >= 3) {
+          if (reportCount >= flagThreshold) {
             const [playerId, flagType] = key.split("-")
             const { error: flagRecordError } = await supabase.from("player_flag_summary").upsert(
               {
-                player_id: playerId, // Fixed: use correct table and field names
+                player_id: playerId,
                 flag_type: flagType,
                 flag_count: reportCount,
                 last_flagged: new Date().toISOString(),
@@ -619,7 +658,17 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             if (flagRecordError) {
               console.error("[v0] Error recording flag:", flagRecordError)
             } else {
-              console.log("[v0] Flag recorded for player:", playerId, "type:", flagType, "with", reportCount, "reports")
+              console.log(
+                "[v0] Flag recorded for player:",
+                playerId,
+                "type:",
+                flagType,
+                "with",
+                reportCount,
+                "reports (threshold:",
+                flagThreshold,
+                ")",
+              )
             }
           }
         }
@@ -675,33 +724,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
       }
 
       if (csvCode.trim()) {
-        console.log("[v0] Processing CSV data with coordination service:", csvCode.trim())
-
-        try {
-          const { csvCoordinationService } = await import("@/lib/services/csv-coordination-service")
-          const result = await csvCoordinationService.processAndCoordinateCSV(csvCode.trim(), params.id, {
-            matchName: matchData?.name || "Unknown Match",
-            gameNumber: 1,
-            matchDate: new Date().toISOString(),
-          })
-
-          if (result.success) {
-            console.log(`[v0] Successfully coordinated ${result.processedStats.length} hockey stats across all systems`)
-
-            // Log account ID to username mappings
-            result.processedStats.forEach((stat) => {
-              if (stat.userFound) {
-                console.log(`[v0] Mapped Account ID "${stat.playerId}" → "${stat.actualUsername}" (${stat.userId})`)
-              } else {
-                console.log(`[v0] Account ID "${stat.playerId}" not found in database`)
-              }
-            })
-          } else {
-            console.error("[v0] CSV coordination failed:", result.errors)
-          }
-        } catch (parseError) {
-          console.error("[v0] Error in CSV coordination:", parseError)
-        }
+        console.log("[v0] CSV data submitted:", csvCode.trim())
       }
 
       setHasSubmitted(true)
@@ -1003,7 +1026,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Consensus Needed:</span>
-                  <Badge variant="outline">6 matching</Badge>
+                  <Badge variant="outline">60% majority</Badge>
                 </div>
                 <Separator />
 
@@ -1014,8 +1037,16 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{score}</span>
                         <Badge
-                          variant={groupSubmissions.length >= 6 ? "default" : "outline"}
-                          className={groupSubmissions.length >= 6 ? "bg-green-600" : ""}
+                          variant={
+                            groupSubmissions.length >= Math.ceil((matchData?.match_participants?.length || 8) * 0.6)
+                              ? "default"
+                              : "outline"
+                          }
+                          className={
+                            groupSubmissions.length >= Math.ceil((matchData?.match_participants?.length || 8) * 0.6)
+                              ? "bg-green-600"
+                              : ""
+                          }
                         >
                           {groupSubmissions.length} votes
                         </Badge>
@@ -1029,6 +1060,9 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
                     <p className="text-sm text-muted-foreground">No submissions yet</p>
                   )}
                 </div>
+                <Button onClick={handleCompleteMatch} className="w-full bg-green-600 hover:bg-green-700">
+                  Complete Match
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -1094,10 +1128,10 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             </div>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { value: "unsportsmanlike", label: "Unsportsmanlike" },
+                { value: "toxicity", label: "Toxicity" },
                 { value: "cheating", label: "Cheating" },
-                { value: "harassment", label: "Harassment" },
                 { value: "griefing", label: "Griefing" },
+                { value: "afk", label: "AFK/Inactive" },
               ].map((option) => (
                 <Button
                   key={option.value}
