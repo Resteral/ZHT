@@ -247,10 +247,10 @@ export default function AnalyticsPage() {
     const interval = setInterval(() => {
       processCompletedMatches()
       loadEloStats()
-    }, 30000)
+    }, 60000) // Increased to 60 seconds to reduce spam
 
     return () => clearInterval(interval)
-  }, [processCompletedMatches])
+  }, []) // Removed processCompletedMatches from dependency array to prevent infinite loop
 
   const fetchMatches = async () => {
     try {

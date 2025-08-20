@@ -70,9 +70,13 @@ export class CSVCoordinationService {
         await this.storeCSVDataForMatch(matchId, csvData, processedStats)
       }
 
-      if (consensusValidation.isValid) {
-        await this.updateLeaderboardStats(processedStats, matchId, matchContext)
+      if (consensusValidation.isValid && consensusValidation.submissionCount >= consensusValidation.requiredConsensus) {
+        console.log(`[v0] Consensus reached for match ${matchId || "unknown"} - finalizing game and updating profiles`)
+        await this.finalizeGameAndUpdateProfiles(processedStats, matchId, matchContext)
         await this.syncWinLossAcrossSystems(processedStats)
+      } else if (consensusValidation.isValid) {
+        // Store preliminary stats but don't finalize ratings
+        await this.storePreliminaryStats(processedStats, matchId, matchContext)
       }
 
       return {
@@ -133,23 +137,23 @@ export class CSVCoordinationService {
     }
   }
 
-  private async updateLeaderboardStats(
+  private async finalizeGameAndUpdateProfiles(
     stats: ProcessedHockeyStats[],
     actualMatchId?: string,
     matchContext?: MatchContext,
   ) {
     try {
+      console.log(
+        `[v0] Finalizing game ${matchContext?.matchName || "Match"} #${matchContext?.gameNumber || 1} - updating all player profiles`,
+      )
+
       let matchResult = null
       let validMatchId = actualMatchId
 
       if (!validMatchId) {
         const { data: existingMatch } = await this.supabase.from("matches").select("id").limit(1).single()
-
         if (existingMatch) {
           validMatchId = existingMatch.id
-          console.log(
-            `[v0] Using existing match for ELO history: ${matchContext?.matchName || "Match"} #${matchContext?.gameNumber || 1}`,
-          )
         }
       }
 
@@ -162,61 +166,43 @@ export class CSVCoordinationService {
         matchResult = data
       }
 
+      // Mark match as completed with consensus
+      if (validMatchId) {
+        await this.supabase
+          .from("match_results")
+          .update({
+            consensus_reached: true,
+            finalized_at: new Date().toISOString(),
+          })
+          .eq("match_id", validMatchId)
+      }
+
       for (const stat of stats.filter((s) => s.userFound && s.userId)) {
-        console.log(
-          `[v0] Processing stats for ${stat.actualUsername} in ${matchContext?.matchName || "Match"} #${matchContext?.gameNumber || 1}`,
-        )
+        await this.updatePlayerProfileWithFinalRating(stat, matchResult, matchContext)
+      }
 
-        const { data: userExists, error: userCheckError } = await this.supabase
-          .from("users")
-          .select("id, username, elo_rating, wins, losses, total_games")
-          .eq("id", stat.userId)
-          .single()
+      console.log(
+        `[v0] Game finalized - all ${stats.filter((s) => s.userFound).length} player profiles updated with correct ratings`,
+      )
+    } catch (error) {
+      console.error("Error finalizing game and updating profiles:", error)
+    }
+  }
 
-        if (userCheckError || !userExists) {
-          console.warn(
-            `[v0] Player ${stat.actualUsername} not found in database`,
-            userCheckError?.message || "No user data returned",
-          )
-          continue
-        }
+  private async storePreliminaryStats(
+    stats: ProcessedHockeyStats[],
+    actualMatchId?: string,
+    matchContext?: MatchContext,
+  ) {
+    try {
+      console.log(
+        `[v0] Storing preliminary stats for ${matchContext?.matchName || "Match"} #${matchContext?.gameNumber || 1} - awaiting consensus`,
+      )
 
-        console.log(`[v0] User validation passed for ${userExists.username}`)
-
-        let eloChange = 0
-        let isWinner = false
-        let newWins = userExists.wins || 0
-        let newLosses = userExists.losses || 0
-        const newTotalGames = (userExists.total_games || 0) + 1
-
-        if (matchResult && matchResult.winning_team !== 0) {
-          isWinner = stat.team === matchResult.winning_team
-
-          const currentElo = userExists.elo_rating || 1200
-          const kFactor = 32
-
-          // Calculate expected score (simplified - assumes opponent has same ELO)
-          const expectedScore = 0.5 // 50% chance against equal opponent
-          const actualScore = isWinner ? 1 : 0
-
-          // ELO formula: newElo = oldElo + K * (actualScore - expectedScore)
-          eloChange = Math.round(kFactor * (actualScore - expectedScore))
-
-          // Update win/loss counts
-          if (isWinner) {
-            newWins += 1
-          } else {
-            newLosses += 1
-          }
-
-          console.log(
-            `[v0] ELO update for ${userExists.username}: ${isWinner ? "WIN" : "LOSS"}, ELO change: ${eloChange}`,
-          )
-        }
-
-        // Include match context data
+      for (const stat of stats.filter((s) => s.userFound && s.userId)) {
+        // Store performance data but don't update ELO/wins/losses yet
         const performanceRecord = {
-          player_id: userExists.id,
+          player_id: stat.userId,
           game_date: new Date().toISOString(),
           season: "2025",
           game_week: 1,
@@ -239,74 +225,163 @@ export class CSVCoordinationService {
             match_name: matchContext?.matchName || "Unknown Match",
             game_number: matchContext?.gameNumber || 1,
             match_date: matchContext?.matchDate || new Date().toISOString(),
-            kills: stat.goals, // Map goals to kills
-            deaths: 0,
-            damage_dealt: stat.shots, // Map shots to damage_dealt
-            damage_taken: 0,
-            healing_done: stat.saves, // Map saves to healing_done
-            accuracy: stat.savePercent,
-            score: stat.goals + stat.assists,
+            preliminary: true, // Mark as preliminary until consensus
           },
           created_at: new Date().toISOString(),
         }
 
-        const { error: performanceError } = await this.supabase.from("player_performances").insert(performanceRecord)
-
-        if (performanceError) {
-          if (performanceError.code === "23505") {
-            console.log(`[v0] Performance record exists for ${stat.actualUsername}, skipping`)
-          } else {
-            console.error(`Error updating performance stats for ${stat.actualUsername}:`, performanceError)
-          }
-        } else {
-          console.log(
-            `[v0] Successfully updated performance stats for ${stat.actualUsername} for ${matchContext?.matchName || "match"} #${matchContext?.gameNumber || 1}`,
-          )
-        }
-
-        if (matchResult) {
-          const newEloRating = Math.max(800, (userExists.elo_rating || 1200) + eloChange)
-
-          const { error: userUpdateError } = await this.supabase
-            .from("users")
-            .update({
-              elo_rating: newEloRating,
-              wins: newWins,
-              losses: newLosses,
-              total_games: newTotalGames,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", userExists.id)
-
-          if (userUpdateError) {
-            console.error(`Error updating ELO and win/loss for ${stat.actualUsername}:`, userUpdateError)
-          } else {
-            console.log(
-              `[v0] Updated ELO for ${userExists.username}: ${userExists.elo_rating || 1200} → ${newEloRating}, Record: ${newWins}W-${newLosses}L`,
-            )
-          }
-        }
-
-        console.log(
-          `[v0] Game data stored for ${stat.actualUsername} in ${matchContext?.matchName || "Match"} #${matchContext?.gameNumber || 1}`,
-        )
-
-        await this.updateCumulativeStats(userExists.id, stat)
+        await this.supabase.from("player_performances").upsert(performanceRecord)
+        console.log(`[v0] Stored preliminary stats for ${stat.actualUsername}`)
       }
     } catch (error) {
-      console.error("Error updating leaderboard stats:", error)
+      console.error("Error storing preliminary stats:", error)
     }
   }
 
-  private async updateCumulativeStats(userId: string, stat: ProcessedHockeyStats) {
+  private async updatePlayerProfileWithFinalRating(
+    stat: ProcessedHockeyStats,
+    matchResult: any,
+    matchContext?: MatchContext,
+  ) {
     try {
-      const { data: existing } = await this.supabase.from("users").select("id").eq("id", userId).single()
+      const { data: userExists, error: userCheckError } = await this.supabase
+        .from("users")
+        .select("id, username, elo_rating, wins, losses, total_games")
+        .eq("id", stat.userId)
+        .single()
 
-      if (existing) {
-        console.log(`[v0] Updated cumulative stats for ${stat.actualUsername}`)
+      if (userCheckError || !userExists) {
+        console.warn(`[v0] Player ${stat.actualUsername} not found for final rating update`)
+        return
       }
+
+      let eloChange = 0
+      let isWinner = false
+      let newWins = userExists.wins || 0
+      let newLosses = userExists.losses || 0
+      const newTotalGames = (userExists.total_games || 0) + 1
+
+      if (matchResult && matchResult.winning_team !== 0) {
+        isWinner = stat.team === matchResult.winning_team
+        const currentElo = userExists.elo_rating || 1200
+        const kFactor = 32
+        const expectedScore = 0.5
+        const actualScore = isWinner ? 1 : 0
+        eloChange = Math.round(kFactor * (actualScore - expectedScore))
+
+        if (isWinner) {
+          newWins += 1
+        } else {
+          newLosses += 1
+        }
+      }
+
+      const newEloRating = Math.max(800, (userExists.elo_rating || 1200) + eloChange)
+
+      // Final profile update with correct rating
+      const { error: userUpdateError } = await this.supabase
+        .from("users")
+        .update({
+          elo_rating: newEloRating,
+          wins: newWins,
+          losses: newLosses,
+          total_games: newTotalGames,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userExists.id)
+
+      if (userUpdateError) {
+        console.error(`Error updating final profile for ${stat.actualUsername}:`, userUpdateError)
+      } else {
+        console.log(
+          `[v0] FINAL PROFILE UPDATE - ${userExists.username}: ELO ${userExists.elo_rating || 1200} → ${newEloRating}, Record: ${newWins}W-${newLosses}L`,
+        )
+      }
+
+      // Update performance record to mark as finalized
+      await this.supabase
+        .from("player_performances")
+        .update({
+          stats: {
+            ...stat,
+            preliminary: false,
+            finalized: true,
+            final_elo: newEloRating,
+          },
+        })
+        .eq("player_id", stat.userId)
+        .eq("game_date", new Date().toISOString().split("T")[0])
     } catch (error) {
-      console.error("Error updating cumulative stats:", error)
+      console.error("Error updating player profile with final rating:", error)
+    }
+  }
+
+  private async updateLeaderboardStats(
+    stats: ProcessedHockeyStats[],
+    actualMatchId?: string,
+    matchContext?: MatchContext,
+  ) {
+    // This method is now replaced by finalizeGameAndUpdateProfiles and storePreliminaryStats
+    console.log(`[v0] Legacy updateLeaderboardStats called - redirecting to new consensus-based system`)
+    return this.finalizeGameAndUpdateProfiles(stats, actualMatchId, matchContext)
+  }
+
+  private async syncWinLossAcrossSystems(stats: ProcessedHockeyStats[]) {
+    try {
+      for (const stat of stats.filter((s) => s.userFound && s.userId)) {
+        const { data: userData } = await this.supabase
+          .from("users")
+          .select("id, wins, losses, elo_rating")
+          .eq("id", stat.userId)
+          .single()
+
+        if (!userData) continue
+
+        await this.supabase.from("leaderboards").upsert({
+          user_id: userData.id,
+          wins: userData.wins,
+          losses: userData.losses,
+          elo_rating: userData.elo_rating,
+          updated_at: new Date().toISOString(),
+        })
+
+        await this.supabase.from("player_analytics").upsert({
+          player_id: userData.id,
+          total_wins: userData.wins,
+          total_losses: userData.losses,
+          current_elo: userData.elo_rating,
+          win_rate: userData.wins / Math.max(1, userData.wins + userData.losses),
+          updated_at: new Date().toISOString(),
+        })
+
+        await this.updateBettingOdds(userData.id, userData.elo_rating, userData.wins, userData.losses)
+      }
+
+      console.log(`[v0] Successfully synchronized win/loss ratios across all systems`)
+    } catch (error) {
+      console.error("Error syncing win/loss across systems:", error)
+    }
+  }
+
+  private async updateBettingOdds(userId: string, eloRating: number, wins: number, losses: number) {
+    try {
+      const winRate = wins / Math.max(1, wins + losses)
+      const performanceMultiplier = Math.max(0.5, Math.min(2.0, eloRating / 1200)) // Scale based on ELO
+
+      await this.supabase
+        .from("betting_markets")
+        .update({
+          odds: Math.round((2.0 / Math.max(0.1, winRate)) * 100) / 100, // Convert win rate to odds
+          performance_multiplier: performanceMultiplier,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("player_id", userId)
+
+      console.log(
+        `[v0] Updated betting odds: Win rate ${(winRate * 100).toFixed(1)}%, Multiplier ${performanceMultiplier.toFixed(2)}`,
+      )
+    } catch (error) {
+      console.error("Error updating betting odds:", error)
     }
   }
 
@@ -461,65 +536,6 @@ export class CSVCoordinationService {
     }
 
     return conflicts
-  }
-
-  private async syncWinLossAcrossSystems(stats: ProcessedHockeyStats[]) {
-    try {
-      for (const stat of stats.filter((s) => s.userFound && s.userId)) {
-        const { data: userData } = await this.supabase
-          .from("users")
-          .select("id, wins, losses, elo_rating")
-          .eq("id", stat.userId)
-          .single()
-
-        if (!userData) continue
-
-        await this.supabase.from("leaderboards").upsert({
-          user_id: userData.id,
-          wins: userData.wins,
-          losses: userData.losses,
-          elo_rating: userData.elo_rating,
-          updated_at: new Date().toISOString(),
-        })
-
-        await this.supabase.from("player_analytics").upsert({
-          player_id: userData.id,
-          total_wins: userData.wins,
-          total_losses: userData.losses,
-          current_elo: userData.elo_rating,
-          win_rate: userData.wins / Math.max(1, userData.wins + userData.losses),
-          updated_at: new Date().toISOString(),
-        })
-
-        await this.updateBettingOdds(userData.id, userData.elo_rating, userData.wins, userData.losses)
-      }
-
-      console.log(`[v0] Successfully synchronized win/loss ratios across all systems`)
-    } catch (error) {
-      console.error("Error syncing win/loss across systems:", error)
-    }
-  }
-
-  private async updateBettingOdds(userId: string, eloRating: number, wins: number, losses: number) {
-    try {
-      const winRate = wins / Math.max(1, wins + losses)
-      const performanceMultiplier = Math.max(0.5, Math.min(2.0, eloRating / 1200)) // Scale based on ELO
-
-      await this.supabase
-        .from("betting_markets")
-        .update({
-          odds: Math.round((2.0 / Math.max(0.1, winRate)) * 100) / 100, // Convert win rate to odds
-          performance_multiplier: performanceMultiplier,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("player_id", userId)
-
-      console.log(
-        `[v0] Updated betting odds: Win rate ${(winRate * 100).toFixed(1)}%, Multiplier ${performanceMultiplier.toFixed(2)}`,
-      )
-    } catch (error) {
-      console.error("Error updating betting odds:", error)
-    }
   }
 }
 
