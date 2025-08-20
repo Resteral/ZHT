@@ -79,6 +79,8 @@ export default function PlayerProfilePage() {
     const supabase = createClient()
 
     try {
+      console.log("[v0] Loading player profile for user:", userId)
+
       const { data: user, error: userError } = await supabase
         .from("users")
         .select("id, username, display_name, elo_rating, wins, losses, total_games, balance, created_at, last_active")
@@ -90,18 +92,22 @@ export default function PlayerProfilePage() {
 
       setProfile(user)
 
+      console.log("[v0] Loading betting stats for user:", userId)
       const { data: bets, error: betsError } = await supabase
         .from("bets")
-        .select("stake_amount, potential_payout, status")
+        .select("stake_amount, potential_payout, status, placed_at")
         .eq("user_id", userId)
 
       if (!betsError && bets) {
         const totalBets = bets.length
         const wonBets = bets.filter((bet) => bet.status === "won").length
         const lostBets = bets.filter((bet) => bet.status === "lost").length
-        const totalWagered = bets.reduce((sum, bet) => sum + bet.stake_amount, 0)
-        const totalWon = bets.filter((bet) => bet.status === "won").reduce((sum, bet) => sum + bet.potential_payout, 0)
-        const winRate = totalBets > 0 ? (wonBets / (wonBets + lostBets)) * 100 : 0
+        const totalWagered = bets.reduce((sum, bet) => sum + (bet.stake_amount || 0), 0)
+        const totalWon = bets
+          .filter((bet) => bet.status === "won")
+          .reduce((sum, bet) => sum + (bet.potential_payout || 0), 0)
+        const settledBets = wonBets + lostBets
+        const winRate = settledBets > 0 ? (wonBets / settledBets) * 100 : 0
         const netProfit = totalWon - totalWagered
 
         setBettingStats({
@@ -113,6 +119,18 @@ export default function PlayerProfilePage() {
           winRate,
           netProfit,
         })
+
+        console.log("[v0] Betting stats loaded:", {
+          totalBets,
+          wonBets,
+          lostBets,
+          totalWagered,
+          totalWon,
+          winRate: winRate.toFixed(1),
+          netProfit: netProfit.toFixed(2),
+        })
+      } else if (betsError) {
+        console.error("[v0] Error loading betting stats:", betsError)
       }
 
       const { data: performances, error: performancesError } = await supabase

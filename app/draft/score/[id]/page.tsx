@@ -388,16 +388,19 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
 
       console.log("[v0] Match status updated to completed")
 
-      // Insert match result
+      const actualConsensusCount =
+        consensusGroups[`${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`]?.length ||
+        currentSubmissions
+
+      // Insert match result with correct submission count
       const { error: resultError } = await supabase.from("match_results").upsert(
         {
           match_id: params.id,
           team1_score: consensusSubmission.team1_score,
           team2_score: consensusSubmission.team2_score,
           winning_team: winningTeam,
-          csv_code: consensusSubmission.csv_code,
-          total_submissions:
-            consensusGroups[`${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`]?.length || 6,
+          csv_code: consensusSubmission.csv_code || "",
+          total_submissions: actualConsensusCount,
           validated_at: new Date().toISOString(),
         },
         {
@@ -409,6 +412,10 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         console.error("[v0] Error inserting match result:", resultError)
         throw resultError
       }
+
+      console.log(
+        `[v0] Match result saved: ${consensusSubmission.team1_score}-${consensusSubmission.team2_score} with ${actualConsensusCount} matching submissions`,
+      )
 
       const { data: participants, error: participantsError } = await supabase
         .from("match_participants")
