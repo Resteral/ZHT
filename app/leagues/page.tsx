@@ -49,6 +49,7 @@ interface CaptainDraft {
   user_is_participant: boolean // Added to check user participation
   participant_names: string
   created_at: string
+  game_number?: number // Added to include game number
 }
 
 export default function LeaguesPage() {
@@ -134,22 +135,26 @@ export default function LeaguesPage() {
         .order("created_at", { ascending: false })
         .limit(50)
 
-      console.log("[v0] Loaded ELO matches:", eloMatches?.length || 0)
-      console.log("[v0] ELO matches data:", eloMatches)
-
       if (eloMatches) {
         const processedMatches = eloMatches.map((match) => {
           const participants = match.match_participants || []
           const participantCount = participants.length
 
+          const gameNumber =
+            match.game_number ||
+            (match.name?.match(/Game #(\d+)/) ? Number.parseInt(match.name.match(/Game #(\d+)/)[1]) : null) ||
+            (Number.parseInt(match.id.slice(-4), 16) % 9999) + 1
+
           return {
             id: match.id,
-            name: match.name || `${match.match_type?.replace("_draft", "").toUpperCase()} Draft Lobby`,
+            name: match.name?.includes("Game #")
+              ? match.name
+              : `${match.match_type?.replace("_draft", "").toUpperCase()} Game #${gameNumber}`,
             format: match.match_type?.replace("_draft", "").toUpperCase() || "Draft",
             participants: participantCount,
             max_participants: match.max_participants || 8,
-            team_price: 0, // Free drafts
-            prize_pool: participantCount * 5, // $5 per participant
+            team_price: 0,
+            prize_pool: participantCount * 10, // Updated to $10 per participant
             status: match.status,
             current_pick: match.current_pick,
             round: match.current_round,
@@ -161,11 +166,11 @@ export default function LeaguesPage() {
               .filter(Boolean)
               .join(", "),
             created_at: match.created_at,
+            game_number: gameNumber,
           }
         })
 
         setActiveCaptainDrafts(processedMatches)
-        console.log("[v0] Processed matches:", processedMatches.length)
       }
 
       const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
@@ -179,14 +184,14 @@ export default function LeaguesPage() {
           last_active
         `)
         .not("elo_rating", "is", null)
-        .gte("last_active", thirtyMinutesAgo) // Active in last 30 minutes
+        .gte("last_active", thirtyMinutesAgo)
         .order("elo_rating", { ascending: false })
         .limit(12)
 
       if (activeEloData) {
         const elosWithStatus = activeEloData.map((player) => ({
           ...player,
-          status: Math.random() > 0.5 ? "online" : "in_match", // Mock status
+          status: Math.random() > 0.5 ? "online" : "in_match",
         }))
         setActiveElos(elosWithStatus)
       }
@@ -249,7 +254,7 @@ export default function LeaguesPage() {
                   FREE
                 </Badge>
               </h3>
-              <p className="text-xs text-muted-foreground">FREE + $5 per game</p>
+              <p className="text-xs text-muted-foreground">FREE + $10 per game</p>
             </CardContent>
           </Card>
 
@@ -342,12 +347,12 @@ export default function LeaguesPage() {
                 <div className="flex-1">
                   <h3 className="font-semibold mb-1">Start Earning Today!</h3>
                   <p className="text-sm text-muted-foreground">
-                    Join matches to compete for prize pools • Earn $5 per game played • $25 per tournament • Start with
+                    Join matches to compete for prize pools • Earn $10 per game played • $25 per tournament • Start with
                     $25 bonus
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-green-500">$5</div>
+                  <div className="text-2xl font-bold text-green-500">$10</div>
                   <div className="text-xs text-muted-foreground">per game played</div>
                 </div>
                 <Button asChild size="lg">
@@ -569,7 +574,7 @@ export default function LeaguesPage() {
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="text-right">
-                              <div className="font-bold text-green-500">$5</div>
+                              <div className="font-bold text-green-500">$10</div>
                               <div className="text-xs text-muted-foreground">per player</div>
                             </div>
                             <div className="text-right">
@@ -605,11 +610,11 @@ export default function LeaguesPage() {
                     </Badge>
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Snake draft picks players • Strategic team building • Earn $5 per game played • No entry fees!
+                    Snake draft picks players • Strategic team building • Earn $10 per game played • No entry fees!
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-green-500">$5</div>
+                  <div className="text-2xl font-bold text-green-500">$10</div>
                   <div className="text-xs text-muted-foreground">per game played</div>
                 </div>
               </div>
@@ -623,7 +628,7 @@ export default function LeaguesPage() {
                     Join ELO Draft
                   </CardTitle>
                   <CardDescription>
-                    Choose from 1v1 to 6v6 formats. All FREE with $5 rewards per player!
+                    Choose from 1v1 to 6v6 formats. All FREE with $10 rewards per player!
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -637,7 +642,7 @@ export default function LeaguesPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary" className="bg-green-100 text-green-700">
-                        $5 Reward
+                        $10 Reward
                       </Badge>
                       <span>Per player</span>
                     </div>

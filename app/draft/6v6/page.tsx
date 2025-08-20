@@ -95,7 +95,7 @@ export default function Draft6v6Page() {
           name: `6v6 Draft Lobby - ${new Date().toLocaleTimeString()}`,
           match_type: "6v6_draft",
           max_participants: 12,
-          prize_pool: 600, // $50 per player * 12 players
+          prize_pool: 120, // $10 per player * 12 players
           status: "waiting",
           creator_id: user.id,
           game: "Omega Strikers",
@@ -174,7 +174,7 @@ export default function Draft6v6Page() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">6v6 ELO Draft</h1>
-        <p className="text-muted-foreground">Compete in 6v6 team battles. FREE entry + $50 reward per player!</p>
+        <p className="text-muted-foreground">Compete in 6v6 team battles. FREE entry + $10 reward per player!</p>
       </div>
 
       {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
@@ -199,7 +199,7 @@ export default function Draft6v6Page() {
               </div>
               <div className="flex items-center justify-center gap-2">
                 <DollarSign className="h-4 w-4" />
-                FREE + $50 Reward
+                FREE + $10 Reward
               </div>
             </div>
           </CardContent>

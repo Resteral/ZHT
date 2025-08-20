@@ -102,7 +102,7 @@ export default function ThreeVThreePage() {
           name: `3v3 Draft Lobby - ${new Date().toLocaleTimeString()}`,
           match_type: "3v3_draft",
           max_participants: 6,
-          prize_pool: 300, // $50 per player * 6 players
+          prize_pool: 60, // $10 per player * 6 players
           status: "waiting",
           creator_id: user.id,
           game: "Omega Strikers",
@@ -177,7 +177,7 @@ export default function ThreeVThreePage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">3v3 ELO Matches</h1>
         <p className="text-muted-foreground">
-          Strategic 3v3 matches with captain draft. Earn $50 per game and improve your ELO rating.
+          Strategic 3v3 matches with captain draft. Earn $10 per game and improve your ELO rating.
         </p>
       </div>
 
@@ -226,7 +226,7 @@ export default function ThreeVThreePage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span>Reward:</span>
-                    <span className="text-green-500 font-medium">$50</span>
+                    <span className="text-green-500 font-medium">$10</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span>ELO:</span>

@@ -68,7 +68,7 @@ export class BettingService {
 
     const { data: user, error: userError } = await this.supabase
       .from("users")
-      .select("balance") // use balance column instead of wallet_balance
+      .select("balance")
       .eq("id", userId)
       .single()
 
@@ -79,30 +79,40 @@ export class BettingService {
       )
     }
 
-    // Create bet and update balance in transaction
     const { data: bet, error: betError } = await this.supabase
       .from("bets")
       .insert({
         user_id: userId,
         market_id: marketId,
-        bet_type: selection, // use bet_type column instead of selection
-        stake_amount: stake, // use stake_amount column
+        bet_type: selection,
+        selection: selection, // Store in both columns for compatibility
+        stake_amount: stake,
+        stake: stake, // Store in both columns for compatibility
         odds,
         potential_payout: potentialPayout,
         status: "pending",
         placed_at: new Date().toISOString(),
+        created_at: new Date().toISOString(), // Add created_at for compatibility
       })
       .select()
       .single()
 
-    if (betError) throw betError
+    if (betError) {
+      console.error("Error creating bet:", betError)
+      throw new Error(`Failed to place bet: ${betError.message}`)
+    }
 
     const { error: balanceError } = await this.supabase
       .from("users")
       .update({ balance: (user.balance || 0) - stake })
       .eq("id", userId)
 
-    if (balanceError) throw balanceError
+    if (balanceError) {
+      console.error("Error updating balance:", balanceError)
+      // Try to rollback the bet if balance update fails
+      await this.supabase.from("bets").delete().eq("id", bet.id)
+      throw new Error("Failed to update balance")
+    }
 
     return bet
   }

@@ -42,26 +42,62 @@ export function BettingHistory() {
 
       const { data, error } = await supabase
         .from("bets")
-        .select("*")
+        .select(`
+          *,
+          betting_markets (
+            id,
+            game_id,
+            market_type,
+            selection,
+            games (
+              id,
+              name,
+              team1_name,
+              team2_name,
+              team1_score,
+              team2_score,
+              winning_team,
+              status
+            )
+          )
+        `)
         .eq("user_id", user.user.id)
-        .order("created_at", { ascending: false })
+        .order("placed_at", { ascending: false })
         .limit(20)
 
       if (error) throw error
 
-      setBettingHistory(data || [])
+      const transformedData: BettingHistoryItem[] = (data || []).map((bet) => ({
+        id: bet.id,
+        market_id: bet.market_id || "",
+        bet_type: bet.bet_type || bet.selection || "Unknown",
+        selection: bet.bet_type || bet.selection || "Unknown",
+        stake_amount: bet.stake_amount || bet.stake || 0,
+        odds: bet.odds || 0,
+        potential_payout: bet.potential_payout || 0,
+        status: bet.status || "pending",
+        created_at: bet.placed_at || bet.created_at,
+        settled_at: bet.settled_at,
+      }))
 
-      const totalBets = data?.length || 0
-      const wonBets = data?.filter((bet) => bet.status === "won").length || 0
-      const totalWagered = data?.reduce((sum, bet) => sum + bet.stake_amount, 0) || 0
-      const totalWon =
-        data?.filter((bet) => bet.status === "won").reduce((sum, bet) => sum + bet.potential_payout, 0) || 0
+      setBettingHistory(transformedData)
+
+      const totalBets = transformedData.length
+      const wonBets = transformedData.filter((bet) => bet.status === "won").length
+      const lostBets = transformedData.filter((bet) => bet.status === "lost").length
+      const totalWagered = transformedData.reduce((sum, bet) => sum + bet.stake_amount, 0)
+      const totalWon = transformedData
+        .filter((bet) => bet.status === "won")
+        .reduce((sum, bet) => sum + bet.potential_payout, 0)
+      const totalLost = transformedData
+        .filter((bet) => bet.status === "lost")
+        .reduce((sum, bet) => sum + bet.stake_amount, 0)
 
       setStats({
         totalBets,
-        winRate: totalBets > 0 ? Math.round((wonBets / totalBets) * 100) : 0,
+        winRate: totalBets > 0 && wonBets + lostBets > 0 ? Math.round((wonBets / (wonBets + lostBets)) * 100) : 0,
         totalWagered,
-        netProfit: totalWon - totalWagered,
+        netProfit: totalWon - totalLost,
       })
     } catch (error) {
       console.error("Error loading betting history:", error)

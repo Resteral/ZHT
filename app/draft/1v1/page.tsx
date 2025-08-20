@@ -102,7 +102,7 @@ export default function OneVOnePage() {
           name: `1v1 Draft Lobby - ${new Date().toLocaleTimeString()}`,
           match_type: "1v1_draft",
           max_participants: 2,
-          prize_pool: 10, // $5 per player * 2 players
+          prize_pool: 20, // $10 per player * 2 players
           status: "waiting",
           creator_id: user.id,
           game: "Omega Strikers",
@@ -176,7 +176,7 @@ export default function OneVOnePage() {
     <div className="container mx-auto py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">1v1 ELO Matches</h1>
-        <p className="text-muted-foreground">Quick 1-on-1 matches. Earn $5 per game and improve your ELO rating.</p>
+        <p className="text-muted-foreground">Quick 1-on-1 matches. Earn $10 per game and improve your ELO rating.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -228,7 +228,7 @@ export default function OneVOnePage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span>Reward:</span>
-                    <span className="text-green-500 font-medium">$5</span>
+                    <span className="text-green-500 font-medium">$10</span> {/* Updated from $5 to $10 */}
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span>ELO:</span>

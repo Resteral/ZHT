@@ -292,6 +292,16 @@ export default function Draft4v4Page() {
         throw new Error("Please log in to create a lobby")
       }
 
+      const { data: existingMatches, error: countError } = await supabase
+        .from("matches")
+        .select("id")
+        .eq("match_type", "4v4_draft")
+        .order("created_at", { ascending: false })
+
+      if (countError) throw countError
+
+      const gameNumber = (existingMatches?.length || 0) + 1
+
       const baseElo = 1200
       const eloVariation = Math.floor(Math.random() * 600) - 300
       const userElo = Math.max(800, Math.min(2000, baseElo + eloVariation))
@@ -305,13 +315,14 @@ export default function Draft4v4Page() {
       const { data: match, error: matchError } = await supabase
         .from("matches")
         .insert({
-          name: `4v4 Draft Lobby - ${new Date().toLocaleTimeString()}`,
+          name: `4v4 ELO Game #${gameNumber}`,
           match_type: "4v4_draft",
           max_participants: 8,
           prize_pool: 400,
           status: "waiting",
           creator_id: user.id,
           game: "Omega Strikers",
+          game_number: gameNumber,
         })
         .select()
         .single()

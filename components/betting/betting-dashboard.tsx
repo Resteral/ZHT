@@ -2,12 +2,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TrendingUp, DollarSign, Target, Clock, Zap } from "lucide-react"
+import { TrendingUp, DollarSign, Target, Clock, Zap, Trophy } from "lucide-react"
 import { LiveBettingMarkets } from "./live-betting-markets"
 import { UpcomingBets } from "./upcoming-bets"
 import { BettingHistory } from "./betting-history"
 import { BetSlip } from "./bet-slip"
 import { ELODraftBetting } from "./elo-draft-betting"
+import { BettingResults } from "./betting-results"
 
 export function BettingDashboard() {
   return (
@@ -71,6 +72,10 @@ export function BettingDashboard() {
                 </TabsTrigger>
                 <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
                 <TabsTrigger value="elo-draft">ELO Draft</TabsTrigger>
+                <TabsTrigger value="results" className="flex items-center space-x-2">
+                  <Trophy className="h-4 w-4" />
+                  <span>Results</span>
+                </TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
               <div className="flex items-center space-x-2">
@@ -91,6 +96,10 @@ export function BettingDashboard() {
 
             <TabsContent value="elo-draft" className="space-y-6">
               <ELODraftBetting />
+            </TabsContent>
+
+            <TabsContent value="results" className="space-y-6">
+              <BettingResults />
             </TabsContent>
 
             <TabsContent value="history" className="space-y-6">

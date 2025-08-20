@@ -1,4 +1,5 @@
--- Update default user settings to $25 starting balance, 1200 ELO, and $5 game payment
+-- Updated default game reward from $5 to $10
+-- Update default user settings to $25 starting balance, 1200 ELO, and $10 game payment
 
 -- Update default starting balance to $25 and ELO to 1200
 ALTER TABLE users 
@@ -14,22 +15,22 @@ UPDATE users
 SET elo_rating = 1200 
 WHERE elo_rating IS NULL OR elo_rating = 1500;
 
--- Update game participation reward to $5 instead of $50
+-- Update game participation reward to $10 instead of $5
 UPDATE captain_drafts 
-SET game_reward = 5 
-WHERE game_reward = 50 OR game_reward IS NULL;
+SET game_reward = 10 
+WHERE game_reward = 5 OR game_reward = 50 OR game_reward IS NULL;
 
--- Create function to award $5 per game played (updated from $50)
+-- Create function to award $10 per game played (updated from $5)
 CREATE OR REPLACE FUNCTION award_game_participation(user_id UUID, draft_id UUID)
 RETURNS VOID AS $$
 BEGIN
-  -- Award $5 for participating in the game
+  -- Award $10 for participating in the game
   INSERT INTO wallet_transactions (user_id, amount, transaction_type, description)
-  VALUES (user_id, 5, 'game_participation', 'ELO match participation reward');
+  VALUES (user_id, 10, 'game_participation', 'ELO match participation reward');
   
   -- Update user balance
   UPDATE users 
-  SET balance = balance + 5
+  SET balance = balance + 10
   WHERE id = user_id;
 END;
 $$ LANGUAGE plpgsql;
@@ -52,3 +53,18 @@ WHERE balance = 0 OR balance IS NULL;
 -- Create index for better performance on balance queries
 CREATE INDEX IF NOT EXISTS idx_users_balance ON users(balance);
 CREATE INDEX IF NOT EXISTS idx_users_elo_rating ON users(elo_rating DESC);
+
+-- Create elo_history table if it doesn't exist for proper ELO tracking
+CREATE TABLE IF NOT EXISTS elo_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  old_rating INTEGER NOT NULL,
+  new_rating INTEGER NOT NULL,
+  rating_change INTEGER NOT NULL,
+  game_result VARCHAR(10) CHECK (game_result IN ('win', 'loss', 'draw')),
+  match_id UUID,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_elo_history_user_id ON elo_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_elo_history_created_at ON elo_history(created_at DESC);

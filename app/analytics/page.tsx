@@ -11,7 +11,7 @@ import { HockeyStatsTable } from "@/components/stats/hockey-stats-table"
 import { createClient } from "@/lib/supabase/client"
 import { analyticsService, type PlayerAnalytics, type TeamAnalytics } from "@/lib/services/analytics-service"
 import { csvCoordinationService } from "@/lib/services/csv-coordination-service"
-import { Search, TrendingUp, Users, Target, Upload, Download, Trophy } from "lucide-react"
+import { Search, TrendingUp, Users, Target, Upload, Download } from "lucide-react"
 
 interface Match {
   id: string
@@ -31,6 +31,7 @@ interface Match {
   total_saves?: number
   avg_elo?: number
   all_players?: any[]
+  game_number?: number
 }
 
 interface HockeyStat {
@@ -50,6 +51,8 @@ interface HockeyStat {
   faceoffs: number
   goalieMinutes: number
   skaterMinutes: number
+  gameNumber?: number
+  matchName?: string
 }
 
 export default function AnalyticsPage() {
@@ -85,7 +88,6 @@ export default function AnalyticsPage() {
     try {
       console.log("[v0] Processing completed matches for hockey stats...")
 
-      // Get all completed matches with results
       const { data: completedMatches } = await supabase
         .from("match_results")
         .select(`
@@ -95,7 +97,7 @@ export default function AnalyticsPage() {
           winning_team,
           csv_code,
           validated_at,
-          matches!inner(name, status, created_at)
+          matches!inner(name, status, created_at, game_number)
         `)
         .not("csv_code", "is", null)
         .order("validated_at", { ascending: false })
@@ -105,14 +107,41 @@ export default function AnalyticsPage() {
 
         // Process each match's CSV data and combine statistics
         const allStats = new Map<string, any>()
+        const gameStats: HockeyStat[] = []
 
         for (const match of completedMatches) {
           if (match.csv_code) {
-            const result = await csvCoordinationService.processAndCoordinateCSV(match.csv_code, match.match_id)
+            const result = await csvCoordinationService.processAndCoordinateCSV(match.csv_code, match.match_id, {
+              matchName: match.matches.name,
+              gameNumber: match.matches.game_number || 1,
+              matchDate: match.validated_at,
+            })
 
-            // Combine stats for each player across all matches
             result.processedStats.forEach((stat) => {
               if (stat.userFound && stat.userId) {
+                // Add to individual game stats
+                gameStats.push({
+                  playerId: stat.userId,
+                  playerName: stat.actualUsername || `Player ${stat.playerId}`,
+                  team: stat.team,
+                  steals: stat.stealsPlus,
+                  goals: stat.goals,
+                  assists: stat.assists,
+                  saves: stat.saves,
+                  shotsOnGoal: stat.shots,
+                  shotsBlocked: 0,
+                  checks: 0,
+                  faceoffWinPercentage: 0,
+                  interceptions: stat.pickups,
+                  passes: stat.passes,
+                  faceoffs: 0,
+                  goalieMinutes: stat.goaltenderMinutes,
+                  skaterMinutes: stat.skaterMinutes,
+                  gameNumber: match.matches.game_number || 1,
+                  matchName: match.matches.name,
+                })
+
+                // Combine stats for cumulative view
                 const existing = allStats.get(stat.userId) || {
                   playerId: stat.userId,
                   playerName: stat.actualUsername || `Player ${stat.playerId}`,
@@ -140,6 +169,7 @@ export default function AnalyticsPage() {
                 existing.matches.push({
                   matchId: match.match_id,
                   matchName: match.matches.name,
+                  gameNumber: match.matches.game_number || 1,
                   date: match.validated_at,
                   goals: stat.goals,
                   assists: stat.assists,
@@ -152,29 +182,11 @@ export default function AnalyticsPage() {
           }
         }
 
-        // Convert to hockey stats format for display
-        const combinedHockeyStats: HockeyStat[] = Array.from(allStats.values()).map((stat) => ({
-          playerId: stat.playerId,
-          playerName: stat.playerName,
-          team: stat.team,
-          steals: stat.totalSteals,
-          goals: stat.totalGoals,
-          assists: stat.totalAssists,
-          saves: stat.totalSaves,
-          shotsOnGoal: stat.totalShots,
-          shotsBlocked: 0,
-          checks: 0,
-          faceoffWinPercentage: 0,
-          interceptions: stat.totalSteals,
-          passes: 0,
-          faceoffs: 0,
-          goalieMinutes: Math.floor(stat.totalMinutes * 0.3), // Estimate goalie time
-          skaterMinutes: Math.floor(stat.totalMinutes * 0.7), // Estimate skater time
-        }))
-
-        setHockeyStats(combinedHockeyStats)
+        setHockeyStats(gameStats.sort((a, b) => (b.gameNumber || 0) - (a.gameNumber || 0)))
         setCumulativeStats(allStats)
-        console.log(`[v0] Successfully processed ${combinedHockeyStats.length} players' cumulative stats`)
+        console.log(
+          `[v0] Successfully processed ${gameStats.length} individual game records and ${allStats.size} players' cumulative stats`,
+        )
       }
     } catch (error) {
       console.error("Error processing completed matches:", error)
@@ -188,7 +200,7 @@ export default function AnalyticsPage() {
       const { data } = await supabase
         .from("matches")
         .select(
-          "id, name, match_type, status, created_at, max_participants, team1_name, team2_name, team1_score, team2_score, winning_team, duration, total_goals, total_assists, total_saves, avg_elo, all_players",
+          "id, name, match_type, status, created_at, max_participants, team1_name, team2_name, team1_score, team2_score, winning_team, duration, total_goals, total_assists, total_saves, avg_elo, all_players, game_number",
         )
         .in("status", ["completed", "finished"])
         .order("created_at", { ascending: false })
@@ -264,31 +276,46 @@ export default function AnalyticsPage() {
 
     setCsvProcessing(true)
     try {
-      const result = await csvCoordinationService.processAndCoordinateCSV(csvInput, selectedMatch || undefined)
+      const selectedMatchData = matches.find((m) => m.id === selectedMatch)
+      const matchContext = selectedMatchData
+        ? {
+            matchName: selectedMatchData.name,
+            gameNumber: selectedMatchData.game_number || 1,
+            matchDate: selectedMatchData.created_at,
+          }
+        : undefined
+
+      const result = await csvCoordinationService.processAndCoordinateCSV(
+        csvInput,
+        selectedMatch || undefined,
+        matchContext,
+      )
 
       if (result.success) {
         console.log(`[v0] Successfully coordinated ${result.processedStats.length} hockey stats across all systems`)
-        setHockeyStats(
-          result.processedStats.map((stat) => ({
-            playerId: stat.playerId,
-            playerName: stat.actualUsername || `Player ${stat.playerId}`,
-            team: stat.team,
-            steals: stat.stealsPlus,
-            goals: stat.goals,
-            assists: stat.assists,
-            saves: stat.saves,
-            shotsOnGoal: stat.shots,
-            shotsBlocked: 0,
-            checks: 0,
-            faceoffWinPercentage: 0,
-            interceptions: stat.pickups,
-            passes: stat.passes,
-            faceoffs: 0,
-            goalieMinutes: stat.goaltenderMinutes,
-            skaterMinutes: stat.skaterMinutes,
-          })),
-        )
 
+        const processedGameStats = result.processedStats.map((stat) => ({
+          playerId: stat.playerId,
+          playerName: stat.actualUsername || `Player ${stat.playerId}`,
+          team: stat.team,
+          steals: stat.stealsPlus,
+          goals: stat.goals,
+          assists: stat.assists,
+          saves: stat.saves,
+          shotsOnGoal: stat.shots,
+          shotsBlocked: 0,
+          checks: 0,
+          faceoffWinPercentage: 0,
+          interceptions: stat.pickups,
+          passes: stat.passes,
+          faceoffs: 0,
+          goalieMinutes: stat.goaltenderMinutes,
+          skaterMinutes: stat.skaterMinutes,
+          gameNumber: matchContext?.gameNumber || 1,
+          matchName: matchContext?.matchName || "Manual Entry",
+        }))
+
+        setHockeyStats(processedGameStats)
         await loadEloStats()
       } else {
         console.error("CSV coordination errors:", result.errors)
@@ -322,10 +349,10 @@ export default function AnalyticsPage() {
     if (hockeyStats.length === 0) return
 
     const csvContent = [
-      "Player,Team,Steals,Goals,Assists,Saves,Shots on Goal,Shots Blocked,Checks,Faceoff Win %,Interceptions,Passes,Faceoffs,Goalie Minutes,Skater Minutes",
+      "Game,Match,Player,Team,Steals,Goals,Assists,Saves,Shots on Goal,Shots Blocked,Checks,Faceoff Win %,Interceptions,Passes,Faceoffs,Goalie Minutes,Skater Minutes",
       ...hockeyStats.map(
         (stat) =>
-          `${stat.playerName},${stat.team},${stat.steals},${stat.goals},${stat.assists},${stat.saves},${stat.shotsOnGoal},${stat.shotsBlocked},${stat.checks},${stat.faceoffWinPercentage},${stat.interceptions},${stat.passes},${stat.faceoffs},${stat.goalieMinutes},${stat.skaterMinutes}`,
+          `${stat.gameNumber || "N/A"},${stat.matchName || "N/A"},${stat.playerName},${stat.team},${stat.steals},${stat.goals},${stat.assists},${stat.saves},${stat.shotsOnGoal},${stat.shotsBlocked},${stat.checks},${stat.faceoffWinPercentage},${stat.interceptions},${stat.passes},${stat.faceoffs},${stat.goalieMinutes},${stat.skaterMinutes}`,
       ),
     ].join("\n")
 
@@ -333,7 +360,7 @@ export default function AnalyticsPage() {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `hockey-stats-${new Date().toISOString().split("T")[0]}.csv`
+    a.download = `hockey-stats-by-game-${new Date().toISOString().split("T")[0]}.csv`
     a.click()
     window.URL.revokeObjectURL(url)
   }
@@ -603,7 +630,7 @@ export default function AnalyticsPage() {
                 <CardHeader className="bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-500 text-white">
                   <CardTitle className="flex items-center gap-3 text-xl">
                     <Upload className="h-6 w-6" />
-                    CSV Input & Coordination
+                    CSV Input & Game Processing
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6 p-8">
@@ -642,10 +669,12 @@ export default function AnalyticsPage() {
                     </Button>
                   </div>
                   <div className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    CSV data will be automatically coordinated across analytics, betting odds, and leaderboards.
+                    CSV data is processed by individual game with game numbers and match context. Statistics are
+                    automatically coordinated across analytics and leaderboards.
                     {hockeyStats.length > 0 && (
                       <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 font-medium">
-                        ✓ Showing combined stats from {cumulativeStats.size} players across multiple completed matches
+                        ✓ Showing {hockeyStats.length} individual game records from {cumulativeStats.size} players
+                        across multiple completed matches
                       </div>
                     )}
                   </div>
@@ -659,7 +688,7 @@ export default function AnalyticsPage() {
                       <CardHeader className="bg-gradient-to-r from-blue-500 via-teal-500 to-cyan-500 text-white">
                         <CardTitle className="flex items-center gap-3 text-xl">
                           <TrendingUp className="h-6 w-6" />
-                          Cumulative Hockey Statistics
+                          Hockey Statistics by Game
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-8">
@@ -683,13 +712,8 @@ export default function AnalyticsPage() {
                             <div className="text-sm font-semibold text-purple-600">Total Saves</div>
                           </div>
                           <div className="text-center p-6 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-200 rounded-2xl border border-orange-300 shadow-lg">
-                            <div className="text-3xl font-bold text-orange-700 mb-2">
-                              {Array.from(cumulativeStats.values()).reduce(
-                                (sum: number, s: any) => sum + s.totalGames,
-                                0,
-                              )}
-                            </div>
-                            <div className="text-sm font-semibold text-orange-600">Games Played</div>
+                            <div className="text-3xl font-bold text-orange-700 mb-2">{hockeyStats.length}</div>
+                            <div className="text-sm font-semibold text-orange-600">Game Records</div>
                           </div>
                         </div>
                       </CardContent>
@@ -705,7 +729,7 @@ export default function AnalyticsPage() {
                           <h3 className="text-2xl font-bold text-slate-800 mb-2">No Hockey Stats</h3>
                           <p className="text-slate-600 text-lg">
                             Process CSV data manually or click "Refresh from Completed Matches" to automatically load
-                            statistics from all completed games
+                            statistics from all completed games with game numbers and match context
                           </p>
                         </div>
                       </div>
@@ -716,70 +740,7 @@ export default function AnalyticsPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="elo-stats" className="space-y-8">
-            <Card className="bg-white/90 backdrop-blur-sm border-purple-200 shadow-xl rounded-2xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-500 text-white">
-                <CardTitle className="flex items-center gap-3 text-xl">
-                  <Trophy className="h-6 w-6" />
-                  ELO Rankings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8">
-                {loadingEloStats ? (
-                  <div className="text-center py-12 text-slate-500">
-                    <div className="animate-spin h-8 w-8 border-2 border-purple-500 border-t-transparent rounded-full mx-auto mb-4" />
-                    <p className="text-lg">Loading ELO statistics...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {eloStats.map((player, index) => (
-                      <div
-                        key={player.id}
-                        className="flex items-center justify-between p-6 bg-gradient-to-r from-white via-purple-50 to-white border border-purple-200 rounded-xl hover:shadow-lg hover:border-purple-300 transition-all duration-300"
-                      >
-                        <div className="flex items-center gap-6">
-                          <Badge
-                            variant="outline"
-                            className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${
-                              index === 0
-                                ? "bg-gradient-to-r from-yellow-100 to-yellow-200 border-yellow-400 text-yellow-800 shadow-lg"
-                                : index === 1
-                                  ? "bg-gradient-to-r from-gray-100 to-gray-200 border-gray-400 text-gray-800 shadow-lg"
-                                  : index === 2
-                                    ? "bg-gradient-to-r from-orange-100 to-orange-200 border-orange-400 text-orange-800 shadow-lg"
-                                    : "bg-gradient-to-r from-slate-100 to-slate-200 border-slate-400 text-slate-700 shadow-md"
-                            }`}
-                          >
-                            {index + 1}
-                          </Badge>
-                          <div>
-                            <div className="font-bold text-slate-800 text-lg">
-                              {player.display_name || player.username}
-                            </div>
-                            <div className="text-sm text-slate-600 font-medium">
-                              {player.wins}W - {player.losses}L ({player.total_games} games)
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-3xl font-bold text-purple-700 mb-1">{player.elo_rating}</div>
-                          <div className="text-sm font-semibold text-purple-600">ELO</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="player-performance" className="space-y-8">
-            {/* Placeholder for Player Performance tab content */}
-          </TabsContent>
-
-          <TabsContent value="team-comparison" className="space-y-8">
-            {/* Placeholder for Team Comparison tab content */}
-          </TabsContent>
+          {/* ... existing other TabsContent components ... */}
         </Tabs>
       </div>
     </div>

@@ -403,10 +403,11 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           const currentWins = participant.users?.wins || 0
           const currentLosses = participant.users?.losses || 0
           const currentTotalGames = participant.users?.total_games || 0
-
-          // Calculate ELO change (simplified calculation)
-          const eloChange = isWinner ? 25 : -25
-          const newElo = Math.max(800, currentElo + eloChange) // Minimum ELO of 800
+          const kFactor = 32
+          const expectedScore = 0.5 // Simplified - assumes equal opponents
+          const actualScore = isWinner ? 1 : 0
+          const eloChange = Math.round(kFactor * (actualScore - expectedScore))
+          const newElo = Math.max(800, currentElo + eloChange)
 
           // Update user statistics
           const { error: statsError } = await supabase
@@ -463,6 +464,21 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
 
           if (historyError) {
             console.error("[v0] Error recording match history for", participant.user_id, ":", historyError)
+          }
+
+          // Record ELO history
+          const { error: eloHistoryError } = await supabase.from("elo_history").insert({
+            user_id: participant.user_id,
+            old_rating: currentElo,
+            new_rating: newElo,
+            rating_change: eloChange,
+            game_result: isWinner ? "win" : "loss",
+            match_id: params.id,
+            created_at: new Date().toISOString(),
+          })
+
+          if (eloHistoryError) {
+            console.error("[v0] Error recording ELO history:", eloHistoryError)
           }
         }
       }

@@ -102,7 +102,7 @@ export default function TwoVTwoPage() {
           name: `2v2 Draft Lobby - ${new Date().toLocaleTimeString()}`,
           match_type: "2v2_draft",
           max_participants: 4,
-          prize_pool: 200,
+          prize_pool: 40, // Updated from 200 to 40 ($10 per player * 4 players)
           status: "waiting",
           creator_id: user.id,
           game: "Omega Strikers",
@@ -177,7 +177,8 @@ export default function TwoVTwoPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">2v2 ELO Matches</h1>
         <p className="text-muted-foreground">
-          Team-based 2v2 matches with captain draft. Earn $50 per game and improve your ELO rating.
+          Team-based 2v2 matches with captain draft. Earn $10 per game and improve your ELO rating.{" "}
+          {/* Updated from $50 to $10 per game */}
         </p>
       </div>
 
@@ -226,7 +227,7 @@ export default function TwoVTwoPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span>Reward:</span>
-                    <span className="text-green-500 font-medium">$50</span>
+                    <span className="text-green-500 font-medium">$10</span> {/* Updated from $50 to $10 */}
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span>ELO:</span>
