@@ -47,7 +47,18 @@ export function BettingHistory() {
           betting_markets (
             id,
             game_id,
-            market_type
+            market_type,
+            selection,
+            games (
+              id,
+              name,
+              team1_name,
+              team2_name,
+              team1_score,
+              team2_score,
+              winning_team,
+              status
+            )
           )
         `)
         .eq("user_id", user.user.id)

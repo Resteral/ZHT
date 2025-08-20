@@ -219,15 +219,14 @@ export const importExportService = {
         }
 
         games.push({
-          name: `${game.team1} vs ${game.team2}`,
-          game: game.game_type || "hockey",
-          match_type: "regular",
+          team1_name: game.team1,
+          team2_name: game.team2,
+          team1_score: Number.parseInt(game.score1) || 0,
+          team2_score: Number.parseInt(game.score2) || 0,
+          game_type: game.game_type || "regular",
+          played_at: new Date(game.date).toISOString(),
           status: "completed",
           created_at: new Date().toISOString(),
-          start_date: new Date(game.date).toISOString(),
-          max_participants: 10,
-          entry_fee: 0,
-          prize_pool: 0,
         })
       }
 

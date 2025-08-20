@@ -27,7 +27,7 @@ export const streamService = {
       .from("livestreams")
       .select(`
         *,
-        games(name, game, match_type),
+        games(title, team1_name, team2_name),
         tournaments(name)
       `)
       .eq("id", id)
@@ -37,7 +37,7 @@ export const streamService = {
 
     return {
       ...data,
-      game_title: data.games?.name || "Unknown Game",
+      game_title: data.games?.title || "Unknown Game",
       tournament_name: data.tournaments?.name,
     }
   },

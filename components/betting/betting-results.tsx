@@ -96,17 +96,7 @@ export function BettingResults() {
 
       let matchesData: any[] = []
       if (gameIds.length > 0) {
-        const { data: matches, error: matchesError } = await supabase
-          .from("matches")
-          .select(`
-            id,
-            name,
-            status,
-            game,
-            match_type,
-            created_at
-          `)
-          .in("id", gameIds)
+        const { data: matches, error: matchesError } = await supabase.from("matches").select("*").in("id", gameIds)
 
         if (!matchesError) {
           matchesData = matches || []
@@ -131,9 +121,12 @@ export function BettingResults() {
           settled_at: bet.settled_at,
           game_name: matchData?.name || `Game ${bet.betting_markets?.game_id?.slice(0, 8) || "Unknown"}`,
           match_name: matchData?.name || "Unknown Match",
-          team1_name: "Team 1", // Default team names since columns don't exist
-          team2_name: "Team 2",
-          final_score: undefined, // Remove score display until proper scoring system is implemented
+          team1_name: matchData?.team1_captain || matchData?.team1_name,
+          team2_name: matchData?.team2_captain || matchData?.team2_name,
+          final_score:
+            matchData?.team1_score && matchData?.team2_score
+              ? `${matchData.team1_score}-${matchData.team2_score}`
+              : undefined,
           winning_team: matchData?.winner || matchData?.winning_team,
         }
       })
@@ -414,9 +407,16 @@ export function BettingResults() {
                       <div>
                         <strong>Selection:</strong> {result.selection}
                       </div>
-                      <div>
-                        <strong>Match:</strong> {result.team1_name} vs {result.team2_name}
-                      </div>
+                      {result.team1_name && result.team2_name && (
+                        <div>
+                          <strong>Match:</strong> {result.team1_name} vs {result.team2_name}
+                        </div>
+                      )}
+                      {result.final_score && (
+                        <div>
+                          <strong>Final Score:</strong> {result.final_score}
+                        </div>
+                      )}
                     </div>
                   </div>
 
