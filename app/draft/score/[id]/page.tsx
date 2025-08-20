@@ -428,97 +428,82 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
 
       if (participantsError) {
         console.error("[v0] Error fetching participants:", participantsError)
-      } else if (participants && participants.length > 0) {
-        console.log("[v0] Updating player statistics for", participants.length, "participants")
+        throw participantsError
+      }
 
-        // Update player statistics for each participant
+      if (participants && participants.length > 0) {
+        console.log("[v0] Updating ELO ratings and win/loss records for participants")
+
+        // Calculate ELO changes for each participant
         for (const participant of participants) {
-          const isWinner =
-            (winningTeam === 1 && participant.team_assignment === 1) ||
-            (winningTeam === 2 && participant.team_assignment === 2)
+          const user = participant.users
+          if (!user) continue
 
-          const currentElo = participant.users?.elo_rating || 1200
-          const currentWins = participant.users?.wins || 0
-          const currentLosses = participant.users?.losses || 0
-          const currentTotalGames = participant.users?.total_games || 0
-          const kFactor = 32
-          const expectedScore = 0.5 // Simplified - assumes equal opponents
-          const actualScore = isWinner ? 1 : 0
-          const eloChange = Math.round(kFactor * (actualScore - expectedScore))
-          const newElo = Math.max(800, currentElo + eloChange)
+          const isWinner = participant.team_assignment === winningTeam
+          const isDraw = winningTeam === null
 
-          // Update user statistics
-          const { error: statsError } = await supabase
+          // Calculate ELO change (simplified K-factor of 32)
+          const K = 32
+          const currentElo = user.elo_rating || 1200
+
+          // For team games, calculate average opponent ELO
+          const opponents = participants.filter((p) => p.team_assignment !== participant.team_assignment && p.users)
+          const avgOpponentElo =
+            opponents.length > 0
+              ? opponents.reduce((sum, opp) => sum + (opp.users?.elo_rating || 1200), 0) / opponents.length
+              : 1200
+
+          // Expected score calculation
+          const expectedScore = 1 / (1 + Math.pow(10, (avgOpponentElo - currentElo) / 400))
+
+          // Actual score (1 for win, 0.5 for draw, 0 for loss)
+          const actualScore = isWinner ? 1 : isDraw ? 0.5 : 0
+
+          // ELO change
+          const eloChange = Math.round(K * (actualScore - expectedScore))
+          const newElo = Math.max(100, currentElo + eloChange) // Minimum ELO of 100
+
+          // Update user stats
+          const newWins = user.wins + (isWinner ? 1 : 0)
+          const newLosses = user.losses + (!isWinner && !isDraw ? 1 : 0)
+          const newTotalGames = (user.total_games || 0) + 1
+
+          const { error: updateError } = await supabase
             .from("users")
             .update({
               elo_rating: newElo,
-              wins: isWinner ? currentWins + 1 : currentWins,
-              losses: isWinner ? currentLosses : currentLosses + 1,
-              total_games: currentTotalGames + 1,
+              wins: newWins,
+              losses: newLosses,
+              total_games: newTotalGames,
               updated_at: new Date().toISOString(),
             })
-            .eq("id", participant.user_id)
+            .eq("id", user.id)
 
-          if (statsError) {
-            console.error("[v0] Error updating player stats for", participant.user_id, ":", statsError)
+          if (updateError) {
+            console.error(`[v0] Error updating user ${user.username}:`, updateError)
           } else {
             console.log(
-              "[v0] Updated stats for",
-              participant.users?.username,
-              "- ELO:",
-              currentElo,
-              "→",
-              newElo,
-              "Result:",
-              isWinner ? "WIN" : "LOSS",
+              `[v0] Updated ${user.username}: ELO ${currentElo} → ${newElo} (${eloChange > 0 ? "+" : ""}${eloChange}), Record: ${newWins}W-${newLosses}L`,
             )
           }
 
-          // Record match history
-          const { error: historyError } = await supabase.from("match_history").insert({
-            player_id: participant.user_id,
-            game: "hockey",
-            match_type: "4v4_draft",
-            result: isWinner ? "win" : "loss",
-            player_score: isWinner
-              ? participant.team_assignment === 1
-                ? consensusSubmission.team1_score
-                : consensusSubmission.team2_score
-              : participant.team_assignment === 1
-                ? consensusSubmission.team2_score
-                : consensusSubmission.team1_score,
-            opponent_score: isWinner
-              ? participant.team_assignment === 1
-                ? consensusSubmission.team2_score
-                : consensusSubmission.team1_score
-              : participant.team_assignment === 1
-                ? consensusSubmission.team2_score
-                : consensusSubmission.team1_score,
-            elo_before: currentElo,
-            elo_after: newElo,
-            elo_change: eloChange,
-            match_date: new Date().toISOString(),
-          })
-
-          if (historyError) {
-            console.error("[v0] Error recording match history for", participant.user_id, ":", historyError)
-          }
-
           // Record ELO history
-          const { error: eloHistoryError } = await supabase.from("elo_history").insert({
-            user_id: participant.user_id,
+          const { error: historyError } = await supabase.from("elo_history").insert({
+            user_id: user.id,
+            game_id: params.id,
             old_rating: currentElo,
             new_rating: newElo,
             rating_change: eloChange,
-            game_result: isWinner ? "win" : "loss",
-            match_id: params.id,
-            created_at: new Date().toISOString(),
+            game_result: isWinner ? "win" : isDraw ? "draw" : "loss",
+            opponent_id: opponents[0]?.users?.id || null, // First opponent for history
           })
 
-          if (eloHistoryError) {
-            console.error("[v0] Error recording ELO history:", eloHistoryError)
+          if (historyError) {
+            console.error(`[v0] Error recording ELO history for ${user.username}:`, historyError)
           }
         }
+
+        console.log("[v0] Successfully updated all participant ELO ratings and records")
       }
 
       const consensusSubmissions =
