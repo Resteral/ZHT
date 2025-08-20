@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Calendar, Filter, TrendingUp, TrendingDown, Search } from "lucide-react"
 import { ProfileNameLink } from "./profile-name-link"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase/client"
 
 interface Match {
   id: string
@@ -51,6 +51,8 @@ export function EnhancedMatchHistory({ userId }: EnhancedMatchHistoryProps) {
 
   const loadMatches = async () => {
     try {
+      console.log("[v0] Loading match history...")
+
       const { data: matchResults, error } = await supabase
         .from("match_results")
         .select(`
@@ -69,7 +71,12 @@ export function EnhancedMatchHistory({ userId }: EnhancedMatchHistoryProps) {
         .order("created_at", { ascending: false })
         .limit(10)
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error loading match results:", error)
+        throw error
+      }
+
+      console.log(`[v0] Found ${matchResults?.length || 0} match results`)
 
       const formattedMatches: Match[] =
         matchResults?.map((result) => ({
@@ -92,8 +99,12 @@ export function EnhancedMatchHistory({ userId }: EnhancedMatchHistoryProps) {
 
       setMatches(page === 1 ? formattedMatches : [...matches, ...formattedMatches])
       setHasMore(formattedMatches.length === 10)
+
+      if (formattedMatches.length === 0) {
+        console.log("[v0] No match history found - matches will appear here once games are completed")
+      }
     } catch (error) {
-      console.error("Error loading matches:", error)
+      console.error("[v0] Error loading matches:", error)
       setMatches([]) // Set empty array instead of mock data
     } finally {
       setLoading(false)
