@@ -96,6 +96,7 @@ export default function Dashboard() {
   const [activeELOPlayers, setActiveELOPlayers] = useState<ActiveELOPlayer[]>([])
   const [liveScores, setLiveScores] = useState<LiveScore[]>([])
   const [completedMatches, setCompletedMatches] = useState<CompletedMatch[]>([])
+  const [lastFetch, setLastFetch] = useState<number>(0)
 
   const loadRealTimeData = async () => {
     if (!isSupabaseConfigured) {
@@ -103,6 +104,13 @@ export default function Dashboard() {
       setLoading(false)
       return
     }
+
+    const now = Date.now()
+    if (now - lastFetch < 10000) {
+      console.log("[v0] Skipping data fetch - too soon since last fetch")
+      return
+    }
+    setLastFetch(now)
 
     try {
       const supabase = createClient()
@@ -130,10 +138,8 @@ export default function Dashboard() {
         console.error("[v0] Error loading matches:", matchesError)
       } else {
         console.log("[v0] Loaded matches:", matchesData?.length || 0)
-        console.log("[v0] Matches data:", matchesData)
       }
 
-      // Load players
       const { data: players, error: playersError } = await supabase
         .from("users")
         .select("id, username, elo_rating")
@@ -171,7 +177,6 @@ export default function Dashboard() {
           team1_score,
           team2_score,
           winning_team,
-          match_duration,
           validated_at
         `)
         .order("validated_at", { ascending: false })
@@ -200,7 +205,7 @@ export default function Dashboard() {
             }
           }
 
-          if (isCompleted) {
+          if (isCompleted || match.status === "completed") {
             return null
           }
 
@@ -238,7 +243,6 @@ export default function Dashboard() {
         })
       })
 
-      // Add other online players not in matches
       if (players) {
         players.forEach((player) => {
           if (!activePlayersSet.has(player.id)) {
@@ -252,10 +256,8 @@ export default function Dashboard() {
         })
       }
 
-      // Sort by ELO rating
       activePlayersData.sort((a, b) => b.elo_rating - a.elo_rating)
 
-      // Format top players
       const formattedTopPlayers: TopPlayer[] = (players || []).slice(0, 5).map((player: any) => ({
         id: player.id,
         username: player.username,
@@ -279,8 +281,8 @@ export default function Dashboard() {
           status: match.status,
           team1_score: result?.team1_score || 0,
           team2_score: result?.team2_score || 0,
-          team1_captain: "Team 1", // Mock data - could be enhanced with actual team data
-          team2_captain: "Team 2", // Mock data - could be enhanced with actual team data
+          team1_captain: "Team 1",
+          team2_captain: "Team 2",
           winner: result?.winning_team === 1 ? "Team 1" : result?.winning_team === 2 ? "Team 2" : "TBD",
           created_at: match.created_at,
         }
@@ -303,8 +305,7 @@ export default function Dashboard() {
   useEffect(() => {
     loadRealTimeData()
 
-    // Set up real-time updates
-    const interval = setInterval(loadRealTimeData, 30000) // Update every 30 seconds
+    const interval = setInterval(loadRealTimeData, 60000)
 
     return () => clearInterval(interval)
   }, [])

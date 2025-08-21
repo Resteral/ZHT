@@ -10,16 +10,26 @@ export function useRealtimeSubscription<T>(table: string, filter?: string, initi
   const [data, setData] = useState<T[]>(initialData)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetch, setLastFetch] = useState<number>(0)
 
   useEffect(() => {
     let channel: RealtimeChannel
+    let isMounted = true
 
     const setupSubscription = async () => {
       try {
+        // Prevent rapid refetching - minimum 5 second interval
+        const now = Date.now()
+        if (now - lastFetch < 5000) {
+          return
+        }
+        setLastFetch(now)
+
         // Initial data fetch
         let query = supabase.from(table).select("*")
         if (filter) {
-          query = query.filter(...filter.split(","))
+          const [column, operator, value] = filter.split(",")
+          query = query.filter(column, operator, value)
         }
 
         const { data: initialData, error: fetchError } = await query
@@ -29,12 +39,14 @@ export function useRealtimeSubscription<T>(table: string, filter?: string, initi
           return
         }
 
-        setData(initialData || [])
-        setLoading(false)
+        if (isMounted) {
+          setData(initialData || [])
+          setLoading(false)
+        }
 
-        // Set up real-time subscription
+        // Set up real-time subscription with debouncing
         channel = supabase
-          .channel(`${table}_changes`)
+          .channel(`${table}_changes_${Date.now()}`)
           .on(
             "postgres_changes",
             {
@@ -43,30 +55,41 @@ export function useRealtimeSubscription<T>(table: string, filter?: string, initi
               table: table,
             },
             (payload) => {
-              if (payload.eventType === "INSERT") {
-                setData((current) => [...current, payload.new as T])
-              } else if (payload.eventType === "UPDATE") {
-                setData((current) => current.map((item: any) => (item.id === payload.new.id ? payload.new : item)))
-              } else if (payload.eventType === "DELETE") {
-                setData((current) => current.filter((item: any) => item.id !== payload.old.id))
-              }
+              if (!isMounted) return
+
+              // Debounce rapid updates
+              setTimeout(() => {
+                if (payload.eventType === "INSERT") {
+                  setData((current) => {
+                    const exists = current.some((item: any) => item.id === payload.new.id)
+                    return exists ? current : [...current, payload.new as T]
+                  })
+                } else if (payload.eventType === "UPDATE") {
+                  setData((current) => current.map((item: any) => (item.id === payload.new.id ? payload.new : item)))
+                } else if (payload.eventType === "DELETE") {
+                  setData((current) => current.filter((item: any) => item.id !== payload.old.id))
+                }
+              }, 100)
             },
           )
           .subscribe()
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error")
-        setLoading(false)
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : "Unknown error")
+          setLoading(false)
+        }
       }
     }
 
     setupSubscription()
 
     return () => {
+      isMounted = false
       if (channel) {
         supabase.removeChannel(channel)
       }
     }
-  }, [table, filter])
+  }, [table, filter]) // Removed lastFetch from dependencies to prevent loops
 
   return { data, loading, error }
 }

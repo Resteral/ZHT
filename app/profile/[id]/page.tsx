@@ -19,12 +19,15 @@ import {
   DollarSign,
   Gamepad2,
   BarChart3,
+  Users,
+  Download,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { ProfileStats } from "@/components/profile/profile-stats"
 import { PlayerStatsDashboard } from "@/components/profile/player-statistics-dashboard"
 import { EnhancedMatchHistory } from "@/components/profile/enhanced-match-history"
 import { ProfileAchievements } from "@/components/profile/profile-achievements"
+import { CSVStatsService, type CSVPlayerStats } from "@/lib/services/csv-stats-service"
 
 interface PlayerProfile {
   id: string
@@ -37,6 +40,7 @@ interface PlayerProfile {
   balance: number
   created_at: string
   last_active?: string
+  account_id?: string
 }
 
 interface BettingStats {
@@ -64,6 +68,8 @@ export default function PlayerProfilePage() {
   const [profile, setProfile] = useState<PlayerProfile | null>(null)
   const [bettingStats, setBettingStats] = useState<BettingStats | null>(null)
   const [hockeyStats, setHockeyStats] = useState<HockeyStats | null>(null)
+  const [csvStats, setCsvStats] = useState<CSVPlayerStats[]>([])
+  const [loadingCsvStats, setLoadingCsvStats] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -79,9 +85,13 @@ export default function PlayerProfilePage() {
     const supabase = createClient()
 
     try {
+      console.log("[v0] Loading player profile for user:", userId)
+
       const { data: user, error: userError } = await supabase
         .from("users")
-        .select("id, username, display_name, elo_rating, wins, losses, total_games, balance, created_at, last_active")
+        .select(
+          "id, username, display_name, elo_rating, wins, losses, total_games, balance, created_at, last_active, account_id",
+        )
         .eq("id", userId)
         .single()
 
@@ -90,18 +100,24 @@ export default function PlayerProfilePage() {
 
       setProfile(user)
 
+      await loadPlayerCSVStats(user.account_id)
+
+      console.log("[v0] Loading betting stats for user:", userId)
       const { data: bets, error: betsError } = await supabase
         .from("bets")
-        .select("stake_amount, potential_payout, status")
+        .select("stake_amount, potential_payout, status, placed_at")
         .eq("user_id", userId)
 
       if (!betsError && bets) {
         const totalBets = bets.length
         const wonBets = bets.filter((bet) => bet.status === "won").length
         const lostBets = bets.filter((bet) => bet.status === "lost").length
-        const totalWagered = bets.reduce((sum, bet) => sum + bet.stake_amount, 0)
-        const totalWon = bets.filter((bet) => bet.status === "won").reduce((sum, bet) => sum + bet.potential_payout, 0)
-        const winRate = totalBets > 0 ? (wonBets / (wonBets + lostBets)) * 100 : 0
+        const totalWagered = bets.reduce((sum, bet) => sum + (bet.stake_amount || 0), 0)
+        const totalWon = bets
+          .filter((bet) => bet.status === "won")
+          .reduce((sum, bet) => sum + (bet.potential_payout || 0), 0)
+        const settledBets = wonBets + lostBets
+        const winRate = settledBets > 0 ? (wonBets / settledBets) * 100 : 0
         const netProfit = totalWon - totalWagered
 
         setBettingStats({
@@ -113,6 +129,18 @@ export default function PlayerProfilePage() {
           winRate,
           netProfit,
         })
+
+        console.log("[v0] Betting stats loaded:", {
+          totalBets,
+          wonBets,
+          lostBets,
+          totalWagered,
+          totalWon,
+          winRate: winRate.toFixed(1),
+          netProfit: netProfit.toFixed(2),
+        })
+      } else if (betsError) {
+        console.error("[v0] Error loading betting stats:", betsError)
       }
 
       const { data: performances, error: performancesError } = await supabase
@@ -153,6 +181,58 @@ export default function PlayerProfilePage() {
       setError(err instanceof Error ? err.message : "Failed to load profile")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadPlayerCSVStats = async (accountId?: string) => {
+    if (!accountId) return
+
+    setLoadingCsvStats(true)
+    try {
+      const supabase = createClient()
+
+      // Get CSV stats for this specific player using their account ID
+      const { data: submissions, error } = await supabase
+        .from("score_submissions")
+        .select(`
+          csv_code,
+          match_id,
+          submitted_at,
+          matches!inner(name)
+        `)
+        .not("csv_code", "is", null)
+        .neq("csv_code", "")
+
+      if (error) throw error
+
+      const playerStats: CSVPlayerStats[] = []
+
+      for (const submission of submissions || []) {
+        const matchStats = CSVStatsService.parseCSVData(
+          submission.csv_code,
+          submission.match_id,
+          submission.matches?.name || "Unknown Match",
+        )
+
+        // Filter for this specific player's account ID
+        const playerMatchStats = matchStats.filter((stat) => stat.accountId === accountId)
+        playerStats.push(...playerMatchStats)
+      }
+
+      // Add usernames
+      const statsWithUsernames = await Promise.all(
+        playerStats.map(async (stat) => {
+          const username = await CSVStatsService.getUsernameForAccountId(supabase, stat.accountId)
+          return { ...stat, username }
+        }),
+      )
+
+      setCsvStats(statsWithUsernames)
+      console.log(`[v0] Loaded ${statsWithUsernames.length} CSV stats for player ${accountId}`)
+    } catch (error) {
+      console.error("[v0] Error loading player CSV stats:", error)
+    } finally {
+      setLoadingCsvStats(false)
     }
   }
 
@@ -210,7 +290,9 @@ export default function PlayerProfilePage() {
         <CardContent className="pt-6">
           <div className="flex items-center gap-6">
             <Avatar className="h-24 w-24 border-4 border-primary/20">
-              <AvatarImage src={`/abstract-geometric-shapes.png?height=96&width=96&query=${profile.username} avatar`} />
+              <AvatarImage
+                src={`/abstract-geometric-shapes.png?key=22rg7&height=96&width=96&query=${profile.username} avatar`}
+              />
               <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
                 {profile.username.slice(0, 2).toUpperCase()}
               </AvatarFallback>
@@ -232,6 +314,11 @@ export default function PlayerProfilePage() {
                 <Badge variant="outline">
                   {profile.wins}W - {profile.losses}L
                 </Badge>
+                {profile.account_id && (
+                  <Badge variant="outline" className="border-green-500 text-green-600">
+                    CSV: {profile.account_id}
+                  </Badge>
+                )}
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -309,24 +396,24 @@ export default function PlayerProfilePage() {
           </Card>
         )}
 
-        {hockeyStats && (
-          <Card className="bg-gradient-to-br from-chart-2/10 to-chart-2/5 border-chart-2/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Hockey Score</CardTitle>
-              <Gamepad2 className="h-4 w-4 text-chart-2" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-chart-2">{hockeyStats.averageScore.toFixed(1)}</div>
-              <Progress value={Math.min((hockeyStats.averageScore / 100) * 100, 100)} className="h-2 mt-2" />
-              <p className="text-xs text-muted-foreground mt-2">Best: {hockeyStats.bestGame}</p>
-            </CardContent>
-          </Card>
-        )}
+        <Card className="bg-gradient-to-br from-chart-2/10 to-chart-2/5 border-chart-2/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">CSV Games</CardTitle>
+            <Gamepad2 className="h-4 w-4 text-chart-2" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-chart-2">{csvStats.length}</div>
+            <Progress value={Math.min((csvStats.length / 10) * 100, 100)} className="h-2 mt-2" />
+            <p className="text-xs text-muted-foreground mt-2">
+              {csvStats.reduce((sum, stat) => sum + stat.goals, 0)} total goals
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Detailed Statistics Tabs */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5 bg-muted">
+        <TabsList className="grid w-full grid-cols-6 bg-muted">
           <TabsTrigger value="overview" className="data-[state=active]:bg-card">
             Overview
           </TabsTrigger>
@@ -338,6 +425,9 @@ export default function PlayerProfilePage() {
           </TabsTrigger>
           <TabsTrigger value="betting" className="data-[state=active]:bg-card">
             Betting
+          </TabsTrigger>
+          <TabsTrigger value="csv-stats" className="data-[state=active]:bg-card">
+            CSV Stats
           </TabsTrigger>
           <TabsTrigger value="achievements" className="data-[state=active]:bg-card">
             Achievements
@@ -456,6 +546,157 @@ export default function PlayerProfilePage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="csv-stats" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-chart-2" />
+                CSV Hockey Statistics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingCsvStats ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-muted-foreground">Loading CSV statistics...</div>
+                </div>
+              ) : csvStats.length > 0 ? (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <p className="text-muted-foreground">
+                      Showing {csvStats.length} game records for {profile.username}
+                    </p>
+                    <Button
+                      onClick={() => {
+                        const csvContent = [
+                          "Account ID,Player Name,Team,Steals,Goals,Assists,Shots,Pickups,Passes,Passes Received,Save %,Shots on Goalie,Shots Saved,Goalie Minutes,Skater Minutes,Match,Submitted At",
+                          ...csvStats.map(
+                            (stat) =>
+                              `${stat.accountId},"${stat.username}",${stat.team},${stat.steals},${stat.goals},${stat.assists},${stat.shots},${stat.pickups},${stat.passes},${stat.passesReceived},${stat.savePercentage},${stat.shotsOnGoalie},${stat.shotsSaved},${stat.goalieMinutes},${stat.skaterMinutes},"${stat.matchName}","${new Date(stat.submittedAt).toLocaleString()}"`,
+                          ),
+                        ].join("\n")
+
+                        const blob = new Blob([csvContent], { type: "text/csv" })
+                        const url = window.URL.createObjectURL(blob)
+                        const a = document.createElement("a")
+                        a.href = url
+                        a.download = `${profile.username}-csv-stats-${new Date().toISOString().split("T")[0]}.csv`
+                        a.click()
+                        window.URL.revokeObjectURL(url)
+                      }}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
+                  </div>
+
+                  {/* Summary Stats */}
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-chart-1">
+                        {csvStats.reduce((sum, stat) => sum + stat.goals, 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Total Goals</div>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-chart-2">
+                        {csvStats.reduce((sum, stat) => sum + stat.assists, 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Total Assists</div>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-chart-3">
+                        {csvStats.reduce((sum, stat) => sum + stat.steals, 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Total Steals</div>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-chart-4">
+                        {csvStats.reduce((sum, stat) => sum + stat.shots, 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Total Shots</div>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-chart-5">
+                        {csvStats.reduce((sum, stat) => sum + stat.pickups, 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Total Pickups</div>
+                    </div>
+                  </div>
+
+                  {/* Detailed Stats Table */}
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold">Match</th>
+                          <th className="px-4 py-3 text-center font-semibold">Team</th>
+                          <th className="px-4 py-3 text-center font-semibold">Goals</th>
+                          <th className="px-4 py-3 text-center font-semibold">Assists</th>
+                          <th className="px-4 py-3 text-center font-semibold">Steals</th>
+                          <th className="px-4 py-3 text-center font-semibold">Shots</th>
+                          <th className="px-4 py-3 text-center font-semibold">Pickups</th>
+                          <th className="px-4 py-3 text-center font-semibold">Passes</th>
+                          <th className="px-4 py-3 text-center font-semibold">Save %</th>
+                          <th className="px-4 py-3 text-center font-semibold">Minutes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {csvStats.map((stat, index) => (
+                          <tr key={`${stat.matchId}-${index}`} className="border-t hover:bg-muted/50">
+                            <td className="px-4 py-3 font-medium">{stat.matchName}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-medium ${
+                                  stat.team === 1
+                                    ? "bg-blue-100 text-blue-800"
+                                    : stat.team === 2
+                                      ? "bg-red-100 text-red-800"
+                                      : "bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                Team {stat.team}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center font-semibold">{stat.goals}</td>
+                            <td className="px-4 py-3 text-center">{stat.assists}</td>
+                            <td className="px-4 py-3 text-center">{stat.steals}</td>
+                            <td className="px-4 py-3 text-center">{stat.shots}</td>
+                            <td className="px-4 py-3 text-center">{stat.pickups}</td>
+                            <td className="px-4 py-3 text-center">{stat.passes}</td>
+                            <td className="px-4 py-3 text-center">{stat.savePercentage.toFixed(1)}%</td>
+                            <td className="px-4 py-3 text-center">{stat.skaterMinutes + stat.goalieMinutes}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Users className="h-16 w-16 text-muted-foreground opacity-50 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No CSV Statistics Found</h3>
+                  <p className="text-muted-foreground mb-4">
+                    {profile.account_id
+                      ? "CSV statistics will appear here once matches with CSV data are submitted."
+                      : "This player needs an account ID mapping to display CSV statistics."}
+                  </p>
+                  {profile.account_id && (
+                    <Button
+                      onClick={() => loadPlayerCSVStats(profile.account_id)}
+                      disabled={loadingCsvStats}
+                      variant="outline"
+                    >
+                      {loadingCsvStats ? "Loading..." : "Refresh CSV Stats"}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="achievements" className="space-y-6">
