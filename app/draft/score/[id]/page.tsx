@@ -262,7 +262,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           submitter:users!score_submissions_submitter_id_fkey(username, account_id)
         `)
         .eq("match_id", params.id)
-        .order("created_at", { ascending: false })
+        .order("submitted_at", { ascending: false })
 
       if (error) {
         console.error("[v0] Error loading submissions:", error)

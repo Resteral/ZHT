@@ -18,9 +18,8 @@ export function useRealtimeSubscription<T>(table: string, filter?: string, initi
 
     const setupSubscription = async () => {
       try {
-        // Prevent rapid refetching - minimum 5 second interval
         const now = Date.now()
-        if (now - lastFetch < 5000) {
+        if (now - lastFetch < 10000) {
           return
         }
         setLastFetch(now)
@@ -44,7 +43,6 @@ export function useRealtimeSubscription<T>(table: string, filter?: string, initi
           setLoading(false)
         }
 
-        // Set up real-time subscription with debouncing
         channel = supabase
           .channel(`${table}_changes_${Date.now()}`)
           .on(
@@ -69,7 +67,7 @@ export function useRealtimeSubscription<T>(table: string, filter?: string, initi
                 } else if (payload.eventType === "DELETE") {
                   setData((current) => current.filter((item: any) => item.id !== payload.old.id))
                 }
-              }, 100)
+              }, 500)
             },
           )
           .subscribe()

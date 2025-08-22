@@ -26,6 +26,7 @@ import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { UpcomingEvents } from "@/components/dashboard/upcoming-events"
 import { createClient } from "@/lib/supabase/client"
 import { isSupabaseConfigured } from "@/lib/supabase/client"
+import { formatDateEST, formatTimeEST } from "@/lib/utils/timezone"
 
 interface LiveDraft {
   id: string
@@ -106,7 +107,7 @@ export default function Dashboard() {
     }
 
     const now = Date.now()
-    if (now - lastFetch < 10000) {
+    if (now - lastFetch < 30000) {
       console.log("[v0] Skipping data fetch - too soon since last fetch")
       return
     }
@@ -305,7 +306,7 @@ export default function Dashboard() {
   useEffect(() => {
     loadRealTimeData()
 
-    const interval = setInterval(loadRealTimeData, 60000)
+    const interval = setInterval(loadRealTimeData, 120000)
 
     return () => clearInterval(interval)
   }, [])
@@ -380,7 +381,7 @@ export default function Dashboard() {
                           <span>
                             {draft.participants}/{draft.max_participants} players
                           </span>
-                          <span>{new Date(draft.created_at).toLocaleTimeString()}</span>
+                          <span>{formatTimeEST(draft.created_at)}</span>
                         </div>
                         {draft.players.length > 0 && (
                           <div className="space-y-2">
@@ -579,7 +580,7 @@ export default function Dashboard() {
                         )}
 
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{new Date(score.created_at).toLocaleString()}</span>
+                          <span>{formatDateEST(score.created_at)}</span>
                           <Link href={`/analytics`}>
                             <Button size="sm" variant="outline">
                               <Eye className="h-3 w-3 mr-1" />
