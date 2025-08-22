@@ -652,7 +652,6 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         }
       }
 
-      // Process MVP votes directly
       const { data: mvpVotes, error: mvpVotesError } = await supabase
         .from("mvp_votes")
         .select("mvp_player_id, voter_id")
@@ -667,42 +666,38 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           voteCounts[vote.mvp_player_id] = (voteCounts[vote.mvp_player_id] || 0) + 1
         })
 
-        // Get total participants to calculate majority
-        const totalParticipants = participants.length
-        const majorityThreshold = Math.ceil(totalParticipants / 2)
+        // Award MVP to player with most votes (no consensus required)
+        const topMvp = Object.entries(voteCounts).reduce(
+          (max, [playerId, voteCount]) => (voteCount > max.votes ? { playerId, votes: voteCount } : max),
+          { playerId: "", votes: 0 },
+        )
 
-        // Award MVP to players with majority votes
-        for (const [playerId, voteCount] of Object.entries(voteCounts)) {
-          if (voteCount >= majorityThreshold) {
-            const { error: mvpAwardError } = await supabase.from("player_mvp_awards").upsert(
-              {
-                player_id: playerId,
-                match_id: params.id,
-                awarded_at: new Date().toISOString(),
-              },
-              {
-                onConflict: "player_id,match_id",
-              },
+        if (topMvp.playerId) {
+          const { error: mvpAwardError } = await supabase.from("player_mvp_awards").upsert(
+            {
+              player_id: topMvp.playerId,
+              match_id: params.id,
+              awarded_at: new Date().toISOString(),
+            },
+            {
+              onConflict: "player_id,match_id",
+            },
+          )
+
+          if (mvpAwardError) {
+            console.error("[v0] Error awarding MVP:", mvpAwardError)
+          } else {
+            console.log(
+              "[v0] MVP awarded to player:",
+              topMvp.playerId,
+              "with",
+              topMvp.votes,
+              "votes (no consensus required)",
             )
-
-            if (mvpAwardError) {
-              console.error("[v0] Error awarding MVP:", mvpAwardError)
-            } else {
-              console.log(
-                "[v0] MVP awarded to player:",
-                playerId,
-                "with",
-                voteCount,
-                "votes (majority of",
-                totalParticipants,
-                ")",
-              )
-            }
           }
         }
       }
 
-      // Process flag votes directly
       const { data: flagReports, error: flagReportsError } = await supabase
         .from("player_flags")
         .select("flagged_player_id, flag_type, reporter_id")
@@ -718,123 +713,47 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           flagCounts[key] = (flagCounts[key] || 0) + 1
         })
 
-        // Get total participants to calculate threshold (25% of participants)
-        const totalParticipants = participants.length
-        const flagThreshold = Math.max(2, Math.ceil(totalParticipants * 0.25))
-
-        // Record flags for players with threshold+ reports of the same type
+        // Record all flags immediately (no threshold required)
         for (const [key, reportCount] of Object.entries(flagCounts)) {
-          if (reportCount >= flagThreshold) {
-            const [playerId, flagType] = key.split("-")
-            const { error: flagRecordError } = await supabase.from("player_flag_summary").upsert(
-              {
-                player_id: playerId,
-                flag_type: flagType,
-                flag_count: reportCount,
-                last_flagged: new Date().toISOString(),
-              },
-              {
-                onConflict: "player_id,flag_type",
-              },
-            )
+          const [playerId, flagType] = key.split("-")
+          const { error: flagRecordError } = await supabase.from("player_flag_summary").upsert(
+            {
+              player_id: playerId,
+              flag_type: flagType,
+              flag_count: reportCount,
+              last_flagged: new Date().toISOString(),
+            },
+            {
+              onConflict: "player_id,flag_type",
+            },
+          )
 
-            if (flagRecordError) {
-              console.error("[v0] Error recording flag:", flagRecordError)
-            } else {
-              console.log(
-                "[v0] Flag recorded for player:",
-                playerId,
-                "type:",
-                flagType,
-                "with",
-                reportCount,
-                "reports (threshold:",
-                flagThreshold,
-                ")",
-              )
-            }
-          }
-        }
-      }
-
-      // Process betting payouts for this match
-      if (participants && participants.length > 0) {
-        console.log("[v0] Processing betting payouts...")
-
-        const { data: bets, error: betsError } = await supabase
-          .from("bets")
-          .select("*")
-          .eq("match_id", params.id)
-          .eq("status", "active")
-
-        if (bets && bets.length > 0) {
-          for (const bet of bets) {
-            const isWinningBet =
-              (bet.bet_type === "match_winner" && bet.selection === `team_${winningTeam}`) ||
-              (bet.bet_type === "total_score" &&
-                consensusSubmission.team1_score + consensusSubmission.team2_score === Number.parseInt(bet.selection))
-
-            const payout = isWinningBet ? bet.amount * (bet.odds || 2.0) : 0
-
-            // Update bet status and payout
-            await supabase
-              .from("bets")
-              .update({
-                status: isWinningBet ? "won" : "lost",
-                payout: payout,
-                settled_at: new Date().toISOString(),
-              })
-              .eq("id", bet.id)
-
-            // Update user balance if they won
-            if (isWinningBet && payout > 0) {
-              const { data: userData } = await supabase.from("users").select("balance").eq("id", bet.user_id).single()
-
-              if (userData) {
-                await supabase
-                  .from("users")
-                  .update({
-                    balance: (userData.balance || 0) + payout,
-                  })
-                  .eq("id", bet.user_id)
-
-                console.log(`[v0] Paid out $${payout} to user ${bet.user_id}`)
-              }
-            }
-          }
-          console.log(`[v0] Processed ${bets.length} betting payouts`)
-        }
-      }
-
-      // Record match history for each participant
-      if (participants && participants.length > 0) {
-        console.log("[v0] Recording match history for all participants...")
-
-        for (const participant of participants) {
-          const user = participant.users
-          if (!user) continue
-
-          const isWinner = participant.team_assignment === winningTeam
-          const isDraw = winningTeam === null
-
-          // Record match in user's match history
-          const { error: historyError } = await supabase.from("match_history").insert({
-            user_id: user.id,
-            match_id: params.id,
-            result: isWinner ? "win" : isDraw ? "draw" : "loss",
-            team1_score: consensusSubmission.team1_score,
-            team2_score: consensusSubmission.team2_score,
-            team_assignment: participant.team_assignment,
-            elo_change: 0, // Will be updated by ELO calculation
-            created_at: new Date().toISOString(),
-          })
-
-          if (historyError) {
-            console.error(`[v0] Error recording match history for ${user.username}:`, historyError)
+          if (flagRecordError) {
+            console.error("[v0] Error recording flag:", flagRecordError)
           } else {
-            console.log(`[v0] Recorded match history for ${user.username}`)
+            console.log(
+              "[v0] Flag recorded for player:",
+              playerId,
+              "type:",
+              flagType,
+              "with",
+              reportCount,
+              "reports (no threshold required)",
+            )
           }
         }
+      }
+
+      console.log("[v0] Removing all participants from lobby...")
+      const { error: removeParticipantsError } = await supabase
+        .from("match_participants")
+        .delete()
+        .eq("match_id", params.id)
+
+      if (removeParticipantsError) {
+        console.error("[v0] Error removing participants from lobby:", removeParticipantsError)
+      } else {
+        console.log("[v0] ✅ All participants removed from lobby")
       }
 
       console.log("[v0] Match completion successful - status updated, results saved, stats processed")
@@ -1251,7 +1170,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Star className="h-4 w-4" />
-              MVP Vote (Optional)
+              MVP Vote (No Consensus Required)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -1286,7 +1205,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Flag className="h-4 w-4" />
-              Report Player (Optional)
+              Report Player (No Consensus Required)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
