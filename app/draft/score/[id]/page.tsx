@@ -378,23 +378,12 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
     }
   }
 
-  const completeMatch = async (consensusSubmission: ScoreSubmission) => {
-    const supabase = createClient()
+  const completeMatch = async (consensusSubmission: any) => {
+    if (!user) return
 
     try {
-      console.log("[v0] Completing match with consensus submission:", consensusSubmission)
-
-      const totalParticipants = matchData?.match_participants?.length || 8
-      const currentSubmissions = submissions.filter(
-        (s) => s.team1_score === consensusSubmission.team1_score && s.team2_score === consensusSubmission.team2_score,
-      ).length
-
-      const requiredConsensus = Math.ceil(totalParticipants * 0.6)
-
-      if (currentSubmissions < requiredConsensus) {
-        console.log(`[v0] Insufficient consensus: ${currentSubmissions}/${requiredConsensus} required`)
-        return
-      }
+      console.log("[v0] Starting match completion process...")
+      const supabase = createClient()
 
       const winningTeam =
         consensusSubmission.team1_score > consensusSubmission.team2_score
@@ -403,36 +392,29 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             ? 2
             : null
 
-      const { data: existingResult, error: existingError } = await supabase
-        .from("match_results")
-        .select("id")
-        .eq("match_id", params.id)
-        .single()
+      console.log("[v0] Creating match result...")
 
-      if (existingError && existingError.code !== "PGRST116") {
-        console.error("[v0] Error checking existing result:", existingError)
-        throw existingError
-      }
+      const consensusSubmissions =
+        consensusGroups[`${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`] || []
 
-      if (existingResult) {
-        console.log("[v0] Match result already exists, skipping duplicate creation")
-        return
-      }
+      const { error: resultError } = await supabase.from("match_results").upsert(
+        {
+          match_id: params.id,
+          team1_score: consensusSubmission.team1_score,
+          team2_score: consensusSubmission.team2_score,
+          winning_team: winningTeam,
+          total_submissions: consensusSubmissions.length,
+          created_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "match_id",
+        },
+      )
 
-      const { data: currentMatch, error: fetchError } = await supabase
-        .from("matches")
-        .select("status")
-        .eq("id", params.id)
-        .single()
-
-      if (fetchError) {
-        console.error("[v0] Error fetching current match status:", fetchError)
-        throw fetchError
-      }
-
-      if (currentMatch?.status === "completed") {
-        console.log("[v0] Match already completed, skipping update")
-        return
+      if (resultError) {
+        console.error("[v0] Error creating match result:", resultError)
+      } else {
+        console.log("[v0] Match result created successfully")
       }
 
       const { error: matchError } = await supabase
@@ -442,61 +424,26 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", params.id)
-        .neq("status", "completed") // Only update if not already completed
 
       if (matchError) {
         console.error("[v0] Error updating match status:", matchError)
-        throw matchError
+      } else {
+        console.log("[v0] Match status updated to completed")
       }
 
-      console.log("[v0] Match status updated to completed")
-
-      const actualConsensusCount =
-        consensusGroups[`${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`]?.length ||
-        currentSubmissions
-
-      const { error: resultError } = await supabase.from("match_results").insert({
-        match_id: params.id,
-        team1_score: consensusSubmission.team1_score,
-        team2_score: consensusSubmission.team2_score,
-        winning_team: winningTeam,
-        csv_code: consensusSubmission.csv_code || "",
-        total_submissions: actualConsensusCount,
-        validated_at: new Date().toISOString(),
-      })
-
-      if (resultError) {
-        console.error("[v0] Error inserting match result:", resultError)
-        throw resultError
-      }
-
-      console.log(
-        `[v0] Match result saved: ${consensusSubmission.team1_score}-${consensusSubmission.team2_score} with ${actualConsensusCount} matching submissions`,
-      )
-
+      console.log("[v0] Starting ELO adjustments...")
       const { data: participants, error: participantsError } = await supabase
         .from("match_participants")
         .select(`
-          user_id,
-          team_assignment,
-          users (
-            id,
-            username,
-            elo_rating,
-            wins,
-            losses,
-            total_games
-          )
-        `)
+        team_assignment,
+        users!inner(id, username, elo_rating, wins, losses, total_games)
+      `)
         .eq("match_id", params.id)
 
       if (participantsError) {
         console.error("[v0] Error fetching participants:", participantsError)
-        throw participantsError
-      }
-
-      if (participants && participants.length > 0) {
-        console.log("[v0] Updating ELO ratings and win/loss records for participants")
+      } else if (participants && participants.length > 0) {
+        console.log(`[v0] Processing ELO for ${participants.length} participants`)
 
         for (const participant of participants) {
           const user = participant.users
@@ -546,11 +493,10 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             console.error(`[v0] Error updating user ${user.username}:`, updateError)
           } else {
             console.log(
-              `[v0] Updated ${user.username}: ELO ${currentElo} → ${newElo} (${eloChange > 0 ? "+" : ""}${eloChange}), Record: ${newWins}W-${newLosses}L`,
+              `[v0] ✅ Updated ${user.username}: ELO ${currentElo} → ${newElo} (${eloChange > 0 ? "+" : ""}${eloChange}), Record: ${newWins}W-${newLosses}L`,
             )
           }
 
-          // Record ELO history
           const { error: historyError } = await supabase.from("elo_history").insert({
             user_id: user.id,
             match_id: params.id,
@@ -558,11 +504,14 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             new_rating: newElo,
             rating_change: eloChange,
             game_result: isWinner ? "win" : isDraw ? "draw" : "loss",
-            opponent_id: opponents[0]?.users?.id || null, // First opponent for history
+            opponent_id: opponents[0]?.users?.id || null,
+            created_at: new Date().toISOString(),
           })
 
           if (historyError) {
             console.error(`[v0] Error recording ELO history for ${user.username}:`, historyError)
+          } else {
+            console.log(`[v0] ✅ Recorded ELO history for ${user.username}`)
           }
 
           try {
@@ -575,88 +524,73 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             if (betsError) {
               console.error(`[v0] Error fetching bets for ${user.username}:`, betsError)
             } else if (userBets && userBets.length > 0) {
+              console.log(`[v0] Processing ${userBets.length} bets for ${user.username}`)
+
               for (const bet of userBets) {
                 let betWon = false
+                let payout = 0
 
-                // Determine if bet won based on bet type and match result
-                if (bet.bet_type.includes("match_winner")) {
-                  if (bet.bet_type.includes("team1") && winningTeam === 1) betWon = true
-                  if (bet.bet_type.includes("team2") && winningTeam === 2) betWon = true
+                // Determine if bet won based on bet type
+                if (bet.bet_type === "match_winner" && bet.predicted_winner === winningTeam) {
+                  betWon = true
+                  payout = bet.amount * (bet.odds || 2.0)
+                } else if (bet.bet_type === "mvp" && bet.predicted_mvp === user.id && isWinner) {
+                  betWon = true
+                  payout = bet.amount * (bet.odds || 3.0)
                 }
 
-                const newStatus = betWon ? "won" : "lost"
-                const payout = betWon ? bet.potential_payout : 0
-
-                // Update bet status
-                const { error: betUpdateError } = await supabase
+                const { error: settleBetError } = await supabase
                   .from("bets")
                   .update({
-                    status: newStatus,
+                    status: betWon ? "won" : "lost",
+                    payout: betWon ? payout : 0,
                     settled_at: new Date().toISOString(),
                   })
                   .eq("id", bet.id)
 
-                if (betUpdateError) {
-                  console.error(`[v0] Error updating bet ${bet.id}:`, betUpdateError)
-                } else if (betWon && payout > 0) {
-                  // Add winnings to user balance
-                  const { data: currentUser, error: balanceError } = await supabase
-                    .from("users")
-                    .select("balance")
-                    .eq("id", user.id)
-                    .single()
+                if (settleBetError) {
+                  console.error(`[v0] Error settling bet ${bet.id}:`, settleBetError)
+                } else {
+                  console.log(`[v0] ✅ Settled bet ${bet.id}: ${betWon ? "WON" : "LOST"} (payout: $${payout})`)
+                }
 
-                  if (!balanceError && currentUser) {
-                    const newBalance = (currentUser.balance || 0) + payout
+                if (betWon && payout > 0) {
+                  const { error: balanceError } = await supabase.rpc("increment_user_balance", {
+                    user_id: user.id,
+                    amount: payout,
+                  })
 
-                    const { error: balanceUpdateError } = await supabase
-                      .from("users")
-                      .update({ balance: newBalance })
-                      .eq("id", user.id)
-
-                    if (!balanceUpdateError) {
-                      console.log(`[v0] Paid out $${payout} to ${user.username} for winning bet`)
-                    }
+                  if (balanceError) {
+                    console.error(`[v0] Error updating balance for ${user.username}:`, balanceError)
+                  } else {
+                    console.log(`[v0] ✅ Added $${payout} to ${user.username}'s balance`)
                   }
                 }
               }
             }
           } catch (bettingError) {
-            console.error(`[v0] Error processing betting payouts for ${user.username}:`, bettingError)
+            console.error(`[v0] Error processing bets for ${user.username}:`, bettingError)
           }
-        }
 
-        for (const participant of participants) {
-          const user = participant.users
-          if (!user) continue
-
-          const isWinner = participant.team_assignment === winningTeam
-          const isDraw = winningTeam === null
-
-          // Record match in user's match history
-          const { error: historyError } = await supabase.from("match_history").insert({
+          const { error: historyRecordError } = await supabase.from("match_history").insert({
             user_id: user.id,
             match_id: params.id,
             result: isWinner ? "win" : isDraw ? "draw" : "loss",
-            team1_score: consensusSubmission.team1_score,
-            team2_score: consensusSubmission.team2_score,
-            team_assignment: participant.team_assignment,
-            elo_change: 0, // Will be updated by ELO calculation
+            elo_change: eloChange,
             created_at: new Date().toISOString(),
           })
 
-          if (historyError) {
-            console.error(`[v0] Error recording match history for ${user.username}:`, historyError)
+          if (historyRecordError) {
+            console.error(`[v0] Error recording match history for ${user.username}:`, historyRecordError)
           } else {
-            console.log(`[v0] Recorded match history for ${user.username}`)
+            console.log(`[v0] ✅ Recorded match history for ${user.username}`)
           }
         }
 
-        console.log("[v0] Successfully updated all participant ELO ratings and records")
+        console.log("[v0] ✅ Successfully completed all ELO adjustments and betting settlements")
       }
 
-      const consensusSubmissions =
-        consensusGroups[`${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`] || []
+      console.log(`[v0] Processing ${consensusSubmissions.length} CSV submissions...`)
 
       for (const submission of consensusSubmissions) {
         if (submission.csv_code && submission.csv_code.trim()) {
@@ -907,16 +841,16 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
       toast.success("Match completed! All statistics have been saved.")
 
       await loadMatchData()
-      await loadMatchResult()
+      await loadScoreSubmissions()
     } catch (error) {
       console.error("[v0] Error completing match:", error)
       toast.error("Failed to complete match properly")
     }
   }
 
-  const handleScoreSubmission = async () => {
+  const submitScore = async () => {
     if (!user || !team1Score || !team2Score) {
-      toast.error("Please fill in team scores")
+      toast.error("Please fill in all team scores")
       return
     }
 
@@ -1231,7 +1165,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button onClick={handleScoreSubmission} disabled={isSubmitting} className="flex-1">
+                    <Button onClick={submitScore} disabled={isSubmitting} className="flex-1">
                       {isSubmitting ? "Submitting..." : isRescoring ? "Update Score" : "Submit Score"}
                     </Button>
                     {isRescoring && (
