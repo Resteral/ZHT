@@ -253,45 +253,67 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
     const supabase = createClient()
 
     try {
-      const { data, error } = await supabase
+      console.log("[v0] Loading score submissions for match:", params.id)
+
+      const { data: submissionsData, error } = await supabase
         .from("score_submissions")
         .select(`
           *,
-          users!inner(username)
+          submitter:users!score_submissions_submitter_id_fkey(username, account_id)
         `)
         .eq("match_id", params.id)
-        .order("submitted_at", { ascending: false })
+        .order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error loading submissions:", error)
+        throw error
+      }
 
-      const submissionsWithUsernames = data.map((s) => ({
-        ...s,
-        submitter_username: s.users.username,
-      }))
+      console.log(`[v0] Found ${submissionsData?.length || 0} total submissions`)
+
+      const submissionsWithUsernames =
+        submissionsData?.map((sub) => ({
+          ...sub,
+          username: sub.submitter?.username || `User ${sub.submitter?.account_id || "Unknown"}`,
+        })) || []
 
       setSubmissions(submissionsWithUsernames)
 
-      const groups: { [key: string]: ScoreSubmission[] } = {}
+      console.log(`[v0] Submissions with usernames: ${submissionsWithUsernames.length}`)
+      console.log(`[v0] Match status: ${matchData?.status}`)
+      console.log(`[v0] Match result exists: ${!!matchResult}`)
+
+      if (submissionsWithUsernames.length > 0) {
+        console.log(
+          "[v0] Recent submissions:",
+          submissionsWithUsernames.slice(0, 3).map((s) => ({
+            username: s.username,
+            score: `${s.team1_score}-${s.team2_score}`,
+            created_at: s.created_at,
+          })),
+        )
+      }
+
+      // Group submissions by score
+      const consensusGroups: { [key: string]: ScoreSubmission[] } = {}
       submissionsWithUsernames.forEach((submission) => {
         const key = `${submission.team1_score}-${submission.team2_score}`
-        if (!groups[key]) {
-          groups[key] = []
+        if (!consensusGroups[key]) {
+          consensusGroups[key] = []
         }
-        groups[key].push(submission)
+        consensusGroups[key].push(submission)
       })
-      setConsensusGroups(groups)
 
-      const largestGroup = Object.values(groups).reduce(
-        (max, current) => (current.length > max.length ? current : max),
-        [],
+      const largestGroup = Object.values(consensusGroups).reduce(
+        (largest, current) => (current.length > largest.length ? current : largest),
+        [] as ScoreSubmission[],
       )
 
       const totalParticipants = matchData?.match_participants?.length || 8
-      const requiredConsensus = Math.ceil(totalParticipants * 0.6) // 60% consensus required
+      const requiredConsensus = Math.ceil(totalParticipants * 0.6)
 
-      console.log(
-        `[v0] Consensus check: ${largestGroup.length}/${totalParticipants} submissions (need ${requiredConsensus})`,
-      )
+      console.log(`[v0] Largest consensus group: ${largestGroup.length} submissions`)
+      console.log(`[v0] Required consensus: ${requiredConsensus}/${totalParticipants} participants`)
 
       if (submissionsWithUsernames.length >= 5 && !matchResult && matchData?.status !== "completed") {
         console.log(
@@ -300,9 +322,21 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
 
         // Find the most common score submission
         const mostCommonScore = largestGroup.length > 0 ? largestGroup[0] : submissionsWithUsernames[0]
+        console.log(`[v0] Using most common score: ${mostCommonScore.team1_score}-${mostCommonScore.team2_score}`)
+
         await completeMatch(mostCommonScore)
         toast.success("Match automatically completed with 5+ submissions!")
         return
+      } else {
+        if (submissionsWithUsernames.length < 5) {
+          console.log(`[v0] Not enough submissions for auto-completion: ${submissionsWithUsernames.length}/5`)
+        }
+        if (matchResult) {
+          console.log("[v0] Match result already exists, skipping auto-completion")
+        }
+        if (matchData?.status === "completed") {
+          console.log("[v0] Match already completed, skipping auto-completion")
+        }
       }
 
       // Only log consensus status for manual completion
@@ -310,7 +344,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         console.log("[v0] Consensus threshold reached, but waiting for manual completion or 5+ submissions")
       }
 
-      const userSubmission = data.find((s) => s.submitter_id === user?.id)
+      const userSubmission = submissionsWithUsernames.find((s) => s.submitter_id === user?.id)
       setHasSubmitted(!!userSubmission)
       setUserSubmission(userSubmission || null)
 
