@@ -220,28 +220,37 @@ export default function MatchLobbyPage() {
           )
         `)
         .eq("id", params.id)
-        .single()
 
       if (error) {
         console.error("[v0] Error loading lobby:", error)
         throw error
       }
 
-      if (!data) {
-        throw new Error("Lobby not found")
+      if (!data || data.length === 0) {
+        console.log("[v0] Lobby not found - likely cleaned up due to inactivity")
+        toast.error("This lobby is no longer available. It may have been cleaned up due to inactivity.")
+        router.push("/leagues")
+        return
       }
 
+      const lobbyData = data[0] // Get first result since we removed .single()
+
       console.log("[v0] Lobby data loaded successfully:", {
-        status: data.status,
-        participants: data.match_participants.length,
-        maxParticipants: data.max_participants,
-        participantNames: data.match_participants.map((p) => p.users?.username).join(", "),
+        status: lobbyData.status,
+        participants: lobbyData.match_participants.length,
+        maxParticipants: lobbyData.max_participants,
+        participantNames: lobbyData.match_participants.map((p) => p.users?.username).join(", "),
       })
 
-      setLobby(data)
+      setLobby(lobbyData)
     } catch (error) {
       console.error("Error loading lobby:", error)
-      toast.error("Failed to load lobby data")
+      if (error.message?.includes("Cannot coerce")) {
+        toast.error("This lobby is no longer available")
+        router.push("/leagues")
+      } else {
+        toast.error("Failed to load lobby data")
+      }
     } finally {
       if (loading) {
         setLoading(false)
