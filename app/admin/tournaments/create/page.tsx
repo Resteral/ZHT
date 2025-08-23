@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,12 +15,12 @@ import { Trophy, ArrowLeft, Users, Zap } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { tournamentService } from "@/lib/services/tournament-service"
-import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/lib/auth-context"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const { user, isAuthenticated } = useAuth()
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -45,22 +45,18 @@ export default function CreateTournamentPage() {
     end_date: "",
   })
 
-  useEffect(() => {
-    const supabase = createClient()
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
-    }
-    getUser()
-  }, [])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      if (!isAuthenticated || !user?.id) {
+        throw new Error("Not authenticated - please log in")
+      }
+
+      console.log("[v0] Creating tournament with user ID:", user.id)
+      console.log("[v0] Tournament data:", formData)
+
       const tournamentData = {
         ...formData,
         player_pool_settings: formData.enable_player_pool
@@ -82,10 +78,12 @@ export default function CreateTournamentPage() {
         },
       }
 
-      await tournamentService.createTournament(tournamentData, user?.id)
+      const tournament = await tournamentService.createTournament(tournamentData, user.id)
+      console.log("[v0] Tournament created successfully:", tournament)
       router.push("/admin/tournaments")
     } catch (error) {
       console.error("Error creating tournament:", error)
+      alert(`Error creating tournament: ${error instanceof Error ? error.message : "Unknown error"}`)
     } finally {
       setLoading(false)
     }
@@ -93,6 +91,16 @@ export default function CreateTournamentPage() {
 
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <p>Please log in to create tournaments.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -306,7 +314,10 @@ export default function CreateTournamentPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Player Pool Draft Settings</CardTitle>
-                <CardDescription>Configure player pool for draft-based tournaments</CardDescription>
+                <CardDescription>
+                  Configure player pool for draft-based tournaments. Player Pool Size = total players who can join
+                  tournament registration. Draft Participants = players who will actually be drafted to teams.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -361,7 +372,8 @@ export default function CreateTournamentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="max_pool_size">Max Pool Size</Label>
+                      <Label htmlFor="max_pool_size">Player Pool Size</Label>
+                      <p className="text-xs text-muted-foreground mb-1">Total players who can join tournament</p>
                       <Input
                         id="max_pool_size"
                         type="number"
@@ -428,7 +440,8 @@ export default function CreateTournamentPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="max_participants">Max Participants</Label>
+                    <Label htmlFor="max_participants">Draft Participants</Label>
+                    <p className="text-xs text-muted-foreground mb-1">Players who will be drafted to teams</p>
                     <Select
                       value={formData.max_participants.toString()}
                       onValueChange={(value) => handleInputChange("max_participants", Number.parseInt(value))}
@@ -547,10 +560,8 @@ export default function CreateTournamentPage() {
                   </div>
                   {formData.enable_player_pool && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Teams:</span>
-                      <span className="font-medium">
-                        {formData.num_teams} × {formData.players_per_team}
-                      </span>
+                      <span className="text-muted-foreground">Player Pool Size:</span>
+                      <span className="font-medium">{formData.max_pool_size}</span>
                     </div>
                   )}
                 </div>

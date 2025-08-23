@@ -219,6 +219,27 @@ export default function Dashboard() {
         .in("status", ["registration", "team_building", "active"])
         .order("created_at", { ascending: false })
 
+      const { data: leagueTournamentsData, error: leagueTournamentsError } = await supabase
+        .from("leagues")
+        .select(`
+          id,
+          name,
+          status,
+          max_teams,
+          sport,
+          entry_fee,
+          prize_pool,
+          created_at,
+          commissioner_id,
+          league_mode,
+          league_participants(count)
+        `)
+        .eq("league_mode", "tournament")
+        .in("status", ["registration", "team_building", "active"])
+        .order("created_at", { ascending: false })
+
+      let allTournaments: any[] = []
+
       if (tournamentsError) {
         console.error("[v0] Error fetching tournaments:", tournamentsError)
       } else {
@@ -226,9 +247,24 @@ export default function Dashboard() {
           ...tournament,
           current_participants: tournament.tournament_participants?.[0]?.count || 0,
         }))
-        console.log("[v0] Loaded tournaments:", formattedTournaments.length)
-        setOpenTournaments(formattedTournaments)
+        allTournaments = [...allTournaments, ...formattedTournaments]
       }
+
+      if (leagueTournamentsError) {
+        console.error("[v0] Error fetching league tournaments:", leagueTournamentsError)
+      } else {
+        const formattedLeagueTournaments =
+          leagueTournamentsData?.map((tournament) => ({
+            ...tournament,
+            game: tournament.sport,
+            created_by: tournament.commissioner_id,
+            participant_count: tournament.league_participants?.[0]?.count || 0,
+          })) || []
+        allTournaments = [...allTournaments, ...formattedLeagueTournaments]
+      }
+
+      console.log("[v0] Loaded tournaments:", allTournaments.length)
+      setOpenTournaments(allTournaments)
 
       const { data: tournamentsDataOld, error: tournamentsErrorOld } = await supabase
         .from("tournaments")
@@ -498,6 +534,27 @@ export default function Dashboard() {
           .in("status", ["registration", "team_building", "active"])
           .order("created_at", { ascending: false })
 
+        const { data: leagueTournamentsData, error: leagueTournamentsError } = await supabase
+          .from("leagues")
+          .select(`
+            id,
+            name,
+            status,
+            max_teams,
+            sport,
+            entry_fee,
+            prize_pool,
+            created_at,
+            commissioner_id,
+            league_mode,
+            league_participants(count)
+          `)
+          .eq("league_mode", "tournament")
+          .in("status", ["registration", "team_building", "active"])
+          .order("created_at", { ascending: false })
+
+        let allTournaments: any[] = []
+
         if (tournamentsError) {
           console.error("[v0] Error fetching tournaments:", tournamentsError)
         } else {
@@ -505,9 +562,24 @@ export default function Dashboard() {
             ...tournament,
             current_participants: tournament.tournament_participants?.[0]?.count || 0,
           }))
-          console.log("[v0] Loaded tournaments:", formattedTournaments.length)
-          setOpenTournaments(formattedTournaments)
+          allTournaments = [...allTournaments, ...formattedTournaments]
         }
+
+        if (leagueTournamentsError) {
+          console.error("[v0] Error fetching league tournaments:", leagueTournamentsError)
+        } else {
+          const formattedLeagueTournaments =
+            leagueTournamentsData?.map((tournament) => ({
+              ...tournament,
+              game: tournament.sport,
+              created_by: tournament.commissioner_id,
+              participant_count: tournament.league_participants?.[0]?.count || 0,
+            })) || []
+          allTournaments = [...allTournaments, ...formattedLeagueTournaments]
+        }
+
+        console.log("[v0] Loaded tournaments:", allTournaments.length)
+        setOpenTournaments(allTournaments)
 
         const formattedGames: LiveGame[] = (matchesData || [])
           .map((match: any) => {
@@ -678,9 +750,26 @@ export default function Dashboard() {
       )
       .subscribe()
 
+    const leagueSubscription = supabase
+      .channel("leagues")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "leagues",
+        },
+        () => {
+          console.log("[v0] League tournament data changed, refetching...")
+          fetchData()
+        },
+      )
+      .subscribe()
+
     return () => {
       matchSubscription.unsubscribe()
       tournamentSubscription.unsubscribe()
+      leagueSubscription.unsubscribe()
     }
   }, [authLoading])
 
@@ -814,11 +903,11 @@ export default function Dashboard() {
                       case "registration":
                         return {
                           badge: {
-                            text: "Registration Open",
+                            text: "Join Now - Open",
                             className: "bg-green-500/20 text-green-400 border-green-500/30",
                           },
                           icon: <Users className="h-3 w-3 mr-1" />,
-                          action: { text: "Join Tournament", href: `/tournaments/${tournament.id}` },
+                          action: { text: "Join Tournament (+$25)", href: `/tournaments/${tournament.id}` },
                         }
                       case "team_building":
                         return {
@@ -893,6 +982,16 @@ export default function Dashboard() {
                               <span className="font-semibold text-green-400">${tournament.entry_fee} entry</span>
                             )}
                           </div>
+
+                          {tournament.status === "registration" && (
+                            <div className="p-2 bg-green-500/20 rounded border border-green-500/30">
+                              <div className="text-center">
+                                <div className="text-green-400 font-bold text-sm">+$25 Instant Reward</div>
+                                <div className="text-green-300 text-xs">Join the player pool now!</div>
+                              </div>
+                            </div>
+                          )}
+
                           {tournament.prize_pool > 0 && (
                             <div className="p-2 bg-yellow-500/20 rounded border border-yellow-500/30">
                               <div className="text-center">
@@ -917,15 +1016,28 @@ export default function Dashboard() {
                               />
                             </div>
                           </div>
-                          <Link href="/lobbies">
-                            <Button
-                              size="sm"
-                              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold border-2 border-white/30 shadow-lg"
-                            >
-                              <Trophy className="h-4 w-4 mr-1" />
-                              View Live Content
-                            </Button>
-                          </Link>
+
+                          {tournament.status === "registration" ? (
+                            <Link href={`/tournaments/${tournament.id}`}>
+                              <Button
+                                size="sm"
+                                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold border-2 border-white/30 shadow-lg"
+                              >
+                                <Users className="h-4 w-4 mr-1" />
+                                Join Now (+$25)
+                              </Button>
+                            </Link>
+                          ) : (
+                            <Link href="/lobbies">
+                              <Button
+                                size="sm"
+                                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold border-2 border-white/30 shadow-lg"
+                              >
+                                <Trophy className="h-4 w-4 mr-1" />
+                                View Live Content
+                              </Button>
+                            </Link>
+                          )}
                         </div>
                       </div>
                     </div>
