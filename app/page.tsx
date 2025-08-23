@@ -29,6 +29,7 @@ import { createClient } from "@/lib/supabase/client"
 import { isSupabaseConfigured } from "@/lib/supabase/client"
 import { formatDateEST } from "@/lib/utils/timezone"
 import { InteractiveHockeyNet } from "@/components/interactive-hockey-net"
+import { useAuth } from "@/lib/auth-context"
 
 interface LiveGame {
   id: string
@@ -108,6 +109,7 @@ interface Tournament {
 }
 
 export default function Dashboard() {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const [loading, setLoading] = useState(true)
   const [liveGames, setLiveGames] = useState<LiveGame[]>([])
   const [openTournaments, setOpenTournaments] = useState<any[]>([])
@@ -404,6 +406,12 @@ export default function Dashboard() {
     const fetchData = async () => {
       try {
         setLoading(true)
+        console.log("[v0] Auth state:", {
+          isAuthenticated,
+          authLoading,
+          userId: user?.id,
+          username: user?.username,
+        })
         console.log("[v0] Loading real-time data...")
 
         const supabase = createClient()
@@ -626,13 +634,15 @@ export default function Dashboard() {
         setLiveScores(formattedLiveScores)
         setCompletedMatches(completedMatchesData || [])
       } catch (error) {
-        console.error("[v0] Error fetching data:", error)
+        console.error("[v0] Error in fetchData:", error)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchData()
+    if (!authLoading) {
+      fetchData()
+    }
 
     const supabase = createClient()
 
@@ -672,12 +682,53 @@ export default function Dashboard() {
       matchSubscription.unsubscribe()
       tournamentSubscription.unsubscribe()
     }
-  }, [])
+  }, [authLoading])
+
+  const renderAuthDebug = () => {
+    if (process.env.NODE_ENV !== "development") return null
+
+    return (
+      <div className="fixed bottom-4 right-4 bg-black/80 text-white p-3 rounded-lg text-xs z-50">
+        <div>Auth: {isAuthenticated ? "✅" : "❌"}</div>
+        <div>Loading: {authLoading ? "⏳" : "✅"}</div>
+        <div>User: {user?.username || "None"}</div>
+        <div>ID: {user?.id?.slice(0, 8) || "None"}</div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary/5 pt-20">
+      {renderAuthDebug()}
+
       <div className="container mx-auto px-4 py-8 space-y-8">
         <div className="text-center space-y-4">
+          {!isAuthenticated && !authLoading && (
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
+              <p className="text-yellow-600 dark:text-yellow-400">
+                🔐 You're not authenticated.{" "}
+                <Link href="/auth/login" className="underline font-medium">
+                  Sign in
+                </Link>{" "}
+                to create lobbies and join tournaments.
+              </p>
+            </div>
+          )}
+
+          {authLoading && (
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+              <p className="text-blue-600 dark:text-blue-400">⏳ Loading authentication...</p>
+            </div>
+          )}
+
+          {isAuthenticated && user && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-6">
+              <p className="text-green-600 dark:text-green-400">
+                ✅ Welcome back, <strong>{user.username}</strong>! ELO: {user.elo_rating} | Balance: ${user.balance}
+              </p>
+            </div>
+          )}
+
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
             TUG E-Sport Lobbies
           </h1>
