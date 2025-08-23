@@ -85,24 +85,21 @@ export function TournamentCreationButton({ tournamentType, className }: Tourname
 
       const tournamentData = {
         name: `${config.title} - ${new Date().toLocaleDateString()}`,
-        description: `${config.description} - Join now!`,
-        tournament_type: tournamentType,
-        game: "Rocket League",
-        status: "registration",
-        max_participants: 16,
+        sport: "hockey", // Changed from 'game' to 'sport' to match leagues table schema
+        max_teams: 16, // Changed from 'max_participants' to 'max_teams' to match leagues table schema
         entry_fee: 10.0,
         prize_pool: 150.0,
-        start_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
-        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Next week
-        created_by: user.id,
-        team_based: true,
-        max_teams: 8,
+        commissioner_id: user.id, // Changed from 'created_by' to 'commissioner_id' to match leagues table schema
+        league_mode: "tournament", // Added to distinguish tournaments from regular leagues
+        status: "registration",
+        season: new Date().getFullYear().toString(), // Added required field for leagues table
+        tournament_type: tournamentType, // Keep tournament type for filtering
       }
 
       console.log("[v0] Creating tournament with data:", tournamentData)
 
       const { data: tournament, error: tournamentError } = await supabase
-        .from("tournaments")
+        .from("leagues")
         .insert(tournamentData)
         .select()
         .single()

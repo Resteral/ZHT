@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Trophy, Users, Calendar, DollarSign, UserPlus } from "lucide-react"
 import { TournamentBracket } from "./tournament-bracket"
 import { TournamentParticipants } from "./tournament-participants"
+import { TournamentTeams } from "./tournament-teams"
 import { tournamentService } from "@/lib/services/tournament-service"
 
 interface TournamentDetailsProps {
@@ -147,12 +148,17 @@ export function TournamentDetails({ tournamentId }: TournamentDetailsProps) {
       {/* Tournament Content */}
       <Tabs defaultValue="bracket" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="bracket">Bracket</TabsTrigger>
-          <TabsTrigger value="participants">Participants ({tournament.participant_count})</TabsTrigger>
+          <TabsTrigger value="bracket">Live Bracket</TabsTrigger>
+          <TabsTrigger value="teams">Teams</TabsTrigger>
+          <TabsTrigger value="participants">Players ({tournament.participant_count})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="bracket">
           <TournamentBracket tournamentId={tournamentId} tournament={tournament} />
+        </TabsContent>
+
+        <TabsContent value="teams">
+          <TournamentTeams tournamentId={tournamentId} tournament={tournament} />
         </TabsContent>
 
         <TabsContent value="participants">

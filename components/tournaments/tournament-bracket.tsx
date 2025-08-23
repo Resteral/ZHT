@@ -49,13 +49,20 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
       const data = await tournamentService.getBracket(tournamentId)
       setMatches(data)
       setLastUpdate(new Date())
+
+      console.log("[v0] Loaded bracket data:", data)
+
+      // If no matches exist but tournament has participants, suggest bracket generation
+      if (data.length === 0 && tournament?.participant_count > 0) {
+        console.log("[v0] No bracket found but participants exist, bracket generation available")
+      }
     } catch (error) {
       console.error("Error loading bracket:", error)
       toast.error("Failed to load tournament bracket")
     } finally {
       setLoading(false)
     }
-  }, [tournamentId])
+  }, [tournamentId, tournament])
 
   useEffect(() => {
     loadBracket()
@@ -222,177 +229,248 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
         </div>
       </div>
 
-      <div className="overflow-x-auto bg-gradient-to-r from-background to-muted/20 rounded-lg border">
-        <div className="flex gap-8 min-w-max p-6">
-          {matches
-            .reduce(
-              (acc, match) => {
-                if (!acc[match.round_number]) {
-                  acc[match.round_number] = []
-                }
-                acc[match.round_number].push(match)
-                return acc
-              },
-              {} as Record<number, Match[]>,
-            )
-            .map(([roundNumber, roundMatches]) => (
-              <div key={roundNumber} className="space-y-6 min-w-[300px]">
-                <div className="text-center">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
-                    {Number(roundNumber) === Math.max(...matches.map((match) => match.round_number)) && (
-                      <Crown className="h-4 w-4 text-yellow-500" />
-                    )}
-                    <h4 className="font-bold text-sm">{getRoundName(Number(roundNumber))}</h4>
-                  </div>
+      {matches.length === 0 && tournament?.participant_count > 0 && tournament.status === "registration" && (
+        <Card className="border-dashed border-2 border-primary/20">
+          <CardContent className="text-center py-12">
+            <Trophy className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-bold mb-2">Ready to Generate Bracket</h3>
+            <p className="text-muted-foreground mb-6">
+              {tournament.participant_count} players registered. Generate the tournament bracket to begin matches.
+            </p>
+            <Button onClick={handleGenerateBracket} size="lg" className="bg-gradient-to-r from-blue-500 to-purple-600">
+              <Trophy className="h-4 w-4 mr-2" />
+              Generate Tournament Bracket
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {matches.length === 0 && tournament?.participant_count === 0 && (
+        <Card>
+          <CardContent className="text-center py-12">
+            <Users className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-bold mb-2">Waiting for Players</h3>
+            <p className="text-muted-foreground">
+              The tournament bracket will be available once players register for the tournament.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {matches.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-green-600">
+                  {matches.filter((m) => m.status === "completed").length}
                 </div>
+                <div className="text-sm text-muted-foreground">Completed</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-red-600 animate-pulse">
+                  {matches.filter((m) => m.status === "in_progress").length}
+                </div>
+                <div className="text-sm text-muted-foreground">Live Now</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-yellow-600">
+                  {matches.filter((m) => m.status === "ready" && m.participant1 && m.participant2).length}
+                </div>
+                <div className="text-sm text-muted-foreground">Ready</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-muted-foreground">
+                  {matches.filter((m) => !m.participant1 || !m.participant2).length}
+                </div>
+                <div className="text-sm text-muted-foreground">Waiting</div>
+              </CardContent>
+            </Card>
+          </div>
 
-                <div className="space-y-4">
-                  {roundMatches
-                    .sort((a, b) => a.match_number - b.match_number)
-                    .map((match) => (
-                      <Card
-                        key={match.id}
-                        className={`relative overflow-hidden hover:shadow-lg transition-shadow duration-300 ${
-                          match.status === "in_progress"
-                            ? "ring-2 ring-red-500 ring-opacity-50 shadow-lg shadow-red-500/20"
-                            : ""
-                        }`}
-                      >
-                        {match.status === "in_progress" && (
-                          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-orange-500 animate-pulse" />
-                        )}
+          <div className="overflow-x-auto bg-gradient-to-r from-background to-muted/20 rounded-lg border">
+            <div className="flex gap-8 min-w-max p-6">
+              {Object.entries(
+                matches.reduce(
+                  (acc, match) => {
+                    if (!acc[match.round_number]) {
+                      acc[match.round_number] = []
+                    }
+                    acc[match.round_number].push(match)
+                    return acc
+                  },
+                  {} as Record<number, Match[]>,
+                ),
+              ).map(([roundNumber, roundMatches]) => (
+                <div key={roundNumber} className="space-y-6 min-w-[300px]">
+                  <div className="text-center">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
+                      {Number(roundNumber) === Math.max(...matches.map((match) => match.round_number)) && (
+                        <Crown className="h-4 w-4 text-yellow-500" />
+                      )}
+                      <h4 className="font-bold text-sm">{getRoundName(Number(roundNumber))}</h4>
+                    </div>
+                  </div>
 
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-medium">Match {match.match_number}</CardTitle>
-                            <Badge
-                              className={`${getStatusColor(getMatchStatus(match))} ${
-                                match.status === "in_progress" ? "animate-pulse" : ""
+                  <div className="space-y-4">
+                    {roundMatches
+                      .sort((a, b) => a.match_number - b.match_number)
+                      .map((match) => (
+                        <Card
+                          key={match.id}
+                          className={`relative overflow-hidden hover:shadow-lg transition-shadow duration-300 ${
+                            match.status === "in_progress"
+                              ? "ring-2 ring-red-500 ring-opacity-50 shadow-lg shadow-red-500/20"
+                              : ""
+                          }`}
+                        >
+                          {match.status === "in_progress" && (
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-orange-500 animate-pulse" />
+                          )}
+
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-sm font-medium">Match {match.match_number}</CardTitle>
+                              <Badge
+                                className={`${getStatusColor(getMatchStatus(match))} ${
+                                  match.status === "in_progress" ? "animate-pulse" : ""
+                                }`}
+                              >
+                                {getMatchStatus(match)}
+                                {match.status === "in_progress" && (
+                                  <div className="ml-1 w-2 h-2 bg-white rounded-full animate-ping" />
+                                )}
+                              </Badge>
+                            </div>
+                          </CardHeader>
+
+                          <CardContent className="space-y-3">
+                            <div
+                              className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                                match.winner?.id === match.participant1?.id
+                                  ? "bg-gradient-to-r from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 border border-green-200 dark:border-green-700"
+                                  : "bg-muted/30 hover:bg-muted/50"
                               }`}
                             >
-                              {getMatchStatus(match)}
-                              {match.status === "in_progress" && (
-                                <div className="ml-1 w-2 h-2 bg-white rounded-full animate-ping" />
+                              <div className="flex items-center gap-2">
+                                {match.winner?.id === match.participant1?.id && (
+                                  <Crown className="h-4 w-4 text-yellow-500" />
+                                )}
+                                <span className="font-medium text-sm">{match.participant1?.team_name || "TBD"}</span>
+                              </div>
+                              {match.status === "completed" && (
+                                <span className="font-bold text-lg">{match.score1}</span>
                               )}
-                            </Badge>
-                          </div>
-                        </CardHeader>
-
-                        <CardContent className="space-y-3">
-                          <div
-                            className={`flex items-center justify-between p-3 rounded-lg transition-all ${
-                              match.winner?.id === match.participant1?.id
-                                ? "bg-gradient-to-r from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 border border-green-200 dark:border-green-700"
-                                : "bg-muted/30 hover:bg-muted/50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              {match.winner?.id === match.participant1?.id && (
-                                <Crown className="h-4 w-4 text-yellow-500" />
-                              )}
-                              <span className="font-medium text-sm">{match.participant1?.team_name || "TBD"}</span>
                             </div>
-                            {match.status === "completed" && <span className="font-bold text-lg">{match.score1}</span>}
-                          </div>
 
-                          <div className="text-center">
-                            <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded">
-                              VS
-                            </span>
-                          </div>
-
-                          <div
-                            className={`flex items-center justify-between p-3 rounded-lg transition-all ${
-                              match.winner?.id === match.participant2?.id
-                                ? "bg-gradient-to-r from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 border border-green-200 dark:border-green-700"
-                                : "bg-muted/30 hover:bg-muted/50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              {match.winner?.id === match.participant2?.id && (
-                                <Crown className="h-4 w-4 text-yellow-500" />
-                              )}
-                              <span className="font-medium text-sm">{match.participant2?.team_name || "TBD"}</span>
+                            <div className="text-center">
+                              <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded">
+                                VS
+                              </span>
                             </div>
-                            {match.status === "completed" && <span className="font-bold text-lg">{match.score2}</span>}
-                          </div>
 
-                          {match.participant1 && match.participant2 && match.status !== "completed" && (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  className="w-full mt-3"
-                                  variant={match.status === "in_progress" ? "default" : "outline"}
-                                  onClick={() => {
-                                    setSelectedMatch(match)
-                                    setScore1(match.score1.toString())
-                                    setScore2(match.score2.toString())
-                                  }}
-                                >
-                                  {match.status === "in_progress" ? (
-                                    <>
-                                      <Clock className="h-3 w-3 mr-2" />
-                                      Update Score
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Play className="h-3 w-3 mr-2" />
-                                      Start Match
-                                    </>
-                                  )}
-                                </Button>
-                              </DialogTrigger>
+                            <div
+                              className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                                match.winner?.id === match.participant2?.id
+                                  ? "bg-gradient-to-r from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 border border-green-200 dark:border-green-700"
+                                  : "bg-muted/30 hover:bg-muted/50"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {match.winner?.id === match.participant2?.id && (
+                                  <Crown className="h-4 w-4 text-yellow-500" />
+                                )}
+                                <span className="font-medium text-sm">{match.participant2?.team_name || "TBD"}</span>
+                              </div>
+                              {match.status === "completed" && (
+                                <span className="font-bold text-lg">{match.score2}</span>
+                              )}
+                            </div>
 
-                              <DialogContent className="sm:max-w-md">
-                                <DialogHeader>
-                                  <DialogTitle className="flex items-center gap-2">
-                                    <Trophy className="h-5 w-5" />
-                                    Update Match Score
-                                  </DialogTitle>
-                                </DialogHeader>
-
-                                <div className="space-y-6">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                      <label className="text-sm font-medium">{match.participant1?.team_name}</label>
-                                      <Input
-                                        type="number"
-                                        value={score1}
-                                        onChange={(e) => setScore1(e.target.value)}
-                                        placeholder="Score"
-                                        className="text-center text-lg font-bold"
-                                      />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                      <label className="text-sm font-medium">{match.participant2?.team_name}</label>
-                                      <Input
-                                        type="number"
-                                        value={score2}
-                                        onChange={(e) => setScore2(e.target.value)}
-                                        placeholder="Score"
-                                        className="text-center text-lg font-bold"
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <Button onClick={handleUpdateScore} className="w-full" size="lg">
-                                    <Trophy className="h-4 w-4 mr-2" />
-                                    Update Score
+                            {match.participant1 && match.participant2 && match.status !== "completed" && (
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    className="w-full mt-3"
+                                    variant={match.status === "in_progress" ? "default" : "outline"}
+                                    onClick={() => {
+                                      setSelectedMatch(match)
+                                      setScore1(match.score1.toString())
+                                      setScore2(match.score2.toString())
+                                    }}
+                                  >
+                                    {match.status === "in_progress" ? (
+                                      <>
+                                        <Clock className="h-3 w-3 mr-2" />
+                                        Update Score
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="h-3 w-3 mr-2" />
+                                        Start Match
+                                      </>
+                                    )}
                                   </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
+                                </DialogTrigger>
+
+                                <DialogContent className="sm:max-w-md">
+                                  <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2">
+                                      <Trophy className="h-5 w-5" />
+                                      Update Match Score
+                                    </DialogTitle>
+                                  </DialogHeader>
+
+                                  <div className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-2">
+                                        <label className="text-sm font-medium">{match.participant1?.team_name}</label>
+                                        <Input
+                                          type="number"
+                                          value={score1}
+                                          onChange={(e) => setScore1(e.target.value)}
+                                          placeholder="Score"
+                                          className="text-center text-lg font-bold"
+                                        />
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <label className="text-sm font-medium">{match.participant2?.team_name}</label>
+                                        <Input
+                                          type="number"
+                                          value={score2}
+                                          onChange={(e) => setScore2(e.target.value)}
+                                          placeholder="Score"
+                                          className="text-center text-lg font-bold"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <Button onClick={handleUpdateScore} className="w-full" size="lg">
+                                      <Trophy className="h-4 w-4 mr-2" />
+                                      Update Score
+                                    </Button>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-        </div>
-      </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
