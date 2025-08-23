@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { signIn } from "@/lib/actions"
 
@@ -36,13 +36,18 @@ export default function LoginForm() {
   const router = useRouter()
   const { login } = useAuth()
   const [state, formAction] = useActionState(signIn, null)
+  const loginProcessedRef = useRef(false)
 
   useEffect(() => {
-    if (state?.success && state?.user) {
+    if (state?.success && state?.user && !loginProcessedRef.current) {
+      loginProcessedRef.current = true
       login(state.user)
       router.push("/")
     }
-  }, [state, login, router])
+    if (!state?.success) {
+      loginProcessedRef.current = false
+    }
+  }, [state?.success, state?.user, login, router])
 
   return (
     <div className="w-full max-w-md space-y-8">

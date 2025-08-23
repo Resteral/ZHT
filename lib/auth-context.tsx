@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase/client"
 
 interface User {
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     if (!user) return
 
     try {
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error refreshing user:", error)
     }
-  }
+  }, [user])
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -119,23 +119,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => clearInterval(interval)
-  }, [user])
+  }, [user, refreshUser])
 
   const isAuthenticated = !!user && !isLoading
 
-  const login = (userData: User) => {
+  const login = useCallback((userData: User) => {
     const userWithUUID = {
       ...userData,
       id: userData.id, // Keep the UUID as primary identifier
     }
     setUser(userWithUUID)
     localStorage.setItem("fantasy_user", JSON.stringify(userWithUUID))
-  }
+  }, [])
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null)
     localStorage.removeItem("fantasy_user")
-  }
+  }, [])
 
   return (
     <AuthContext.Provider
