@@ -228,6 +228,8 @@ export default function TournamentDataPage() {
         return <Zap className="h-5 w-5 text-emerald-600" />
       case "linear_draft":
         return <BarChart3 className="h-5 w-5 text-blue-600" />
+      case "auction_draft":
+        return <Trophy className="h-5 w-5 text-purple-600" />
       default:
         return <Trophy className="h-5 w-5 text-purple-600" />
     }
@@ -239,6 +241,8 @@ export default function TournamentDataPage() {
         return "border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50"
       case "linear_draft":
         return "border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50"
+      case "auction_draft":
+        return "border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
       default:
         return "border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
     }
@@ -287,6 +291,77 @@ export default function TournamentDataPage() {
             Live Registration
           </Badge>
         </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3 mb-8">
+        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 hover:shadow-lg transition-all cursor-pointer group">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-500/20 rounded-full group-hover:bg-emerald-500/30 transition-colors">
+                  <Zap className="h-6 w-6 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-emerald-800">Snake Draft</h3>
+                  <p className="text-sm text-emerald-700">Strategic reversing picks</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => router.push("/tournaments/create?type=snake_draft")}
+              >
+                Create
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 hover:shadow-lg transition-all cursor-pointer group">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-500/20 rounded-full group-hover:bg-purple-500/30 transition-colors">
+                  <Trophy className="h-6 w-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-purple-800">Auction Draft</h3>
+                  <p className="text-sm text-purple-700">Bid on your players</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-purple-600 hover:bg-purple-700"
+                onClick={() => router.push("/tournaments/create?type=auction_draft")}
+              >
+                Create
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 hover:shadow-lg transition-all cursor-pointer group">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-blue-500/20 rounded-full group-hover:bg-blue-500/30 transition-colors">
+                  <BarChart3 className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-blue-800">Linear Draft</h3>
+                  <p className="text-sm text-blue-700">Consistent pick order</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => router.push("/tournaments/create?type=linear_draft")}
+              >
+                Create
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -712,6 +787,28 @@ export default function TournamentDataPage() {
                   <Link href="/tournaments/create?type=linear_draft">
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Create Linear Tournament
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-500/20 rounded-full">
+                    <Trophy className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-purple-800">Auction Draft Tournament</CardTitle>
+                    <p className="text-sm text-purple-700">Bid on your players</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Button asChild className="w-full bg-purple-600 hover:bg-purple-700">
+                  <Link href="/tournaments/create?type=auction_draft">
+                    <Trophy className="h-4 w-4 mr-2" />
+                    Create Auction Tournament
                   </Link>
                 </Button>
               </CardContent>
