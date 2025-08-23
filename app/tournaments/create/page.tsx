@@ -185,7 +185,20 @@ export default function CreateTournamentPage() {
 
         const tournament = await monthLongTournamentService.createMonthLongTournament(tournamentData, user.id)
 
-        console.log("[v0] Month-long tournament created:", tournament)
+        console.log("[v0] Month-long tournament created successfully:", tournament)
+
+        const { data: verifyTournament, error: verifyError } = await supabase
+          .from("tournaments")
+          .select("*")
+          .eq("id", tournament.id)
+          .single()
+
+        if (verifyError) {
+          console.error("[v0] Failed to verify tournament creation:", verifyError)
+          throw new Error(`Tournament creation verification failed: ${verifyError.message}`)
+        }
+
+        console.log("[v0] Tournament verified in database:", verifyTournament)
 
         if (formData.player_pool_settings.draft_type === "snake") {
           router.push("/tournaments/snake-draft")
@@ -199,17 +212,51 @@ export default function CreateTournamentPage() {
         console.log("[v0] Tournament service data:", formData)
         console.log("[v0] Using user ID:", user.id)
 
+        if (!formData.name || formData.name.trim() === "") {
+          throw new Error("Tournament name is required")
+        }
+
+        if (!formData.game) {
+          throw new Error("Game selection is required")
+        }
+
+        if (formData.max_participants < 2) {
+          throw new Error("Tournament must have at least 2 participants")
+        }
+
         const tournament = await tournamentService.createTournament(formData, user.id)
-        console.log("[v0] Regular tournament created:", tournament)
+        console.log("[v0] Regular tournament created successfully:", tournament)
+
+        const { data: verifyTournament, error: verifyError } = await supabase
+          .from("leagues")
+          .select("*")
+          .eq("id", tournament.id)
+          .single()
+
+        if (verifyError) {
+          console.error("[v0] Failed to verify tournament creation:", verifyError)
+          throw new Error(`Tournament creation verification failed: ${verifyError.message}`)
+        }
+
+        console.log("[v0] Tournament verified in database:", verifyTournament)
         router.push(`/tournaments/${tournament.id}`)
       }
 
-      console.log("[v0] Tournament created successfully")
+      console.log("[v0] Tournament creation process completed successfully")
     } catch (error) {
       console.error("[v0] Error creating tournament:", error)
       const errorMessage = error instanceof Error ? error.message : "Unknown error"
       console.error("[v0] Full error details:", error)
-      alert(`Failed to create tournament: ${errorMessage}. Please try again.`)
+
+      if (errorMessage.includes("duplicate key")) {
+        alert("A tournament with this name already exists. Please choose a different name.")
+      } else if (errorMessage.includes("foreign key")) {
+        alert("Database constraint error. Please try again or contact support.")
+      } else if (errorMessage.includes("not authenticated")) {
+        alert("Please log in to create tournaments.")
+      } else {
+        alert(`Failed to create tournament: ${errorMessage}. Please check your settings and try again.`)
+      }
     } finally {
       setLoading(false)
     }
