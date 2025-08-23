@@ -34,7 +34,13 @@ export async function signIn(prevState: any, formData: FormData) {
       return { error: "Invalid username or password" }
     }
 
-    return { success: true, user: userData }
+    const userForAuth = {
+      ...userData,
+      id: userData.account_id || userData.username, // Use account_id as primary ID
+      uuid: userData.id, // Store actual UUID for database operations
+    }
+
+    return { success: true, user: userForAuth }
   } catch (error) {
     console.error("Login error:", error)
     return { error: "Login failed. Please try again." }
@@ -66,6 +72,13 @@ export async function signUp(prevState: any, formData: FormData) {
 
     if (existingUser) {
       return { error: "Username already exists" }
+    }
+
+    if (accountId) {
+      const { data: existingAccountId } = await supabase.from("users").select("id").eq("account_id", accountId).single()
+      if (existingAccountId) {
+        return { error: "Account ID already exists" }
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 12)
@@ -106,7 +119,13 @@ export async function signUp(prevState: any, formData: FormData) {
       // Continue anyway, wallet can be created later
     }
 
-    return { success: true, user: newUser, autoLogin: true }
+    const userForAuth = {
+      ...newUser,
+      id: newUser.account_id || newUser.username, // Use account_id as primary ID
+      uuid: newUser.id, // Store actual UUID for database operations
+    }
+
+    return { success: true, user: userForAuth, autoLogin: true }
   } catch (error) {
     console.error("Sign up error:", error)
     return { error: "Signup failed. Please try again." }

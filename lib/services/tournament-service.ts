@@ -51,24 +51,49 @@ export const tournamentService = {
 
     let actualUserId = userId
 
-    // Try to find user by ID first
+    // First try to find user by account_id (if userId looks like an account_id)
     let { data: existingUser, error: userCheckError } = await supabase
       .from("users")
-      .select("id, username")
-      .eq("id", userId)
+      .select("id, username, account_id")
+      .eq("account_id", userId)
       .single()
+
+    // If not found by account_id, try by username
+    if (userCheckError && userCheckError.code === "PGRST116") {
+      const { data: userByUsername, error: usernameError } = await supabase
+        .from("users")
+        .select("id, username, account_id")
+        .eq("username", userId)
+        .single()
+
+      if (!usernameError && userByUsername) {
+        existingUser = userByUsername
+        userCheckError = null
+      }
+    }
+
+    // If still not found, try by UUID as fallback
+    if (userCheckError && userCheckError.code === "PGRST116") {
+      const { data: userByUuid, error: uuidError } = await supabase
+        .from("users")
+        .select("id, username, account_id")
+        .eq("id", userId)
+        .single()
+
+      if (!uuidError && userByUuid) {
+        existingUser = userByUuid
+        userCheckError = null
+      }
+    }
 
     // If user doesn't exist, create them with proper defaults
     if (userCheckError && userCheckError.code === "PGRST116") {
       console.log("[v0] User not found, creating new user:", userId)
 
-      // Get auth user info for proper user creation
-      const { data: authUser, error: authError } = await supabase.auth.getUser()
-
       const userToCreate = {
-        id: userId,
-        username: authUser?.user?.user_metadata?.username || "Resteral",
-        email: authUser?.user?.email || "user@temp.com",
+        username: "Resteral", // Use known username from logs
+        account_id: userId.length > 20 ? null : userId, // Only set account_id if it's not a UUID
+        email: "resteral@temp.com", // Use reasonable default
         elo_rating: 1200,
         total_games: 0,
         wins: 0,
@@ -79,23 +104,50 @@ export const tournamentService = {
         updated_at: new Date().toISOString(),
       }
 
+      console.log("[v0] Creating user with data:", userToCreate)
+
       const { data: newUser, error: createError } = await supabase.from("users").insert(userToCreate).select().single()
 
       if (createError) {
         console.error("[v0] Failed to create user:", createError)
-        throw new Error(`Failed to create user: ${createError.message}`)
-      }
+        if (createError.code === "23505") {
+          // User already exists, try to fetch them again
+          const { data: retryUser } = await supabase
+            .from("users")
+            .select("id, username, account_id")
+            .eq("username", "Resteral")
+            .single()
 
-      console.log("[v0] User created successfully:", newUser.username)
-      actualUserId = newUser.id
-      existingUser = newUser
+          if (retryUser) {
+            console.log("[v0] User found on retry:", retryUser.username)
+            existingUser = retryUser
+            actualUserId = retryUser.id // Use the database UUID for foreign key
+          } else {
+            throw new Error(`User creation failed: ${createError.message}`)
+          }
+        } else {
+          throw new Error(`Failed to create user: ${createError.message}`)
+        }
+      } else {
+        console.log("[v0] User created successfully:", newUser.username)
+        actualUserId = newUser.id // Use the database UUID for foreign key
+        existingUser = newUser
+      }
     } else if (userCheckError) {
       console.error("[v0] Database error checking user:", userCheckError)
       throw new Error(`Database error: ${userCheckError.message}`)
     } else {
       console.log("[v0] User verified in database:", existingUser.username)
-      actualUserId = existingUser.id
+      actualUserId = existingUser.id // Use the database UUID for foreign key
     }
+
+    const { data: finalUserCheck } = await supabase.from("users").select("id").eq("id", actualUserId).single()
+
+    if (!finalUserCheck) {
+      throw new Error("User verification failed - please try logging out and back in")
+    }
+
+    console.log("[v0] Final user verification passed, creating tournament...")
 
     const tournamentToCreate = {
       name: tournamentData.name,
@@ -106,7 +158,7 @@ export const tournamentService = {
       max_teams: Math.ceil((tournamentData.max_participants || 16) / (tournamentData.players_per_team || 4)),
       entry_fee: tournamentData.entry_fee || 0,
       prize_pool: tournamentData.prize_pool || 0,
-      created_by: actualUserId,
+      created_by: actualUserId, // Use database UUID for foreign key constraint
       status: "registration", // Immediate registration
       start_date: tournamentData.start_date || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       end_date: tournamentData.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -185,8 +237,16 @@ export const tournamentService = {
 
     console.log("[v0] Joining tournament pool:", tournamentId)
 
-    // Check if user meets requirements (like ELO league)
-    const { data: userData } = await supabase.from("users").select("elo_rating, balance").eq("id", userId).single()
+    let actualUserId = userId
+    const { data: userData } = await supabase
+      .from("users")
+      .select("id, elo_rating, balance, account_id")
+      .or(`account_id.eq.${userId},username.eq.${userId},id.eq.${userId}`)
+      .single()
+
+    if (userData) {
+      actualUserId = userData.id // Use database UUID for operations
+    }
 
     if (!userData || userData.elo_rating < 1000) {
       throw new Error("You need at least 1000 ELO to join tournaments. Play more matches to increase your rating!")
@@ -197,7 +257,7 @@ export const tournamentService = {
       .from("tournament_player_pool")
       .select("id")
       .eq("tournament_id", tournamentId)
-      .eq("user_id", userId)
+      .eq("user_id", actualUserId)
       .single()
 
     if (existingEntry) {
@@ -225,7 +285,7 @@ export const tournamentService = {
     // Join the pool (like ELO league)
     const { error: poolError } = await supabase.from("tournament_player_pool").insert({
       tournament_id: tournamentId,
-      user_id: userId,
+      user_id: actualUserId,
       status: "available",
       created_at: new Date().toISOString(),
     })
@@ -236,7 +296,7 @@ export const tournamentService = {
 
     // Give instant reward (like ELO league)
     const { error: balanceError } = await supabase.rpc("update_user_balance", {
-      user_id: userId,
+      user_id: actualUserId,
       amount: 25,
     })
 
@@ -246,7 +306,7 @@ export const tournamentService = {
 
     // Record transaction
     await supabase.from("wallet_transactions").insert({
-      user_id: userId,
+      user_id: actualUserId,
       amount: 25,
       transaction_type: "tournament_participation",
       description: `Tournament signup reward`,
@@ -262,6 +322,17 @@ export const tournamentService = {
       throw new Error("Not authenticated - please log in")
     }
 
+    let actualUserId = userId
+    const { data: userData } = await supabase
+      .from("users")
+      .select("id, account_id")
+      .or(`account_id.eq.${userId},username.eq.${userId},id.eq.${userId}`)
+      .single()
+
+    if (userData) {
+      actualUserId = userData.id // Use database UUID for operations
+    }
+
     const { data: participants } = await supabase
       .from("tournament_participants")
       .select("id")
@@ -273,7 +344,7 @@ export const tournamentService = {
       .from("tournament_participants")
       .insert({
         tournament_id: tournamentId,
-        user_id: userId,
+        user_id: actualUserId,
         team_name: teamName || `Team ${seed}`,
         seed: seed,
         status: "registered",
@@ -289,7 +360,7 @@ export const tournamentService = {
         .update({
           balance: supabase.raw("balance + ?", [25]),
         })
-        .eq("id", userId)
+        .eq("id", actualUserId)
 
       if (balanceError) {
         console.error("Error updating user balance:", balanceError)

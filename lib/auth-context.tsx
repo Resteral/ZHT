@@ -4,7 +4,8 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { supabase } from "@/lib/supabase/client"
 
 interface User {
-  id: string
+  id: string // This will now store account_id instead of UUID
+  uuid: string // Store the actual UUID for database operations
   username: string
   account_id: string
   balance: number
@@ -29,7 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const validateAndRefreshSession = async (storedUser: User) => {
     try {
-      const { data, error } = await supabase.from("users").select("*").eq("id", storedUser.id).single()
+      let query = supabase.from("users").select("*")
+
+      if (storedUser.account_id) {
+        query = query.eq("account_id", storedUser.account_id)
+      } else {
+        query = query.eq("id", storedUser.uuid || storedUser.id)
+      }
+
+      const { data, error } = await query.single()
 
       if (error || !data) {
         localStorage.removeItem("fantasy_user")
@@ -38,7 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const updatedUser = {
-        id: data.id,
+        id: data.account_id || data.username,
+        uuid: data.id,
         username: data.username,
         account_id: data.account_id,
         balance: data.balance,
@@ -61,11 +71,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return
 
     try {
-      const { data, error } = await supabase.from("users").select("*").eq("id", user.id).single()
+      let query = supabase.from("users").select("*")
+
+      if (user.account_id) {
+        query = query.eq("account_id", user.account_id)
+      } else {
+        query = query.eq("id", user.uuid)
+      }
+
+      const { data, error } = await query.single()
 
       if (!error && data) {
         const updatedUser = {
-          id: data.id,
+          id: data.account_id || data.username,
+          uuid: data.id,
           username: data.username,
           account_id: data.account_id,
           balance: data.balance,
@@ -114,8 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user && !isLoading
 
   const login = (userData: User) => {
-    setUser(userData)
-    localStorage.setItem("fantasy_user", JSON.stringify(userData))
+    const userWithAccountId = {
+      ...userData,
+      id: userData.account_id || userData.username,
+      uuid: userData.uuid || userData.id,
+    }
+    setUser(userWithAccountId)
+    localStorage.setItem("fantasy_user", JSON.stringify(userWithAccountId))
   }
 
   const logout = () => {
