@@ -4,8 +4,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { supabase } from "@/lib/supabase/client"
 
 interface User {
-  id: string // This will now store account_id instead of UUID
-  uuid: string // Store the actual UUID for database operations
+  id: string // Back to using UUID as primary identifier
   username: string
   account_id: string
   balance: number
@@ -32,10 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       let query = supabase.from("users").select("*")
 
-      if (storedUser.account_id) {
+      if (storedUser.id && storedUser.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        query = query.eq("id", storedUser.id)
+      } else if (storedUser.account_id) {
         query = query.eq("account_id", storedUser.account_id)
       } else {
-        query = query.eq("id", storedUser.uuid || storedUser.id)
+        query = query.eq("username", storedUser.username)
       }
 
       const { data, error } = await query.single()
@@ -47,8 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const updatedUser = {
-        id: data.account_id || data.username,
-        uuid: data.id,
+        id: data.id, // Use actual UUID from database
         username: data.username,
         account_id: data.account_id,
         balance: data.balance,
@@ -71,20 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return
 
     try {
-      let query = supabase.from("users").select("*")
-
-      if (user.account_id) {
-        query = query.eq("account_id", user.account_id)
-      } else {
-        query = query.eq("id", user.uuid)
-      }
-
-      const { data, error } = await query.single()
+      const { data, error } = await supabase.from("users").select("*").eq("id", user.id).single()
 
       if (!error && data) {
         const updatedUser = {
-          id: data.account_id || data.username,
-          uuid: data.id,
+          id: data.id, // Keep using UUID
           username: data.username,
           account_id: data.account_id,
           balance: data.balance,
@@ -133,13 +124,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user && !isLoading
 
   const login = (userData: User) => {
-    const userWithAccountId = {
+    const userWithUUID = {
       ...userData,
-      id: userData.account_id || userData.username,
-      uuid: userData.uuid || userData.id,
+      id: userData.id, // Keep the UUID as primary identifier
     }
-    setUser(userWithAccountId)
-    localStorage.setItem("fantasy_user", JSON.stringify(userWithAccountId))
+    setUser(userWithUUID)
+    localStorage.setItem("fantasy_user", JSON.stringify(userWithUUID))
   }
 
   const logout = () => {

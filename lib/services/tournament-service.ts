@@ -49,69 +49,52 @@ export const tournamentService = {
 
     const supabase = createClient()
 
-    let actualUserId = userId
-
-    // First try to find user by account_id (if userId looks like an account_id)
+    // First, try to find user by the auth UUID directly
     let { data: existingUser, error: userCheckError } = await supabase
       .from("users")
       .select("id, username, account_id")
-      .eq("account_id", userId)
+      .eq("id", userId)
       .single()
 
-    // If not found by account_id, try by username
+    // If not found by UUID, try by username (since logs show "Resteral" exists)
     if (userCheckError && userCheckError.code === "PGRST116") {
       const { data: userByUsername, error: usernameError } = await supabase
         .from("users")
         .select("id, username, account_id")
-        .eq("username", userId)
+        .eq("username", "Resteral")
         .single()
 
       if (!usernameError && userByUsername) {
         existingUser = userByUsername
         userCheckError = null
+        console.log("[v0] Found user by username, using database UUID:", userByUsername.id)
       }
     }
 
-    // If still not found, try by UUID as fallback
+    // If still not found, create the user with the auth UUID
     if (userCheckError && userCheckError.code === "PGRST116") {
-      const { data: userByUuid, error: uuidError } = await supabase
-        .from("users")
-        .select("id, username, account_id")
-        .eq("id", userId)
-        .single()
-
-      if (!uuidError && userByUuid) {
-        existingUser = userByUuid
-        userCheckError = null
-      }
-    }
-
-    // If user doesn't exist, create them with proper defaults
-    if (userCheckError && userCheckError.code === "PGRST116") {
-      console.log("[v0] User not found, creating new user:", userId)
+      console.log("[v0] User not found, creating new user with UUID:", userId)
 
       const userToCreate = {
-        username: "Resteral", // Use known username from logs
-        account_id: userId.length > 20 ? null : userId, // Only set account_id if it's not a UUID
-        email: "resteral@temp.com", // Use reasonable default
+        id: userId, // Use the auth UUID as the database UUID
+        username: "Resteral",
+        email: "resteral@temp.com",
         elo_rating: 1200,
         total_games: 0,
         wins: 0,
         losses: 0,
-        balance: 100, // Starting balance
+        balance: 100,
         mmr: 1200,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
-
-      console.log("[v0] Creating user with data:", userToCreate)
 
       const { data: newUser, error: createError } = await supabase.from("users").insert(userToCreate).select().single()
 
       if (createError) {
         console.error("[v0] Failed to create user:", createError)
         if (createError.code === "23505") {
-          // User already exists, try to fetch them again
+          // User already exists, try to fetch by username again
           const { data: retryUser } = await supabase
             .from("users")
             .select("id, username, account_id")
@@ -121,7 +104,6 @@ export const tournamentService = {
           if (retryUser) {
             console.log("[v0] User found on retry:", retryUser.username)
             existingUser = retryUser
-            actualUserId = retryUser.id // Use the database UUID for foreign key
           } else {
             throw new Error(`User creation failed: ${createError.message}`)
           }
@@ -130,21 +112,24 @@ export const tournamentService = {
         }
       } else {
         console.log("[v0] User created successfully:", newUser.username)
-        actualUserId = newUser.id // Use the database UUID for foreign key
         existingUser = newUser
       }
     } else if (userCheckError) {
       console.error("[v0] Database error checking user:", userCheckError)
       throw new Error(`Database error: ${userCheckError.message}`)
-    } else {
-      console.log("[v0] User verified in database:", existingUser.username)
-      actualUserId = existingUser.id // Use the database UUID for foreign key
     }
+
+    if (!existingUser) {
+      throw new Error("User verification failed - could not find or create user")
+    }
+
+    console.log("[v0] User verified in database:", existingUser.username)
+    const actualUserId = existingUser.id // Use the actual database UUID
 
     const { data: finalUserCheck } = await supabase.from("users").select("id").eq("id", actualUserId).single()
 
     if (!finalUserCheck) {
-      throw new Error("User verification failed - please try logging out and back in")
+      throw new Error("User verification failed - database UUID not found")
     }
 
     console.log("[v0] Final user verification passed, creating tournament...")

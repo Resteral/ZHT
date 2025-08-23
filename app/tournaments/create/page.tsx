@@ -200,13 +200,7 @@ export default function CreateTournamentPage() {
 
         console.log("[v0] Tournament verified in database:", verifyTournament)
 
-        if (formData.player_pool_settings.draft_type === "snake") {
-          router.push("/tournaments/snake-draft")
-        } else if (formData.player_pool_settings.draft_type === "linear") {
-          router.push("/tournaments/linear-draft")
-        } else {
-          router.push(`/tournaments/${tournament.id}`)
-        }
+        router.push(`/tournaments/${tournament.id}`)
       } else {
         console.log("[v0] Creating regular tournament")
         console.log("[v0] Tournament service data:", formData)

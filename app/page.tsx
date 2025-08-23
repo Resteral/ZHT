@@ -30,6 +30,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/client"
 import { formatDateEST } from "@/lib/utils/timezone"
 import { InteractiveHockeyNet } from "@/components/interactive-hockey-net"
 import { useAuth } from "@/lib/auth-context"
+import { UserInitializer } from "@/components/auth/user-initializer"
 
 interface LiveGame {
   id: string
@@ -787,10 +788,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-primary/5 pt-20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       {renderAuthDebug()}
 
-      <div className="container mx-auto px-4 py-8 space-y-8">
+      <main className="container mx-auto px-4 py-8">
+        <UserInitializer />
+
         <div className="text-center space-y-4">
           {!isAuthenticated && !authLoading && (
             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
@@ -865,7 +868,7 @@ export default function Dashboard() {
           </div>
           */}
         </div>
-      </div>
+      </main>
 
       <div className="container mx-auto px-4 space-y-8 relative z-10">
         <Card className="gaming-card bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 border-primary/20">

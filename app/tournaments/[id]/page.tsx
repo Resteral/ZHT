@@ -1,17 +1,40 @@
 "use client"
 
-import { Suspense, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { TournamentDetails } from "@/components/tournaments/tournament-details"
 import { Skeleton } from "@/components/ui/skeleton"
-import Link from "next/link"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BarChart3, ArrowLeft } from "lucide-react"
+import Link from "next/link"
+import { ArrowLeft, Trophy, Users, Calendar, DollarSign } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+import { TournamentSignupSystem } from "@/components/tournaments/tournament-signup-system"
+import { PlayerPoolManagement } from "@/components/tournaments/player-pool-management"
+import { CaptainSelectionInterface } from "@/components/tournaments/captain-selection-interface"
+import { DraftInitiationSystem } from "@/components/tournaments/draft-initiation-system"
+import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 
 interface TournamentPageProps {
   params: {
     id: string
   }
+}
+
+interface Tournament {
+  id: string
+  name: string
+  description: string
+  sport: string
+  status: string
+  max_teams: number
+  entry_fee: number
+  prize_pool: number
+  created_at: string
+  commissioner_id: string
+  league_mode: string
+  participant_count?: number
 }
 
 function isValidUUID(str: string): boolean {
@@ -21,15 +44,129 @@ function isValidUUID(str: string): boolean {
 
 export default function TournamentPage({ params }: TournamentPageProps) {
   const router = useRouter()
+  const [tournament, setTournament] = useState<Tournament | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState("overview")
 
   useEffect(() => {
     if (!isValidUUID(params.id)) {
       router.push("/tournaments")
+      return
     }
+
+    fetchTournament()
   }, [params.id, router])
+
+  const fetchTournament = async () => {
+    try {
+      const supabase = createClient()
+
+      const { data, error } = await supabase
+        .from("leagues")
+        .select(`
+          *,
+          participant_count:league_memberships(count)
+        `)
+        .eq("id", params.id)
+        .eq("league_mode", "tournament")
+        .single()
+
+      if (error) {
+        console.error("Error fetching tournament:", error)
+        router.push("/tournaments")
+        return
+      }
+
+      if (data) {
+        setTournament({
+          ...data,
+          participant_count: data.participant_count?.[0]?.count || 0,
+        })
+
+        if (data.status === "registration") {
+          setActiveTab("signup")
+        } else if (data.status === "team_building") {
+          setActiveTab("pools")
+        } else if (data.status === "draft") {
+          setActiveTab("draft")
+        } else if (data.status === "active" || data.status === "in_progress") {
+          setActiveTab("bracket")
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching tournament:", error)
+      router.push("/tournaments")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (!isValidUUID(params.id)) {
     return null
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-6">
+        <Skeleton className="h-96 w-full" />
+      </div>
+    )
+  }
+
+  if (!tournament) {
+    return (
+      <div className="container mx-auto py-6">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Tournament Not Found</h3>
+            <p className="text-muted-foreground mb-4">The tournament you're looking for doesn't exist.</p>
+            <Button asChild>
+              <Link href="/tournaments">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Tournaments
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "registration":
+        return "bg-blue-500"
+      case "team_building":
+        return "bg-yellow-500"
+      case "draft":
+        return "bg-purple-500"
+      case "active":
+      case "in_progress":
+        return "bg-green-500"
+      case "completed":
+        return "bg-gray-500"
+      default:
+        return "bg-gray-500"
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "registration":
+        return "Registration Open"
+      case "team_building":
+        return "Team Building"
+      case "draft":
+        return "Draft Phase"
+      case "active":
+      case "in_progress":
+        return "Live Tournament"
+      case "completed":
+        return "Completed"
+      default:
+        return status
+    }
   }
 
   return (
@@ -41,17 +178,128 @@ export default function TournamentPage({ params }: TournamentPageProps) {
             Back to Tournaments
           </Link>
         </Button>
-        <Button variant="outline" asChild>
-          <Link href={`/tournaments/${params.id}/stats`}>
-            <BarChart3 className="h-4 w-4 mr-2" />
-            View Statistics
-          </Link>
-        </Button>
+        <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
       </div>
 
-      <Suspense fallback={<Skeleton className="h-96 w-full" />}>
-        <TournamentDetails tournamentId={params.id} />
-      </Suspense>
+      <div className="mb-8">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight mb-2">{tournament.name}</h1>
+            <p className="text-muted-foreground">{tournament.description}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-green-500">${tournament.prize_pool.toLocaleString()}</div>
+            <div className="text-sm text-muted-foreground">Prize Pool</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm">
+              {tournament.participant_count}/{tournament.max_teams} participants
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm">${tournament.entry_fee} entry fee</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm">{tournament.sport.replace("_", " ")}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm">{new Date(tournament.created_at).toLocaleDateString()}</span>
+          </div>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="signup">Signup</TabsTrigger>
+          <TabsTrigger value="pools">Player Pools</TabsTrigger>
+          <TabsTrigger value="captains">Captains</TabsTrigger>
+          <TabsTrigger value="draft">Draft</TabsTrigger>
+          <TabsTrigger value="bracket">Live Bracket</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tournament Overview</CardTitle>
+              <CardDescription>Tournament details and current status</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Tournament Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Status:</span>
+                      <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Game:</span>
+                      <span>{tournament.sport.replace("_", " ")}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Max Teams:</span>
+                      <span>{tournament.max_teams}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Entry Fee:</span>
+                      <span>${tournament.entry_fee}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Prize Pool:</span>
+                      <span className="font-semibold text-green-600">${tournament.prize_pool.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Participation</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Registered:</span>
+                      <span>
+                        {tournament.participant_count}/{tournament.max_teams}
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all"
+                        style={{ width: `${(tournament.participant_count! / tournament.max_teams) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="signup" className="space-y-6">
+          <TournamentSignupSystem tournamentId={tournament.id} />
+        </TabsContent>
+
+        <TabsContent value="pools" className="space-y-6">
+          <PlayerPoolManagement tournamentId={tournament.id} />
+        </TabsContent>
+
+        <TabsContent value="captains" className="space-y-6">
+          <CaptainSelectionInterface tournamentId={tournament.id} />
+        </TabsContent>
+
+        <TabsContent value="draft" className="space-y-6">
+          <DraftInitiationSystem tournamentId={tournament.id} />
+        </TabsContent>
+
+        <TabsContent value="bracket" className="space-y-6">
+          <RoundRobinBracket tournamentId={tournament.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

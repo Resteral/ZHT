@@ -524,42 +524,134 @@ export default function LeaguesPage() {
                 <Trophy className="h-6 w-6 text-blue-500" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold mb-1">ELO Lobbies</h3>
+                <h3 className="font-semibold mb-1">ELO Draft Lobbies</h3>
                 <p className="text-sm text-muted-foreground">
                   Competitive lobbies based on ELO ratings • 1v1 to 6v6 formats • Real-time matchmaking • Skill-based
-                  progression
+                  progression • $10-$50 per game
                 </p>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-blue-500">LOBBIES</div>
-                <div className="text-xs text-muted-foreground">1v1 to 6v6</div>
+                <div className="text-2xl font-bold text-blue-500">LIVE LOBBIES</div>
+                <div className="text-xs text-muted-foreground">All Formats Available</div>
               </div>
             </div>
           </div>
-          <div className="grid gap-6 md:grid-cols-2">
+
+          <div className="grid gap-6">
+            {/* Active Lobbies Display */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Gamepad2 className="h-5 w-5" />
-                  Quick Lobby
+                  Active ELO Lobbies
                 </CardTitle>
-                <CardDescription>Join or create ELO-based lobbies (1v1 to 6v6)</CardDescription>
+                <CardDescription>Join existing lobbies or create new ones</CardDescription>
               </CardHeader>
-              <CardContent>
-                <UnifiedDraftSelector mode="both" />
+              <CardContent className="space-y-4">
+                {loading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : activeCaptainDrafts.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Gamepad2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-semibold mb-2">No active lobbies</h3>
+                    <p className="text-sm mb-4">Be the first to create a lobby!</p>
+                    <UnifiedDraftSelector mode="create" buttonText="Create First Lobby" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activeCaptainDrafts.slice(0, 5).map((draft) => (
+                      <div
+                        key={draft.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-bold text-primary">{draft.format}</span>
+                          </div>
+                          <div>
+                            <h4 className="font-medium">{draft.name}</h4>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Users className="h-3 w-3" />
+                              <span>
+                                {draft.participants}/{draft.max_participants} players
+                              </span>
+                              <span>•</span>
+                              <DollarSign className="h-3 w-3" />
+                              <span>${draft.prize_pool} prize</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={draft.status === "waiting" ? "secondary" : "default"}>
+                            {draft.status === "waiting" ? "Waiting" : "Active"}
+                          </Badge>
+                          <Button size="sm" asChild>
+                            <Link href={`/draft/room/${draft.id}`}>{draft.user_is_participant ? "Enter" : "Join"}</Link>
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            <Card>
+            {/* Quick Actions */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Plus className="h-5 w-5" />
+                    Create ELO Lobby
+                  </CardTitle>
+                  <CardDescription>Start a new ELO-based draft lobby</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <UnifiedDraftSelector mode="create" buttonText="Create New Lobby" className="w-full" />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Browse All Lobbies
+                  </CardTitle>
+                  <CardDescription>View and join existing lobbies across all formats</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SoloQueuePool />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ELO Requirements Info */}
+            <Card className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-500/20">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  ELO Solo Pool
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                  ELO Requirements & Rewards
                 </CardTitle>
-                <CardDescription>Browse active ELO lobbies including 5v5 and 6v6 formats</CardDescription>
               </CardHeader>
               <CardContent>
-                <SoloQueuePool />
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="text-center p-4 bg-white/50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600 mb-1">1200+</div>
+                    <div className="text-sm text-muted-foreground">Minimum ELO Required</div>
+                  </div>
+                  <div className="text-center p-4 bg-white/50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600 mb-1">$10-$50</div>
+                    <div className="text-sm text-muted-foreground">Per Game Reward</div>
+                  </div>
+                  <div className="text-center p-4 bg-white/50 rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600 mb-1">1v1-6v6</div>
+                    <div className="text-sm text-muted-foreground">Available Formats</div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
