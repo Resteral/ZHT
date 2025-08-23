@@ -55,6 +55,27 @@ export const tournamentService = {
 
     console.log("[v0] Authenticated user:", userId)
 
+    if (tournamentData.tournament_type === "month_long_draft") {
+      const { monthLongTournamentService } = await import("./month-long-tournament-service")
+      return await monthLongTournamentService.createMonthLongTournament(
+        {
+          name: tournamentData.name,
+          description: tournamentData.description,
+          tournament_type:
+            tournamentData.player_pool_settings.draft_type === "snake"
+              ? "snake_draft"
+              : tournamentData.player_pool_settings.draft_type === "linear"
+                ? "linear_draft"
+                : "auction_draft",
+          duration_days: tournamentData.duration_days || 30,
+          max_participants: tournamentData.max_participants,
+          entry_fee: tournamentData.entry_fee,
+          start_date: tournamentData.start_date,
+        },
+        userId,
+      )
+    }
+
     const { data, error } = await supabase
       .from("leagues")
       .insert({

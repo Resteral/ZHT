@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, DollarSign, Users, ArrowRight, Plus, Gavel, User, Clock } from "lucide-react"
+import { Trophy, DollarSign, Users, ArrowRight, Plus, Gavel, User, Clock, Zap, BarChart3 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 
@@ -88,7 +88,7 @@ export default function TournamentsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tournaments & Leagues</h1>
           <p className="text-muted-foreground">
-            Choose between team tournaments (3 days) or solo leagues (extended play)
+            Choose between team tournaments (3 days), solo leagues (extended play), or month-long draft championships
           </p>
         </div>
       </div>
@@ -101,8 +101,8 @@ export default function TournamentsPage() {
           <div className="flex-1">
             <h3 className="font-semibold mb-1">Tournament & League Rewards</h3>
             <p className="text-sm text-muted-foreground">
-              Choose team tournaments or solo leagues • Earn $10 per game played • Win massive prize pools • Team
-              tournaments last 3 days, leagues run longer
+              Choose team tournaments, solo leagues, or draft championships • Earn $10 per game played • Win massive
+              prize pools • Multiple formats and durations available
             </p>
           </div>
           <div className="text-right">
@@ -112,8 +112,8 @@ export default function TournamentsPage() {
                 <div className="text-xs text-muted-foreground">Per Game Played</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-blue-500">3 Days</div>
-                <div className="text-xs text-muted-foreground">Tournament Duration</div>
+                <div className="text-lg font-bold text-blue-500">3-30 Days</div>
+                <div className="text-xs text-muted-foreground">Various Durations</div>
               </div>
               <div>
                 <div className="text-lg font-bold text-yellow-500">Prize Pools</div>
@@ -139,6 +139,100 @@ export default function TournamentsPage() {
         </div>
       </div>
 
+      <div className="grid gap-6 md:grid-cols-2 mb-8">
+        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/20 rounded-full">
+                  <Zap className="h-6 w-6 text-emerald-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-emerald-800">Snake Draft Championship</CardTitle>
+                  <CardDescription className="text-emerald-700">
+                    Month-long strategic drafting with reversing pick order
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-300">
+                $10K Prize Pool
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="text-center">
+                <div className="font-bold text-emerald-700">64</div>
+                <div className="text-emerald-600 text-xs">Max Players</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-emerald-700">30</div>
+                <div className="text-emerald-600 text-xs">Days</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-emerald-700">Free</div>
+                <div className="text-emerald-600 text-xs">Entry</div>
+              </div>
+            </div>
+            <p className="text-sm text-emerald-700">
+              Strategic captain selection with snake draft mechanics. Lower ELO captain gets first pick advantage.
+            </p>
+            <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700">
+              <Link href="/tournaments/snake-draft">
+                <Zap className="h-4 w-4 mr-2" />
+                Join Snake Draft Championship
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/20 rounded-full">
+                  <BarChart3 className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-blue-800">Linear Draft Masters</CardTitle>
+                  <CardDescription className="text-blue-700">
+                    Month-long tournament with consistent pick order strategy
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+                $8K Prize Pool
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="text-center">
+                <div className="font-bold text-blue-700">48</div>
+                <div className="text-blue-600 text-xs">Max Players</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-blue-700">30</div>
+                <div className="text-blue-600 text-xs">Days</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-blue-700">Free</div>
+                <div className="text-blue-600 text-xs">Entry</div>
+              </div>
+            </div>
+            <p className="text-sm text-blue-700">
+              Master consistent draft positioning. Same pick order every round - strategy and skill determine success.
+            </p>
+            <Button asChild className="w-full bg-blue-600 hover:bg-blue-700">
+              <Link href="/tournaments/linear-draft">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Join Linear Draft Masters
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       <Tabs defaultValue="team-tournaments" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="team-tournaments">Team Tournaments</TabsTrigger>
@@ -153,12 +247,26 @@ export default function TournamentsPage() {
               <h2 className="text-2xl font-bold">Team Tournaments</h2>
               <p className="text-muted-foreground">3-day tournaments with team building and competitive brackets</p>
             </div>
-            <Button asChild>
-              <Link href="/tournaments/create?type=team">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Team Tournament
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button asChild size="lg" variant="outline">
+                <Link href="/tournaments/create?type=snake_draft">
+                  <Zap className="h-4 w-4 mr-2" />
+                  Snake Draft
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/tournaments/create?type=linear_draft">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Linear Draft
+                </Link>
+              </Button>
+              <Button asChild size="lg">
+                <Link href="/tournaments/create?type=team">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Team Tournament
+                </Link>
+              </Button>
+            </div>
           </div>
 
           {loading ? (
@@ -296,7 +404,7 @@ export default function TournamentsPage() {
               <h2 className="text-2xl font-bold">Solo Leagues</h2>
               <p className="text-muted-foreground">Extended league play for individual competition</p>
             </div>
-            <Button asChild>
+            <Button asChild size="lg">
               <Link href="/tournaments/create?type=solo">
                 <Plus className="h-4 w-4 mr-2" />
                 Create Solo League

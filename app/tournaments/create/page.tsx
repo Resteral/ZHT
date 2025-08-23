@@ -1,9 +1,9 @@
 "use client"
 
 import type React from "react"
-
+import Link from "next/link"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,22 +18,58 @@ import { createClient } from "@/lib/supabase/client"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState<any>(null)
+
+  const tournamentType = searchParams.get("type")
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    tournament_type: "single_elimination",
-    max_participants: 16,
-    entry_fee: 0,
-    prize_pool: 0,
+    name:
+      tournamentType === "team"
+        ? "Team Tournament"
+        : tournamentType === "solo"
+          ? "Solo League"
+          : tournamentType === "snake_draft"
+            ? "Snake Draft Championship"
+            : tournamentType === "linear_draft"
+              ? "Linear Draft Masters"
+              : "",
+    description:
+      tournamentType === "team"
+        ? "3-day team tournament with competitive brackets and team building phase"
+        : tournamentType === "solo"
+          ? "Extended solo league play with ELO-based matchmaking"
+          : tournamentType === "snake_draft"
+            ? "Month-long snake draft tournament with strategic captain selection and reversing pick order"
+            : tournamentType === "linear_draft"
+              ? "Month-long linear draft tournament with consistent pick order and strategic depth"
+              : "",
+    tournament_type:
+      tournamentType === "snake_draft" || tournamentType === "linear_draft" ? "month_long_draft" : "single_elimination",
+    max_participants:
+      tournamentType === "team"
+        ? 16
+        : tournamentType === "solo"
+          ? 32
+          : tournamentType === "snake_draft"
+            ? 64
+            : tournamentType === "linear_draft"
+              ? 48
+              : 16,
+    entry_fee: tournamentType === "snake_draft" || tournamentType === "linear_draft" ? 0 : 0,
+    prize_pool: tournamentType === "snake_draft" ? 10000 : tournamentType === "linear_draft" ? 8000 : 0,
     start_date: "",
-    enable_player_pool: false,
+    duration_days: tournamentType === "snake_draft" || tournamentType === "linear_draft" ? 30 : 3,
+    enable_player_pool: tournamentType === "team" ? true : false,
     player_pool_settings: {
       max_teams: 8,
       players_per_team: 5,
       max_pool_size: 50,
-      draft_type: "auction" as "auction" | "snake" | "linear",
+      draft_type: (tournamentType === "snake_draft"
+        ? "snake"
+        : tournamentType === "linear_draft"
+          ? "linear"
+          : "auction") as "auction" | "snake" | "linear",
       auction_budget: 500,
     },
   })
@@ -54,8 +90,35 @@ export default function CreateTournamentPage() {
     setLoading(true)
 
     try {
-      const tournament = await tournamentService.createTournament(formData, user?.id)
-      router.push(`/tournaments/${tournament.id}`)
+      if (formData.tournament_type === "month_long_draft") {
+        const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
+        const tournament = await monthLongTournamentService.createMonthLongTournament(
+          {
+            name: formData.name,
+            description: formData.description,
+            tournament_type: formData.player_pool_settings.draft_type as
+              | "snake_draft"
+              | "linear_draft"
+              | "auction_draft",
+            duration_days: formData.duration_days,
+            max_participants: formData.max_participants,
+            entry_fee: formData.entry_fee,
+            start_date: formData.start_date,
+          },
+          user?.id,
+        )
+
+        if (formData.player_pool_settings.draft_type === "snake") {
+          router.push("/tournaments/snake-draft")
+        } else if (formData.player_pool_settings.draft_type === "linear") {
+          router.push("/tournaments/linear-draft")
+        } else {
+          router.push(`/tournaments/${tournament.id}`)
+        }
+      } else {
+        const tournament = await tournamentService.createTournament(formData, user?.id)
+        router.push(`/tournaments/${tournament.id}`)
+      }
     } catch (error) {
       console.error("Error creating tournament:", error)
     } finally {
@@ -82,6 +145,12 @@ export default function CreateTournamentPage() {
       description: "Everyone plays everyone - most fair format",
       icon: "🔄",
     },
+    {
+      value: "month_long_draft",
+      label: "Month-Long Draft Tournament",
+      description: "Extended tournament with draft phases and weekly matches",
+      icon: "📅",
+    },
   ]
 
   const participantOptions = [8, 16, 32, 64]
@@ -93,15 +162,53 @@ export default function CreateTournamentPage() {
   return (
     <div className="container mx-auto py-6 max-w-4xl">
       <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/tournaments">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Tournaments
+          </Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Create Tournament</h1>
-          <p className="text-muted-foreground">Set up a new competitive tournament with brackets and prizes</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {tournamentType === "team"
+              ? "Create Team Tournament"
+              : tournamentType === "solo"
+                ? "Create Solo League"
+                : tournamentType === "snake_draft"
+                  ? "Create Snake Draft Championship"
+                  : tournamentType === "linear_draft"
+                    ? "Create Linear Draft Masters"
+                    : "Create Tournament"}
+          </h1>
+          <p className="text-muted-foreground">
+            {tournamentType === "team"
+              ? "Set up a 3-day team tournament with drafting and competitive brackets"
+              : tournamentType === "solo"
+                ? "Create an extended solo league with ELO-based matchmaking"
+                : tournamentType === "snake_draft"
+                  ? "Month-long snake draft tournament with strategic captain selection and reversing pick order"
+                  : tournamentType === "linear_draft"
+                    ? "Month-long linear draft tournament with consistent pick order and strategic depth"
+                    : "Set up a new competitive tournament with brackets and prizes"}
+          </p>
         </div>
       </div>
+
+      {tournamentType && (
+        <div className="mb-6">
+          <Badge variant="secondary" className="text-sm">
+            {tournamentType === "team"
+              ? "🏆 Team Tournament"
+              : tournamentType === "solo"
+                ? "👤 Solo League"
+                : tournamentType === "snake_draft"
+                  ? "🐍 Snake Draft Championship"
+                  : tournamentType === "linear_draft"
+                    ? "📊 Linear Draft Masters"
+                    : ""}
+          </Badge>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Form */}
@@ -234,6 +341,27 @@ export default function CreateTournamentPage() {
                     />
                   </div>
                 </div>
+
+                {/* Duration for Month-Long Draft */}
+                {formData.tournament_type === "month_long_draft" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="duration_days">Tournament Duration (Days)</Label>
+                    <Select
+                      value={formData.duration_days.toString()}
+                      onValueChange={(value) => setFormData({ ...formData, duration_days: Number.parseInt(value) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="14">2 Weeks</SelectItem>
+                        <SelectItem value="30">1 Month</SelectItem>
+                        <SelectItem value="60">2 Months</SelectItem>
+                        <SelectItem value="90">3 Months (Season)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <Button type="submit" disabled={loading} className="w-full" size="lg">
                   {loading ? (
@@ -377,9 +505,33 @@ export default function CreateTournamentPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="auction">Auction Draft</SelectItem>
-                          <SelectItem value="snake">Snake Draft</SelectItem>
-                          <SelectItem value="linear">Linear Draft</SelectItem>
+                          <SelectItem value="auction">
+                            <div className="flex items-center gap-2">
+                              <span>🏛️</span>
+                              <div>
+                                <div>Auction Draft</div>
+                                <div className="text-xs text-muted-foreground">Bid on players with budget</div>
+                              </div>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="snake">
+                            <div className="flex items-center gap-2">
+                              <span>🐍</span>
+                              <div>
+                                <div>Snake Draft</div>
+                                <div className="text-xs text-muted-foreground">Reversing pick order each round</div>
+                              </div>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="linear">
+                            <div className="flex items-center gap-2">
+                              <span>📊</span>
+                              <div>
+                                <div>Linear Draft</div>
+                                <div className="text-xs text-muted-foreground">Same pick order every round</div>
+                              </div>
+                            </div>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -475,10 +627,22 @@ export default function CreateTournamentPage() {
                       <Settings className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">Draft:</span>
                       <Badge variant="outline" className="text-xs">
-                        {formData.player_pool_settings.draft_type}
+                        {formData.player_pool_settings.draft_type === "snake"
+                          ? "🐍 Snake"
+                          : formData.player_pool_settings.draft_type === "linear"
+                            ? "📊 Linear"
+                            : "🏛️ Auction"}
                       </Badge>
                     </div>
                   </>
+                )}
+
+                {formData.tournament_type === "month_long_draft" && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Duration:</span>
+                    <span className="font-medium">{formData.duration_days} days</span>
+                  </div>
                 )}
 
                 {formData.start_date && (

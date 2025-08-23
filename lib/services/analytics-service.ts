@@ -84,7 +84,7 @@ export class AnalyticsService {
       .from("team_analytics")
       .select("*")
       .eq("match_id", matchId)
-      .order("team_score", { ascending: false })
+      .order("total_kills", { ascending: false })
 
     if (error) {
       console.error("Error fetching team analytics:", error)
@@ -95,18 +95,8 @@ export class AnalyticsService {
   }
 
   async getMatchAnalytics(matchId: string): Promise<MatchAnalytics | null> {
-    const { data, error } = await this.supabase.from("match_analytics").select("*").eq("match_id", matchId).single()
-
-    if (error) {
-      if (error.code === "PGRST116") {
-        // Not found is OK
-        return null
-      }
-      console.error("Error fetching match analytics:", error)
-      return null
-    }
-
-    return data
+    console.log("[v0] match_analytics table doesn't exist, returning null for match:", matchId)
+    return null
   }
 
   async getPlayerStats(userId: string, limit = 10): Promise<PlayerAnalytics[]> {
@@ -200,7 +190,6 @@ export class AnalyticsService {
       .from("matches")
       .select(`
         *,
-        match_analytics!match_analytics_match_id_fkey(*),
         match_results!match_results_match_id_fkey(team1_score, team2_score, winning_team, validated_at)
       `)
       .order("created_at", { ascending: false })
@@ -210,10 +199,7 @@ export class AnalyticsService {
       console.error("Error fetching matches with analytics:", error)
       const { data: fallbackData, error: fallbackError } = await this.supabase
         .from("matches")
-        .select(`
-          *,
-          match_results!match_results_match_id_fkey(team1_score, team2_score, winning_team, validated_at)
-        `)
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(limit)
 
@@ -224,9 +210,9 @@ export class AnalyticsService {
 
       return (fallbackData || []).map((match) => ({
         ...match,
-        team1_score: match.match_results?.[0]?.team1_score || 0,
-        team2_score: match.match_results?.[0]?.team2_score || 0,
-        winning_team: match.match_results?.[0]?.winning_team || null,
+        team1_score: 0,
+        team2_score: 0,
+        winning_team: null,
         total_goals: 0,
         total_assists: 0,
         total_saves: 0,
@@ -240,7 +226,7 @@ export class AnalyticsService {
       team1_score: match.match_results?.[0]?.team1_score || 0,
       team2_score: match.match_results?.[0]?.team2_score || 0,
       winning_team: match.match_results?.[0]?.winning_team || null,
-      total_goals: match.match_analytics?.[0]?.total_kills || 0,
+      total_goals: 0, // Could be calculated from player_analytics.kills if needed
       total_assists: 0,
       total_saves: 0,
       avg_elo: 0,
@@ -323,16 +309,8 @@ export class AnalyticsService {
   }
 
   async storeMatchAnalytics(analytics: Omit<MatchAnalytics, "id" | "created_at" | "updated_at">): Promise<boolean> {
-    const { error } = await this.supabase.from("match_analytics").upsert(analytics, {
-      onConflict: "match_id",
-    })
-
-    if (error) {
-      console.error("Error storing match analytics:", error)
-      return false
-    }
-
-    return true
+    console.log("[v0] match_analytics table doesn't exist, cannot store analytics for match:", analytics.match_id)
+    return false
   }
 
   async getEloHistory(userId: string, limit = 50): Promise<any[]> {
@@ -703,31 +681,8 @@ export class AnalyticsService {
   }
 
   async getAllCSVData(): Promise<any[]> {
-    const { data, error } = await this.supabase
-      .from("match_analytics")
-      .select("match_id, csv_data")
-      .not("csv_data", "is", null)
-      .neq("csv_data", "")
-
-    if (error) {
-      console.error("Error fetching CSV data:", error)
-      return []
-    }
-
-    const allCSVData = []
-    for (const match of data || []) {
-      if (match.csv_data) {
-        const parsedData = this.parseCSVData(match.csv_data)
-        allCSVData.push(
-          ...parsedData.map((player) => ({
-            ...player,
-            match_id: match.match_id,
-          })),
-        )
-      }
-    }
-
-    return allCSVData
+    console.log("[v0] match_analytics table doesn't exist, cannot fetch CSV data")
+    return []
   }
 
   async getStackedCSVStats(): Promise<CSVPlayerStats[]> {
