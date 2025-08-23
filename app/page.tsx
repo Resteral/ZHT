@@ -109,7 +109,7 @@ interface Tournament {
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [liveGames, setLiveGames] = useState<LiveGame[]>([])
-  const [openTournaments, setOpenTournaments] = useState<Tournament[]>([])
+  const [openTournaments, setOpenTournaments] = useState<any[]>([])
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([])
   const [activeELOPlayers, setActiveELOPlayers] = useState<ActiveELOPlayer[]>([])
   const [liveScores, setLiveScores] = useState<LiveScore[]>([])
@@ -206,7 +206,28 @@ export default function Dashboard() {
         console.log("[v0] Loaded match results:", matchResultsData?.length || 0)
       }
 
+      console.log("[v0] Fetching open tournaments...")
       const { data: tournamentsData, error: tournamentsError } = await supabase
+        .from("tournaments")
+        .select(`
+          *,
+          tournament_participants(count)
+        `)
+        .in("status", ["registration", "team_building", "active"])
+        .order("created_at", { ascending: false })
+
+      if (tournamentsError) {
+        console.error("[v0] Error fetching tournaments:", tournamentsError)
+      } else {
+        const formattedTournaments = (tournamentsData || []).map((tournament: any) => ({
+          ...tournament,
+          current_participants: tournament.tournament_participants?.[0]?.count || 0,
+        }))
+        console.log("[v0] Loaded tournaments:", formattedTournaments.length)
+        setOpenTournaments(formattedTournaments)
+      }
+
+      const { data: tournamentsDataOld, error: tournamentsErrorOld } = await supabase
         .from("tournaments")
         .select(`
           id,
@@ -225,12 +246,12 @@ export default function Dashboard() {
         .order("created_at", { ascending: false })
         .limit(6)
 
-      if (tournamentsError) {
-        console.log("[v0] Error loading tournaments:", tournamentsError)
+      if (tournamentsErrorOld) {
+        console.log("[v0] Error loading tournaments:", tournamentsErrorOld)
       } else {
-        console.log("[v0] Loaded tournaments:", tournamentsData?.length || 0)
+        console.log("[v0] Loaded tournaments:", tournamentsDataOld?.length || 0)
 
-        const formattedTournaments: Tournament[] = (tournamentsData || []).map((tournament: any) => ({
+        const formattedTournaments: Tournament[] = (tournamentsDataOld || []).map((tournament: any) => ({
           id: tournament.id,
           name: tournament.name || "Tournament",
           description: tournament.description || "Competitive tournament",
@@ -244,7 +265,7 @@ export default function Dashboard() {
           created_at: tournament.created_at,
         }))
 
-        setOpenTournaments(formattedTournaments)
+        //setOpenTournaments(formattedTournaments)
       }
 
       const formattedGames: LiveGame[] = (matchesData || [])
@@ -379,11 +400,277 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    loadRealTimeData()
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        console.log("[v0] Loading real-time data...")
 
-    const interval = setInterval(loadRealTimeData, 120000)
+        const supabase = createClient()
 
-    return () => clearInterval(interval)
+        const { data: matchesData, error: matchesError } = await supabase
+          .from("matches")
+          .select(`
+            id,
+            name,
+            match_type,
+            status,
+            created_at,
+            max_participants,
+            description,
+            match_participants!inner(
+              users!inner(id, username, elo_rating)
+            )
+          `)
+          .in("status", ["waiting", "active", "drafting"])
+          .order("created_at", { ascending: false })
+          .limit(10)
+
+        if (matchesError) {
+          console.error("[v0] Error loading matches:", matchesError)
+        } else {
+          console.log("[v0] Loaded matches:", matchesData?.length || 0)
+        }
+
+        const { data: players, error: playersError } = await supabase
+          .from("users")
+          .select("id, username, elo_rating")
+          .order("elo_rating", { ascending: false })
+          .limit(20)
+
+        if (playersError) {
+          console.error("[v0] Error loading players:", playersError)
+        } else {
+          console.log("[v0] Loaded players:", players?.length || 0)
+        }
+
+        const { data: completedMatchesData, error: completedError } = await supabase
+          .from("matches")
+          .select(`
+            id,
+            name,
+            status,
+            created_at
+          `)
+          .eq("status", "completed")
+          .order("created_at", { ascending: false })
+          .limit(5)
+
+        if (completedError) {
+          console.error("[v0] Error loading completed matches:", completedError)
+        } else {
+          console.log("[v0] Loaded completed matches:", completedMatchesData?.length || 0)
+        }
+
+        const { data: matchResultsData, error: resultsError } = await supabase
+          .from("match_results")
+          .select(`
+            match_id,
+            team1_score,
+            team2_score,
+            winning_team,
+            validated_at
+          `)
+          .order("validated_at", { ascending: false })
+          .limit(10)
+
+        if (resultsError) {
+          console.error("[v0] Error loading match results:", resultsError)
+        } else {
+          console.log("[v0] Loaded match results:", matchResultsData?.length || 0)
+        }
+
+        console.log("[v0] Fetching open tournaments...")
+        const { data: tournamentsData, error: tournamentsError } = await supabase
+          .from("tournaments")
+          .select(`
+          *,
+          tournament_participants(count)
+        `)
+          .in("status", ["registration", "team_building", "active"])
+          .order("created_at", { ascending: false })
+
+        if (tournamentsError) {
+          console.error("[v0] Error fetching tournaments:", tournamentsError)
+        } else {
+          const formattedTournaments = (tournamentsData || []).map((tournament: any) => ({
+            ...tournament,
+            current_participants: tournament.tournament_participants?.[0]?.count || 0,
+          }))
+          console.log("[v0] Loaded tournaments:", formattedTournaments.length)
+          setOpenTournaments(formattedTournaments)
+        }
+
+        const formattedGames: LiveGame[] = (matchesData || [])
+          .map((match: any) => {
+            const participants = match.match_participants || []
+            const players = participants.map((p: any) => p.users).filter(Boolean)
+
+            let gameState: "lobby" | "drafting" | "scoring" = "lobby"
+            const isCompleted = false
+
+            if (match.description) {
+              try {
+                const description = JSON.parse(match.description)
+                if (description.draft_state?.status === "completed") {
+                  gameState = "scoring"
+                } else if (description.draft_state?.status === "in_progress") {
+                  gameState = "drafting"
+                }
+              } catch (e) {
+                // Ignore JSON parse errors
+              }
+            }
+
+            // Skip completed matches
+            if (match.status === "completed") {
+              return null
+            }
+
+            // Determine game state based on status and participants
+            if (match.status === "drafting" && participants.length === match.max_participants) {
+              gameState = "drafting"
+            } else if (match.status === "scoring") {
+              gameState = "scoring"
+            }
+
+            return {
+              id: match.id,
+              name: match.name,
+              match_type: match.match_type,
+              status: match.status,
+              participants: participants.length,
+              max_participants: match.max_participants || 8,
+              created_at: match.created_at,
+              description: match.description,
+              game_state: gameState,
+              players: players.slice(0, 8).map((player: any) => ({
+                id: player.id,
+                username: player.username || player.account_name || "Unknown",
+                elo_rating: player.elo_rating || 1200,
+              })),
+            }
+          })
+          .filter(Boolean) as LiveGame[]
+
+        console.log("[v0] Formatted games:", formattedGames)
+        setLiveGames(formattedGames)
+
+        const activePlayersSet = new Set()
+        const activePlayersData: ActiveELOPlayer[] = []
+
+        formattedGames.forEach((game) => {
+          game.players.forEach((player) => {
+            if (!activePlayersSet.has(player.id)) {
+              activePlayersSet.add(player.id)
+              activePlayersData.push({
+                id: player.id,
+                username: player.username,
+                elo_rating: player.elo_rating,
+                status: game.status === "drafting" ? "drafting" : "in_match",
+                current_match_id: game.id,
+              })
+            }
+          })
+        })
+
+        if (players) {
+          players.forEach((player) => {
+            if (!activePlayersSet.has(player.id)) {
+              activePlayersData.push({
+                id: player.id,
+                username: player.username,
+                elo_rating: player.elo_rating,
+                status: "online",
+              })
+            }
+          })
+        }
+
+        activePlayersData.sort((a, b) => b.elo_rating - a.elo_rating)
+
+        const formattedTopPlayers: TopPlayer[] = (players || []).slice(0, 5).map((player: any) => ({
+          id: player.id,
+          username: player.username,
+          elo_rating: player.elo_rating,
+          recent_change: Math.floor(Math.random() * 40) - 20, // Mock recent change
+        }))
+
+        const resultsMap = new Map()
+        if (matchResultsData) {
+          matchResultsData.forEach((result: any) => {
+            resultsMap.set(result.match_id, result)
+          })
+        }
+
+        const formattedLiveScores: LiveScore[] = (completedMatchesData || []).map((match: any) => {
+          const result = resultsMap.get(match.id)
+
+          return {
+            id: match.id,
+            name: match.name,
+            status: match.status,
+            team1_score: result?.team1_score || 0,
+            team2_score: result?.team2_score || 0,
+            team1_captain: "Team 1",
+            team2_captain: "Team 2",
+            winner: result?.winning_team === 1 ? "Team 1" : result?.winning_team === 2 ? "Team 2" : "TBD",
+            created_at: match.created_at,
+          }
+        })
+
+        console.log("[v0] Formatted live scores:", formattedLiveScores)
+
+        setTopPlayers(formattedTopPlayers)
+        setActiveELOPlayers(activePlayersData.slice(0, 10))
+        setLiveScores(formattedLiveScores)
+        setCompletedMatches(completedMatchesData || [])
+      } catch (error) {
+        console.error("[v0] Error fetching data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+
+    const supabase = createClient()
+
+    const matchSubscription = supabase
+      .channel("matches")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "matches",
+        },
+        () => {
+          console.log("[v0] Match data changed, refetching...")
+          fetchData()
+        },
+      )
+      .subscribe()
+
+    const tournamentSubscription = supabase
+      .channel("tournaments")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tournaments",
+        },
+        () => {
+          console.log("[v0] Tournament data changed, refetching...")
+          fetchData()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      matchSubscription.unsubscribe()
+      tournamentSubscription.unsubscribe()
+    }
   }, [])
 
   return (
