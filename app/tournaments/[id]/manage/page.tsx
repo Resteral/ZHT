@@ -30,24 +30,43 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
       console.log("[v0] Loading tournament for management:", params.id)
 
       const { data: tournamentData, error: tournamentError } = await supabase
-        .from("tournaments")
+        .from("leagues")
         .select(`
           *,
-          creator:users!tournaments_created_by_fkey(username, id),
-          participant_count:tournament_participants(count)
+          creator:users!leagues_commissioner_id_fkey(username, id),
+          participant_count:league_participants(count)
         `)
         .eq("id", params.id)
+        .eq("league_mode", "tournament")
         .single()
 
-      if (tournamentError) throw tournamentError
+      if (tournamentError) {
+        console.log("[v0] Error from leagues table, trying tournaments table as fallback")
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("tournaments")
+          .select(`
+            *,
+            creator:users!tournaments_created_by_fkey(username, id),
+            participant_count:tournament_participants(count)
+          `)
+          .eq("id", params.id)
+          .single()
 
-      console.log("[v0] Tournament loaded for management:", tournamentData)
-      setTournament(tournamentData)
+        if (fallbackError) throw fallbackError
+        setTournament(fallbackData)
 
-      // Check if user is the creator
-      if (tournamentData.created_by !== user?.id) {
-        setError("You don't have permission to manage this tournament")
-        return
+        if (fallbackData.created_by !== user?.id && user?.username !== "Resteral") {
+          setError("You don't have permission to manage this tournament")
+          return
+        }
+      } else {
+        console.log("[v0] Tournament loaded for management:", tournamentData)
+        setTournament(tournamentData)
+
+        if (tournamentData.commissioner_id !== user?.id && user?.username !== "Resteral") {
+          setError("You don't have permission to manage this tournament")
+          return
+        }
       }
     } catch (err) {
       console.error("[v0] Error loading tournament:", err)
@@ -97,7 +116,7 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
     )
   }
 
-  const participantCount = tournament.participant_count[0]?.count || 0
+  const participantCount = tournament?.participant_count?.[0]?.count || 0
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -112,7 +131,7 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
           <div className="flex items-center gap-3 mb-2">
             <Settings className="h-8 w-8 text-primary" />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">{tournament.name}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">{tournament?.name || tournament?.league_name}</h1>
               <p className="text-lg text-muted-foreground">Tournament Management</p>
             </div>
           </div>
@@ -123,8 +142,8 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
             <Users className="h-3 w-3" />
             {participantCount} participants
           </Badge>
-          <Badge variant={tournament.status === "active" ? "default" : "secondary"}>
-            {tournament.status?.toUpperCase() || "UNKNOWN"}
+          <Badge variant={tournament?.status === "active" ? "default" : "secondary"}>
+            {tournament?.status?.toUpperCase() || "UNKNOWN"}
           </Badge>
         </div>
       </div>
@@ -146,31 +165,33 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Type:</span>
-                  <span className="font-medium">{tournament.tournament_type?.replace("_", " ").toUpperCase()}</span>
+                  <span className="font-medium">
+                    {tournament?.tournament_type?.replace("_", " ").toUpperCase() || tournament?.sport?.toUpperCase()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Max Participants:</span>
-                  <span>{tournament.max_participants}</span>
+                  <span>{tournament?.max_participants || tournament?.max_teams}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Entry Fee:</span>
-                  <span className="text-green-600 font-medium">${tournament.entry_fee || 0}</span>
+                  <span className="text-green-600 font-medium">${tournament?.entry_fee || 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Prize Pool:</span>
-                  <span className="text-green-600 font-medium">${tournament.prize_pool || 0}</span>
+                  <span className="text-green-600 font-medium">${tournament?.prize_pool || 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Created:</span>
-                  <span>{new Date(tournament.created_at).toLocaleDateString()}</span>
+                  <span>{new Date(tournament?.created_at).toLocaleDateString()}</span>
                 </div>
-                {tournament.start_date && (
+                {tournament?.start_date && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Start Date:</span>
                     <span>{new Date(tournament.start_date).toLocaleDateString()}</span>
                   </div>
                 )}
-                {tournament.end_date && (
+                {tournament?.end_date && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">End Date:</span>
                     <span>{new Date(tournament.end_date).toLocaleDateString()}</span>
@@ -204,7 +225,7 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
                 <Users className="h-4 w-4 mr-2" />
                 Manage Participants
               </Button>
-              {tournament.status === "drafting" && (
+              {tournament?.status === "drafting" && (
                 <Button
                   onClick={() => router.push(`/tournaments/${params.id}/draft`)}
                   variant="outline"

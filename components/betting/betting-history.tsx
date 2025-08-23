@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, Clock, TrendingUp } from "lucide-react"
+import { CheckCircle, XCircle, Clock, TrendingUp, Trophy } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 interface BettingHistoryItem {
@@ -18,11 +18,21 @@ interface BettingHistoryItem {
   status: string
   created_at: string
   settled_at?: string
+  isELODraft?: boolean
+  matchName?: string
+  matchType?: string
 }
 
 export function BettingHistory() {
   const [bettingHistory, setBettingHistory] = useState<BettingHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [showELODraftOnly, setShowELODraftOnly] = useState(false)
+  const [eloDraftStats, setEloDraftStats] = useState({
+    totalELOBets: 0,
+    eloWinRate: 0,
+    avgELOStake: 0,
+    bestELOWin: 0,
+  })
   const [stats, setStats] = useState({
     totalBets: 0,
     winRate: 0,
@@ -33,7 +43,7 @@ export function BettingHistory() {
 
   useEffect(() => {
     loadBettingHistory()
-  }, [])
+  }, [showELODraftOnly])
 
   const loadBettingHistory = async () => {
     try {
@@ -47,12 +57,19 @@ export function BettingHistory() {
           betting_markets (
             id,
             game_id,
-            market_type
+            market_type,
+            description,
+            matches (
+              id,
+              name,
+              match_type,
+              status
+            )
           )
         `)
         .eq("user_id", user.user.id)
         .order("placed_at", { ascending: false })
-        .limit(20)
+        .limit(50)
 
       if (error) throw error
 
@@ -67,9 +84,34 @@ export function BettingHistory() {
         status: bet.status || "pending",
         created_at: bet.placed_at || bet.created_at,
         settled_at: bet.settled_at,
+        isELODraft:
+          bet.betting_markets?.matches?.match_type?.includes("draft") ||
+          bet.bet_type?.includes("elo") ||
+          bet.betting_markets?.market_type?.includes("elo") ||
+          bet.betting_markets?.description?.toLowerCase().includes("elo"),
+        matchName: bet.betting_markets?.matches?.name || "Unknown Match",
+        matchType: bet.betting_markets?.matches?.match_type || "Unknown",
       }))
 
-      setBettingHistory(transformedData)
+      const filteredData = showELODraftOnly ? transformedData.filter((bet) => bet.isELODraft) : transformedData
+
+      setBettingHistory(filteredData)
+
+      const eloDraftBets = transformedData.filter((bet) => bet.isELODraft)
+      const eloDraftWon = eloDraftBets.filter((bet) => bet.status === "won")
+      const eloDraftLost = eloDraftBets.filter((bet) => bet.status === "lost")
+      const eloDraftSettled = [...eloDraftWon, ...eloDraftLost]
+
+      setEloDraftStats({
+        totalELOBets: eloDraftBets.length,
+        eloWinRate: eloDraftSettled.length > 0 ? Math.round((eloDraftWon.length / eloDraftSettled.length) * 100) : 0,
+        avgELOStake:
+          eloDraftBets.length > 0
+            ? eloDraftBets.reduce((sum, bet) => sum + bet.stake_amount, 0) / eloDraftBets.length
+            : 0,
+        bestELOWin:
+          eloDraftWon.length > 0 ? Math.max(...eloDraftWon.map((bet) => bet.potential_payout - bet.stake_amount)) : 0,
+      })
 
       const totalBets = transformedData.length
       const wonBets = transformedData.filter((bet) => bet.status === "won").length
@@ -142,7 +184,41 @@ export function BettingHistory() {
 
   return (
     <div className="space-y-6">
-      {/* Summary Stats */}
+      {eloDraftStats.totalELOBets > 0 && (
+        <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Trophy className="h-4 w-4" />
+              ELO Draft Betting Performance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">{eloDraftStats.totalELOBets}</div>
+                <div className="text-xs text-muted-foreground">ELO Draft Bets</div>
+              </div>
+              <div className="text-center">
+                <div
+                  className={`text-2xl font-bold ${eloDraftStats.eloWinRate > 50 ? "text-green-500" : "text-red-500"}`}
+                >
+                  {eloDraftStats.eloWinRate}%
+                </div>
+                <div className="text-xs text-muted-foreground">ELO Win Rate</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">${eloDraftStats.avgELOStake.toFixed(0)}</div>
+                <div className="text-xs text-muted-foreground">Avg ELO Stake</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">${eloDraftStats.bestELOWin.toFixed(2)}</div>
+                <div className="text-xs text-muted-foreground">Best ELO Win</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
@@ -185,14 +261,31 @@ export function BettingHistory() {
         </Card>
       </div>
 
-      {/* Bet History */}
-      <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Recent Bets</h3>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={showELODraftOnly ? "default" : "outline"}
+            onClick={() => setShowELODraftOnly(!showELODraftOnly)}
+            className="flex items-center gap-2"
+          >
+            <Trophy className="h-4 w-4" />
+            {showELODraftOnly ? "Show All Bets" : "ELO Draft Only"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
         {bettingHistory.length === 0 ? (
           <div className="text-center py-8">
             <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-lg font-medium mb-2">No Betting History</h3>
-            <p className="text-muted-foreground">Your betting history will appear here once you place bets</p>
+            <p className="text-muted-foreground">
+              {showELODraftOnly
+                ? "No ELO draft betting history found"
+                : "Your betting history will appear here once you place bets"}
+            </p>
           </div>
         ) : (
           bettingHistory.map((bet) => (
@@ -204,6 +297,14 @@ export function BettingHistory() {
                     <Badge variant={getStatusVariant(bet.status)}>
                       {bet.status.charAt(0).toUpperCase() + bet.status.slice(1)}
                     </Badge>
+                    {bet.isELODraft && (
+                      <Badge
+                        variant="secondary"
+                        className="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
+                      >
+                        ELO Draft
+                      </Badge>
+                    )}
                     <span className="text-sm text-muted-foreground">
                       {new Date(bet.created_at).toLocaleDateString()}
                     </span>
@@ -228,6 +329,11 @@ export function BettingHistory() {
                       {bet.bet_type.replace("_", " ").toUpperCase()} • {bet.odds > 0 ? "+" : ""}
                       {bet.odds}
                     </p>
+                    {bet.isELODraft && (
+                      <p className="text-xs text-purple-600 dark:text-purple-400">
+                        {bet.matchName} ({bet.matchType?.toUpperCase()})
+                      </p>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium">${bet.stake_amount}</p>
