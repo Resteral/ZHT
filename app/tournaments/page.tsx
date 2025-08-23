@@ -40,39 +40,46 @@ export default function TournamentsPage() {
 
   const fetchTournaments = async () => {
     try {
+      console.log("[v0] Fetching tournaments from leagues table...")
+
       const { data: tournamentData } = await supabase
-        .from("tournaments")
+        .from("leagues")
         .select(`
           *,
-          tournament_player_pool!inner(count)
+          participant_count:league_memberships(count)
         `)
-        .in("status", ["registration", "team_building", "active", "draft"])
+        .in("status", ["registration", "team_building", "active", "draft", "in_progress"])
+        .eq("league_mode", "tournament")
         .order("created_at", { ascending: false })
         .limit(10)
+
+      console.log("[v0] Raw tournament data:", tournamentData)
 
       if (tournamentData) {
         const processedTournaments = tournamentData.map((tournament) => ({
           id: tournament.id,
           name: tournament.name || "Tournament",
-          game: tournament.game || "zealot_hockey",
-          max_teams: tournament.max_participants || 16,
-          current_teams: tournament.current_participants || 0,
+          game: tournament.sport || "zealot_hockey",
+          max_teams: tournament.max_teams || 16,
+          current_teams: tournament.participant_count?.[0]?.count || 0,
           entry_fee: tournament.entry_fee || 0,
           prize_pool: tournament.prize_pool || 1000,
-          start_date: tournament.start_date || new Date().toISOString(),
+          start_date: tournament.created_at || new Date().toISOString(),
           status: tournament.status,
-          format: tournament.tournament_format || "bracket",
-          betting_enabled: tournament.betting_enabled || false,
-          total_bets: tournament.total_bets || 0,
-          player_pool_size: tournament.tournament_player_pool?.length || 0,
-          max_player_pool: tournament.max_player_pool || 64,
+          format: "bracket", // Default format
+          betting_enabled: false, // Default betting
+          total_bets: 0,
+          player_pool_size: tournament.participant_count?.[0]?.count || 0,
+          max_player_pool: tournament.max_teams || 64,
           registration_open: tournament.status === "registration" || tournament.status === "draft",
-          tournament_type: tournament.tournament_type || "team",
+          tournament_type: tournament.league_mode || "team",
         }))
+
+        console.log("[v0] Processed tournaments:", processedTournaments)
         setTournaments(processedTournaments)
       }
     } catch (error) {
-      console.error("Error fetching tournaments:", error)
+      console.error("[v0] Error fetching tournaments:", error)
     } finally {
       setLoading(false)
     }

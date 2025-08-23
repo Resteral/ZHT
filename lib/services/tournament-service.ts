@@ -131,9 +131,10 @@ export const tournamentService = {
         entry_fee: tournamentData.entry_fee || 0,
         prize_pool: tournamentData.prize_pool || 0,
         commissioner_id: userId, // Use passed userId instead of user.id
-        league_mode: tournamentData.tournament_type || "tournament",
+        league_mode: "tournament", // Always set to tournament to distinguish from regular leagues
         status: "registration",
         season: new Date().getFullYear().toString(),
+        tournament_type: tournamentData.tournament_type || "snake_draft", // Add specific tournament type
       })
       .select()
       .single()
