@@ -95,10 +95,10 @@ export default function CreateTournamentPage() {
       }
 
       console.log("[v0] Starting tournament creation for user:", user.id)
+      console.log("[v0] Tournament data:", formData)
 
       const supabase = createClient()
 
-      // Ensure user exists in database with proper error handling
       const { data: existingUser, error: userCheckError } = await supabase
         .from("users")
         .select("id, username")
@@ -123,32 +123,39 @@ export default function CreateTournamentPage() {
           .single()
 
         if (createError) {
+          console.error("[v0] Failed to create user:", createError)
           throw new Error(`Failed to create user: ${createError.message}`)
         }
         console.log("[v0] User created successfully:", newUser.username)
       } else if (userCheckError) {
+        console.error("[v0] Database error checking user:", userCheckError)
         throw new Error(`Database error: ${userCheckError.message}`)
       } else {
         console.log("[v0] User verified in database:", existingUser.username)
       }
 
+      console.log("[v0] User verification complete, proceeding with tournament creation")
+
       if (formData.tournament_type === "month_long_draft") {
+        console.log("[v0] Creating month-long draft tournament")
         const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
-        const tournament = await monthLongTournamentService.createMonthLongTournament(
-          {
-            name: formData.name,
-            description: formData.description,
-            tournament_type: formData.player_pool_settings.draft_type as
-              | "snake_draft"
-              | "linear_draft"
-              | "auction_draft",
-            duration_days: formData.duration_days,
-            max_participants: formData.max_participants,
-            entry_fee: formData.entry_fee,
-            start_date: formData.start_date,
-          },
-          user.id, // Use auth user ID directly
-        )
+
+        const tournamentData = {
+          name: formData.name,
+          description: formData.description,
+          tournament_type: formData.player_pool_settings.draft_type as "snake_draft" | "linear_draft" | "auction_draft",
+          duration_days: formData.duration_days,
+          max_participants: formData.max_participants,
+          entry_fee: formData.entry_fee,
+          start_date: formData.start_date,
+        }
+
+        console.log("[v0] Month-long tournament data:", tournamentData)
+        console.log("[v0] Using user ID:", user.id)
+
+        const tournament = await monthLongTournamentService.createMonthLongTournament(tournamentData, user.id)
+
+        console.log("[v0] Month-long tournament created:", tournament)
 
         if (formData.player_pool_settings.draft_type === "snake") {
           router.push("/tournaments/snake-draft")
@@ -158,16 +165,21 @@ export default function CreateTournamentPage() {
           router.push(`/tournaments/${tournament.id}`)
         }
       } else {
-        const tournament = await tournamentService.createTournament(formData, user.id) // Use auth user ID directly
+        console.log("[v0] Creating regular tournament")
+        console.log("[v0] Tournament service data:", formData)
+        console.log("[v0] Using user ID:", user.id)
+
+        const tournament = await tournamentService.createTournament(formData, user.id)
+        console.log("[v0] Regular tournament created:", tournament)
         router.push(`/tournaments/${tournament.id}`)
       }
 
       console.log("[v0] Tournament created successfully")
     } catch (error) {
       console.error("[v0] Error creating tournament:", error)
-      alert(
-        `Failed to create tournament: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
-      )
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      console.error("[v0] Full error details:", error)
+      alert(`Failed to create tournament: ${errorMessage}. Please try again.`)
     } finally {
       setLoading(false)
     }
