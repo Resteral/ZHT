@@ -14,6 +14,7 @@ import { userManagementService } from "@/lib/services/user-management-service"
 interface TournamentPlayerPoolDraftProps {
   tournamentId: string
   isOrganizer?: boolean
+  isHosted?: boolean
 }
 
 interface PlayerPoolSettings {
@@ -22,31 +23,26 @@ interface PlayerPoolSettings {
   max_pool_size: number
   draft_type: "auction" | "snake" | "linear"
   auction_budget?: number
+  allow_public_visibility: boolean
+  override_enabled: boolean
+  last_override_timestamp?: string
 }
 
-interface PoolPlayer {
-  id: string
-  username: string
-  elo_rating: number
-  csv_stats: {
-    goals: number
-    assists: number
-    saves: number
-    games_played: number
-  }
-  total_score: number
-  rank: number
-}
-
-export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }: TournamentPlayerPoolDraftProps) {
+export function TournamentPlayerPoolDraft({
+  tournamentId,
+  isOrganizer = false,
+  isHosted = false,
+}: TournamentPlayerPoolDraftProps) {
   const [settings, setSettings] = useState<PlayerPoolSettings>({
     max_teams: 8,
     players_per_team: 5,
     max_pool_size: 50,
     draft_type: "auction",
     auction_budget: 500,
+    allow_public_visibility: false,
+    override_enabled: false,
   })
-  const [playerPool, setPlayerPool] = useState<PoolPlayer[]>([])
+  const [playerPool, setPlayerPool] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
@@ -71,7 +67,6 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
 
   const loadPlayerPool = async () => {
     try {
-      // Load players who have signed up for the tournament player pool
       const { data: poolData } = await supabase
         .from("tournament_player_pool")
         .select(`
@@ -146,6 +141,78 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
     }
   }
 
+  const overridePlayerPool = async (newSettings: Partial<PlayerPoolSettings>) => {
+    if (!isOrganizer) return
+
+    const updatedSettings = {
+      ...settings,
+      ...newSettings,
+      override_enabled: true,
+      last_override_timestamp: new Date().toISOString(),
+    }
+    setSettings(updatedSettings)
+
+    try {
+      const { error: tournamentError } = await supabase
+        .from("tournaments")
+        .update({
+          player_pool_settings: updatedSettings,
+          status: isHosted ? "active" : "registration",
+        })
+        .eq("id", tournamentId)
+
+      if (tournamentError) throw tournamentError
+
+      if (isHosted && newSettings.allow_public_visibility) {
+        await supabase
+          .from("tournament_player_pool")
+          .update({
+            visibility: "public",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("tournament_id", tournamentId)
+      }
+
+      console.log("[v0] Player pool settings overridden successfully")
+    } catch (error) {
+      console.error("Error overriding player pool settings:", error)
+    }
+  }
+
+  const hostTournament = async () => {
+    if (!isOrganizer) return
+
+    try {
+      const { error: tournamentError } = await supabase
+        .from("tournaments")
+        .update({
+          status: "active",
+          hosted_at: new Date().toISOString(),
+        })
+        .eq("id", tournamentId)
+
+      if (tournamentError) throw tournamentError
+
+      await supabase
+        .from("tournament_player_pool")
+        .update({
+          visibility: "public",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("tournament_id", tournamentId)
+
+      const updatedSettings = {
+        ...settings,
+        allow_public_visibility: true,
+      }
+      setSettings(updatedSettings)
+
+      console.log("[v0] Tournament hosted and player pool made public")
+    } catch (error) {
+      console.error("Error hosting tournament:", error)
+    }
+  }
+
   const joinPlayerPool = async () => {
     setLoading(true)
     try {
@@ -154,7 +221,6 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
       const user = await userManagementService.getCurrentUser()
       console.log("[v0] User verified:", user.username)
 
-      // Check if user is already in the pool
       const { data: existingEntry } = await supabase
         .from("tournament_player_pool")
         .select("id")
@@ -195,16 +261,26 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
 
   return (
     <div className="space-y-6">
-      {/* Tournament Pool Overview */}
       <Card className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-6 w-6 text-purple-500" />
             Tournament Player Pool Draft
+            {isHosted && (
+              <Badge variant="secondary" className="bg-green-500/20 text-green-700">
+                Hosted
+              </Badge>
+            )}
+            {settings.allow_public_visibility && (
+              <Badge variant="outline" className="border-blue-500 text-blue-600">
+                Public Pool
+              </Badge>
+            )}
           </CardTitle>
           <CardDescription>
             {settings.max_teams} teams • {settings.players_per_team} players per team • {settings.max_pool_size} max
             pool size
+            {settings.override_enabled && <span className="text-orange-600 ml-2">• Settings Overridden</span>}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -244,15 +320,26 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
         </CardContent>
       </Card>
 
-      {/* Settings Panel (Organizer Only) */}
       {isOrganizer && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
               Tournament Pool Settings
+              {isHosted && (
+                <Button variant="outline" size="sm" onClick={() => overridePlayerPool(settings)} className="ml-auto">
+                  Override Settings
+                </Button>
+              )}
             </CardTitle>
-            <CardDescription>Configure team count and player pool settings</CardDescription>
+            <CardDescription>
+              Configure team count and player pool settings
+              {isHosted && (
+                <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded text-sm text-orange-700">
+                  ⚠️ Tournament is hosted. Changes will override current settings and affect all participants.
+                </div>
+              )}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -354,29 +441,79 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
                 </div>
               )}
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+              <div className="space-y-2">
+                <Label>Public Visibility</Label>
+                <Select
+                  value={settings.allow_public_visibility ? "public" : "private"}
+                  onValueChange={(value) => overridePlayerPool({ allow_public_visibility: value === "public" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="private">Private Pool</SelectItem>
+                    <SelectItem value="public">Public Pool</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {!isHosted && (
+                <div className="space-y-2">
+                  <Label>Tournament Status</Label>
+                  <Button onClick={hostTournament} className="w-full bg-green-600 hover:bg-green-700">
+                    Host Tournament
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {settings.override_enabled && settings.last_override_timestamp && (
+              <div className="pt-4 border-t">
+                <p className="text-xs text-muted-foreground">
+                  Last override: {new Date(settings.last_override_timestamp).toLocaleString()}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Player Pool */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Available Players */}
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-blue-500" />
                 Player Pool ({currentPoolSize})
+                {settings.allow_public_visibility && (
+                  <Badge variant="outline" className="text-xs">
+                    Open to All
+                  </Badge>
+                )}
               </CardTitle>
-              <CardDescription>Players available for draft, ranked by CSV performance</CardDescription>
+              <CardDescription>
+                Players available for draft, ranked by CSV performance
+                {isHosted && settings.allow_public_visibility && (
+                  <span className="block mt-1 text-green-600">
+                    This pool is visible to all users and open for joining
+                  </span>
+                )}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              {currentPoolSize < settings.max_pool_size && (
+              {(currentPoolSize < settings.max_pool_size || (isHosted && settings.allow_public_visibility)) && (
                 <div className="mb-4">
                   <Button onClick={joinPlayerPool} disabled={loading} className="w-full">
                     <Users className="h-4 w-4 mr-2" />
                     {loading ? "Joining..." : "Join Player Pool"}
                   </Button>
+                  {isHosted && settings.allow_public_visibility && (
+                    <p className="text-xs text-muted-foreground mt-2 text-center">
+                      Pool is publicly accessible - anyone can join
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -422,7 +559,6 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
           </Card>
         </div>
 
-        {/* Team Structure */}
         <div>
           <Card>
             <CardHeader>
