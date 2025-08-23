@@ -137,8 +137,61 @@ export default function SnakeDraftTournamentPage() {
     }
 
     try {
+      const { createClient } = await import("@/lib/supabase/client")
+      const supabase = createClient()
+
+      // First, try to find an existing snake draft championship tournament
+      const { data: existingTournament, error: findError } = await supabase
+        .from("tournaments")
+        .select("id")
+        .eq("name", "Snake Draft Championship")
+        .eq("tournament_type", "snake_draft")
+        .eq("status", "registration")
+        .single()
+
+      let tournamentId: string
+
+      if (existingTournament) {
+        tournamentId = existingTournament.id
+        console.log("[v0] Found existing snake draft tournament:", tournamentId)
+      } else {
+        // Create a new snake draft championship tournament
+        const startDate = new Date()
+        startDate.setDate(startDate.getDate() + 1) // Start tomorrow
+
+        const { data: newTournament, error: createError } = await supabase
+          .from("tournaments")
+          .insert({
+            name: "Snake Draft Championship",
+            description: "Ultimate month-long snake draft tournament with strategic picks and intense competition",
+            tournament_type: "snake_draft",
+            game: "hockey",
+            max_participants: 64,
+            entry_fee: 0,
+            prize_pool: 10000,
+            start_date: startDate.toISOString(),
+            end_date: new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString(), // 28 days later
+            created_by: user.id,
+            status: "registration",
+            team_based: false,
+            player_pool_settings: {
+              draft_type: "snake_draft",
+              duration_days: 28,
+              phases_enabled: true,
+            },
+          })
+          .select("id")
+          .single()
+
+        if (createError) throw createError
+
+        tournamentId = newTournament.id
+        console.log("[v0] Created new snake draft tournament:", tournamentId)
+      }
+
+      // Now register the user for the tournament using the proper UUID
       const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
-      await monthLongTournamentService.joinMonthLongTournament("snake_draft_championship", user.id)
+      await monthLongTournamentService.joinMonthLongTournament(tournamentId, user.id)
       setIsRegistered(true)
       console.log("[v0] User registered for snake draft tournament")
     } catch (error) {
