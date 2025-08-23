@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Users, Trophy, Star, Target, Settings } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { userManagementService } from "@/lib/services/user-management-service"
 
 interface TournamentPlayerPoolDraftProps {
   tournamentId: string
@@ -148,10 +149,23 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
   const joinPlayerPool = async () => {
     setLoading(true)
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) throw new Error("Not authenticated")
+      console.log("[v0] Attempting to join player pool for tournament:", tournamentId)
+
+      const user = await userManagementService.getCurrentUser()
+      console.log("[v0] User verified:", user.username)
+
+      // Check if user is already in the pool
+      const { data: existingEntry } = await supabase
+        .from("tournament_player_pool")
+        .select("id")
+        .eq("tournament_id", tournamentId)
+        .eq("user_id", user.id)
+        .single()
+
+      if (existingEntry) {
+        console.log("[v0] User already in player pool")
+        return
+      }
 
       const { error } = await supabase.from("tournament_player_pool").insert({
         tournament_id: tournamentId,
@@ -160,11 +174,16 @@ export function TournamentPlayerPoolDraft({ tournamentId, isOrganizer = false }:
         created_at: new Date().toISOString(),
       })
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error joining player pool:", error)
+        throw error
+      }
 
+      console.log("[v0] Successfully joined player pool")
       await loadPlayerPool()
     } catch (error) {
-      console.error("Error joining player pool:", error)
+      console.error("[v0] Error joining player pool:", error)
+      alert("Failed to join player pool. Please try again.")
     } finally {
       setLoading(false)
     }

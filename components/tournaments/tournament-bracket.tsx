@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Trophy, Play, Clock, Crown, Zap, Users } from "lucide-react"
+import { Trophy, Play, Clock, Crown, Users, Wifi, WifiOff, RefreshCw } from "lucide-react"
 import { tournamentService } from "@/lib/services/tournament-service"
+import { createBrowserClient } from "@supabase/ssr"
+import { toast } from "sonner"
 
 interface Match {
   id: string
@@ -19,6 +21,7 @@ interface Match {
   score1: number
   score2: number
   status: string
+  updated_at?: string
 }
 
 interface TournamentBracketProps {
@@ -32,28 +35,101 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
   const [score1, setScore1] = useState("")
   const [score2, setScore2] = useState("")
+  const [isConnected, setIsConnected] = useState(true)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+  const [autoRefresh, setAutoRefresh] = useState(true)
 
-  useEffect(() => {
-    loadBracket()
-  }, [tournamentId])
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
 
-  const loadBracket = async () => {
+  const loadBracket = useCallback(async () => {
     try {
       const data = await tournamentService.getBracket(tournamentId)
       setMatches(data)
+      setLastUpdate(new Date())
     } catch (error) {
       console.error("Error loading bracket:", error)
+      toast.error("Failed to load tournament bracket")
     } finally {
       setLoading(false)
     }
-  }
+  }, [tournamentId])
+
+  useEffect(() => {
+    loadBracket()
+
+    const channel = supabase
+      .channel(`tournament-bracket-${tournamentId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tournament_brackets",
+          filter: `tournament_id=eq.${tournamentId}`,
+        },
+        (payload) => {
+          console.log("[v0] Real-time bracket update:", payload)
+
+          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
+            setMatches((prev) => {
+              const updated = prev.map((match) => (match.id === payload.new.id ? { ...match, ...payload.new } : match))
+
+              if (payload.eventType === "INSERT" && !prev.find((m) => m.id === payload.new.id)) {
+                updated.push(payload.new as Match)
+              }
+
+              return updated
+            })
+
+            if (payload.eventType === "UPDATE" && payload.new.status === "completed") {
+              const match = payload.new as Match
+              toast.success(`Match completed: ${match.participant1?.team_name} vs ${match.participant2?.team_name}`)
+            }
+
+            setLastUpdate(new Date())
+          }
+        },
+      )
+      .on("presence", { event: "sync" }, () => {
+        setIsConnected(true)
+      })
+      .on("presence", { event: "leave" }, () => {
+        setIsConnected(false)
+      })
+      .subscribe((status) => {
+        console.log("[v0] Subscription status:", status)
+        setIsConnected(status === "SUBSCRIBED")
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [tournamentId, loadBracket, supabase])
+
+  useEffect(() => {
+    if (!autoRefresh) return
+
+    const interval = setInterval(() => {
+      const hasLiveMatches = matches.some((m) => m.status === "in_progress")
+      if (tournament.status === "in_progress" && hasLiveMatches) {
+        loadBracket()
+      }
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [autoRefresh, matches, tournament.status, loadBracket])
 
   const handleGenerateBracket = async () => {
     try {
       await tournamentService.generateBracket(tournamentId)
       loadBracket()
+      toast.success("Tournament bracket generated successfully!")
     } catch (error) {
       console.error("Error generating bracket:", error)
+      toast.error("Failed to generate tournament bracket")
     }
   }
 
@@ -69,64 +145,15 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
       setSelectedMatch(null)
       setScore1("")
       setScore2("")
+      toast.success("Match score updated successfully!")
     } catch (error) {
       console.error("Error updating score:", error)
+      toast.error("Failed to update match score")
     }
   }
 
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading tournament bracket...</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (matches.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center space-y-4">
-          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto">
-            <Trophy className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="font-semibold">No Bracket Generated</h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              {tournament.status === "registration"
-                ? "The tournament bracket will be automatically generated when registration closes and the tournament begins."
-                : "Generate the tournament bracket to start matches and track progress."}
-            </p>
-          </div>
-          {tournament.status !== "registration" && (
-            <Button onClick={handleGenerateBracket} size="lg">
-              <Zap className="h-4 w-4 mr-2" />
-              Generate Bracket
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-    )
-  }
-
-  // Group matches by round
-  const rounds = matches.reduce(
-    (acc, match) => {
-      if (!acc[match.round_number]) {
-        acc[match.round_number] = []
-      }
-      acc[match.round_number].push(match)
-      return acc
-    },
-    {} as Record<number, Match[]>,
-  )
-
-  const maxRound = Math.max(...Object.keys(rounds).map(Number))
-
   const getRoundName = (roundNumber: number) => {
-    const totalRounds = maxRound
+    const totalRounds = Math.max(...matches.map((match) => match.round_number))
     if (roundNumber === totalRounds) return "Final"
     if (roundNumber === totalRounds - 1) return "Semi-Final"
     if (roundNumber === totalRounds - 2) return "Quarter-Final"
@@ -160,20 +187,35 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
           <h3 className="text-xl font-bold flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
             Tournament Bracket
+            {isConnected ? (
+              <Wifi className="h-4 w-4 text-green-500" title="Live updates connected" />
+            ) : (
+              <WifiOff className="h-4 w-4 text-red-500" title="Connection lost" />
+            )}
           </h3>
           <p className="text-sm text-muted-foreground">
             {tournament.tournament_type.replace("_", " ").replace(/\b\w/g, (l: string) => l.toUpperCase())} •{" "}
             {matches.length} matches
+            <span className="ml-2 text-xs">• Updated {lastUpdate.toLocaleTimeString()}</span>
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {tournament.status === "in_progress" && (
-            <Badge variant="secondary" className="bg-green-100 text-green-800">
+            <Badge variant="secondary" className="bg-green-100 text-green-800 animate-pulse">
               <Users className="h-3 w-3 mr-1" />
               Live Tournament
             </Badge>
           )}
+          <Button
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            variant="outline"
+            size="sm"
+            className={autoRefresh ? "bg-green-50 border-green-200" : ""}
+          >
+            <RefreshCw className={`h-3 w-3 mr-1 ${autoRefresh ? "animate-spin" : ""}`} />
+            Auto-refresh
+          </Button>
           <Button onClick={loadBracket} variant="outline" size="sm">
             Refresh
           </Button>
@@ -182,13 +224,24 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
 
       <div className="overflow-x-auto bg-gradient-to-r from-background to-muted/20 rounded-lg border">
         <div className="flex gap-8 min-w-max p-6">
-          {Object.entries(rounds)
-            .sort(([a], [b]) => Number(a) - Number(b))
+          {matches
+            .reduce(
+              (acc, match) => {
+                if (!acc[match.round_number]) {
+                  acc[match.round_number] = []
+                }
+                acc[match.round_number].push(match)
+                return acc
+              },
+              {} as Record<number, Match[]>,
+            )
             .map(([roundNumber, roundMatches]) => (
               <div key={roundNumber} className="space-y-6 min-w-[300px]">
                 <div className="text-center">
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
-                    {Number(roundNumber) === maxRound && <Crown className="h-4 w-4 text-yellow-500" />}
+                    {Number(roundNumber) === Math.max(...matches.map((match) => match.round_number)) && (
+                      <Crown className="h-4 w-4 text-yellow-500" />
+                    )}
                     <h4 className="font-bold text-sm">{getRoundName(Number(roundNumber))}</h4>
                   </div>
                 </div>
@@ -197,11 +250,31 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
                   {roundMatches
                     .sort((a, b) => a.match_number - b.match_number)
                     .map((match) => (
-                      <Card key={match.id} className="relative overflow-hidden hover:shadow-lg transition-shadow">
+                      <Card
+                        key={match.id}
+                        className={`relative overflow-hidden hover:shadow-lg transition-shadow duration-300 ${
+                          match.status === "in_progress"
+                            ? "ring-2 ring-red-500 ring-opacity-50 shadow-lg shadow-red-500/20"
+                            : ""
+                        }`}
+                      >
+                        {match.status === "in_progress" && (
+                          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-orange-500 animate-pulse" />
+                        )}
+
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-sm font-medium">Match {match.match_number}</CardTitle>
-                            <Badge className={getStatusColor(getMatchStatus(match))}>{getMatchStatus(match)}</Badge>
+                            <Badge
+                              className={`${getStatusColor(getMatchStatus(match))} ${
+                                match.status === "in_progress" ? "animate-pulse" : ""
+                              }`}
+                            >
+                              {getMatchStatus(match)}
+                              {match.status === "in_progress" && (
+                                <div className="ml-1 w-2 h-2 bg-white rounded-full animate-ping" />
+                              )}
+                            </Badge>
                           </div>
                         </CardHeader>
 
@@ -222,7 +295,6 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
                             {match.status === "completed" && <span className="font-bold text-lg">{match.score1}</span>}
                           </div>
 
-                          {/* VS Divider */}
                           <div className="text-center">
                             <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded">
                               VS

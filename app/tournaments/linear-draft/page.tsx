@@ -271,10 +271,10 @@ export default function LinearDraftTournamentPage() {
                 key={phase.id}
                 className={`border-l-4 ${
                   phase.status === "active"
-                    ? "border-l-blue-500 bg-blue-50"
+                    ? "border-l-blue-600 bg-blue-100" // Darkened from blue-500/blue-50 to blue-600/blue-100
                     : phase.status === "completed"
-                      ? "border-l-gray-400 bg-gray-50"
-                      : "border-l-indigo-500 bg-indigo-50"
+                      ? "border-l-gray-500 bg-gray-100" // Darkened from gray-400/gray-50 to gray-500/gray-100
+                      : "border-l-indigo-600 bg-indigo-100" // Darkened from indigo-500/indigo-50 to indigo-600/indigo-100
                 }`}
               >
                 <CardHeader className="pb-3">

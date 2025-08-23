@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { Trophy, Users, Calendar, DollarSign, ArrowLeft, Zap, Target, Settings } from "lucide-react"
 import { tournamentService } from "@/lib/services/tournament-service"
 import { createClient } from "@/lib/supabase/client"
+import { userManagementService } from "@/lib/services/user-management-service"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
@@ -90,6 +91,15 @@ export default function CreateTournamentPage() {
     setLoading(true)
 
     try {
+      if (!user?.id) {
+        throw new Error("User not authenticated")
+      }
+
+      console.log("[v0] Starting tournament creation for user:", user.id)
+
+      const dbUser = await userManagementService.ensureUserExists(user)
+      console.log("[v0] User verified in database:", dbUser.username)
+
       if (formData.tournament_type === "month_long_draft") {
         const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
         const tournament = await monthLongTournamentService.createMonthLongTournament(
@@ -105,7 +115,7 @@ export default function CreateTournamentPage() {
             entry_fee: formData.entry_fee,
             start_date: formData.start_date,
           },
-          user?.id,
+          dbUser.id, // Use verified database user ID
         )
 
         if (formData.player_pool_settings.draft_type === "snake") {
@@ -116,11 +126,14 @@ export default function CreateTournamentPage() {
           router.push(`/tournaments/${tournament.id}`)
         }
       } else {
-        const tournament = await tournamentService.createTournament(formData, user?.id)
+        const tournament = await tournamentService.createTournament(formData, dbUser.id) // Use verified database user ID
         router.push(`/tournaments/${tournament.id}`)
       }
+
+      console.log("[v0] Tournament created successfully")
     } catch (error) {
-      console.error("Error creating tournament:", error)
+      console.error("[v0] Error creating tournament:", error)
+      alert("Failed to create tournament. Please try again.")
     } finally {
       setLoading(false)
     }

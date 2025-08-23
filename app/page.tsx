@@ -28,6 +28,7 @@ import { createClient } from "@/lib/supabase/client"
 import { isSupabaseConfigured } from "@/lib/supabase/client"
 import { formatDateEST } from "@/lib/utils/timezone"
 import { UnifiedGameCreator } from "@/components/game-creation/unified-game-creator"
+import { TournamentCreationButton } from "@/components/tournaments/tournament-creation-button"
 
 interface LiveGame {
   id: string
@@ -92,9 +93,24 @@ interface CompletedMatch {
   }
 }
 
+interface Tournament {
+  id: string
+  name: string
+  description: string
+  status: string
+  max_participants: number
+  current_participants: number
+  entry_fee: number
+  prize_pool: number
+  tournament_type: string
+  start_date: string
+  created_at: string
+}
+
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [liveGames, setLiveGames] = useState<LiveGame[]>([])
+  const [openTournaments, setOpenTournaments] = useState<Tournament[]>([])
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([])
   const [activeELOPlayers, setActiveELOPlayers] = useState<ActiveELOPlayer[]>([])
   const [liveScores, setLiveScores] = useState<LiveScore[]>([])
@@ -189,6 +205,47 @@ export default function Dashboard() {
         console.error("[v0] Error loading match results:", resultsError)
       } else {
         console.log("[v0] Loaded match results:", matchResultsData?.length || 0)
+      }
+
+      const { data: tournamentsData, error: tournamentsError } = await supabase
+        .from("tournaments")
+        .select(`
+          id,
+          name,
+          description,
+          status,
+          max_participants,
+          entry_fee,
+          prize_pool,
+          tournament_type,
+          start_date,
+          created_at,
+          tournament_participants(count)
+        `)
+        .in("status", ["registration", "team_building", "active"])
+        .order("created_at", { ascending: false })
+        .limit(6)
+
+      if (tournamentsError) {
+        console.log("[v0] Error loading tournaments:", tournamentsError)
+      } else {
+        console.log("[v0] Loaded tournaments:", tournamentsData?.length || 0)
+
+        const formattedTournaments: Tournament[] = (tournamentsData || []).map((tournament: any) => ({
+          id: tournament.id,
+          name: tournament.name || "Tournament",
+          description: tournament.description || "Competitive tournament",
+          status: tournament.status,
+          max_participants: tournament.max_participants || 16,
+          current_participants: tournament.tournament_participants?.[0]?.count || 0,
+          entry_fee: tournament.entry_fee || 0,
+          prize_pool: tournament.prize_pool || 0,
+          tournament_type: tournament.tournament_type || "single_elimination",
+          start_date: tournament.start_date || tournament.created_at,
+          created_at: tournament.created_at,
+        }))
+
+        setOpenTournaments(formattedTournaments)
       }
 
       const formattedGames: LiveGame[] = (matchesData || [])
@@ -348,6 +405,12 @@ export default function Dashboard() {
           <div className="pt-4">
             <UnifiedGameCreator />
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <TournamentCreationButton tournamentType="snake_draft" className="w-full" />
+            <TournamentCreationButton tournamentType="auction" className="w-full" />
+            <TournamentCreationButton tournamentType="linear" className="w-full" />
+          </div>
         </div>
       </div>
 
@@ -379,8 +442,132 @@ export default function Dashboard() {
                   <Skeleton key={i} className="h-24 w-full" />
                 ))}
               </div>
-            ) : liveGames.length > 0 ? (
+            ) : liveGames.length > 0 || openTournaments.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-3">
+                {openTournaments.map((tournament) => {
+                  const getStatusInfo = () => {
+                    switch (tournament.status) {
+                      case "registration":
+                        return {
+                          badge: {
+                            text: "Registration Open",
+                            className: "bg-green-500/20 text-green-400 border-green-500/30",
+                          },
+                          icon: <Users className="h-3 w-3 mr-1" />,
+                          action: { text: "Join Tournament", href: `/tournaments/${tournament.id}` },
+                        }
+                      case "team_building":
+                        return {
+                          badge: {
+                            text: "Team Building",
+                            className: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                          },
+                          icon: <Trophy className="h-3 w-3 mr-1" />,
+                          action: { text: "Build Team", href: `/tournaments/${tournament.id}` },
+                        }
+                      case "active":
+                        return {
+                          badge: { text: "Tournament Live", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+                          icon: <Timer className="h-3 w-3 mr-1" />,
+                          action: { text: "View Bracket", href: `/tournaments/${tournament.id}` },
+                        }
+                      default:
+                        return {
+                          badge: {
+                            text: "Tournament",
+                            className: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+                          },
+                          icon: <Trophy className="h-3 w-3 mr-1" />,
+                          action: { text: "View Tournament", href: `/tournaments/${tournament.id}` },
+                        }
+                    }
+                  }
+
+                  const statusInfo = getStatusInfo()
+
+                  return (
+                    <div
+                      key={tournament.id}
+                      className="relative bg-gradient-to-b from-purple-800 to-purple-900 rounded-lg overflow-hidden border-2 border-purple-600"
+                      style={{
+                        backgroundImage: `
+                          linear-gradient(90deg, transparent 0%, transparent 48%, #7c3aed 48%, #7c3aed 52%, transparent 52%, transparent 100%),
+                          linear-gradient(0deg, transparent 0%, transparent 48%, #7c3aed 48%, #7c3aed 52%, transparent 52%, transparent 100%),
+                          repeating-linear-gradient(45deg, transparent, transparent 8px, #6d28d9 8px, #6d28d9 10px),
+                          repeating-linear-gradient(-45deg, transparent, transparent 8px, #6d28d9 8px, #6d28d9 10px)
+                        `,
+                        backgroundSize: "20px 20px, 20px 20px, 28px 28px, 28px 28px",
+                      }}
+                    >
+                      {/* Tournament frame */}
+                      <div className="absolute inset-0 border-4 border-purple-500 rounded-lg"></div>
+                      <div className="absolute top-0 left-0 right-0 h-1 bg-purple-500"></div>
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-purple-500"></div>
+                      <div className="absolute top-0 bottom-0 left-0 w-1 bg-purple-500"></div>
+                      <div className="absolute top-0 bottom-0 right-0 w-1 bg-purple-500"></div>
+
+                      {/* Content overlay */}
+                      <div className="relative bg-black/60 backdrop-blur-sm p-4 h-full">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-sm text-white drop-shadow-lg">{tournament.name}</h4>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs bg-black/50 text-white border-white/30">
+                                {tournament.tournament_type.replace("_", " ").toUpperCase()}
+                              </Badge>
+                              <Badge variant="secondary" className={`${statusInfo.badge.className} bg-opacity-80`}>
+                                {statusInfo.icon}
+                                {statusInfo.badge.text}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span className="font-semibold">
+                              {tournament.current_participants}/{tournament.max_participants} participants
+                            </span>
+                            {tournament.entry_fee > 0 && (
+                              <span className="font-semibold text-green-400">${tournament.entry_fee} entry</span>
+                            )}
+                          </div>
+                          {tournament.prize_pool > 0 && (
+                            <div className="p-2 bg-yellow-500/20 rounded border border-yellow-500/30">
+                              <div className="text-center">
+                                <div className="text-yellow-400 font-bold text-sm">${tournament.prize_pool}</div>
+                                <div className="text-yellow-300 text-xs">Prize Pool</div>
+                              </div>
+                            </div>
+                          )}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs text-gray-300">
+                              <span>Participants</span>
+                              <span>
+                                {tournament.current_participants}/{tournament.max_participants}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-700 rounded-full h-1.5">
+                              <div
+                                className="bg-purple-500 h-1.5 rounded-full transition-all"
+                                style={{
+                                  width: `${(tournament.current_participants / tournament.max_participants) * 100}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <Link href={statusInfo.action.href}>
+                            <Button
+                              size="sm"
+                              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold border-2 border-white/30 shadow-lg"
+                            >
+                              {statusInfo.icon}
+                              {statusInfo.action.text}
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
                 {liveGames.map((game) => {
                   const getGameStateInfo = () => {
                     switch (game.game_state) {
@@ -505,13 +692,12 @@ export default function Dashboard() {
             ) : (
               <div className="text-center py-8">
                 <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No live games at the moment</p>
-                <Link href="/leagues">
-                  <Button className="mt-4 gaming-button-primary">
-                    Create New Game
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                </Link>
+                <p className="text-muted-foreground">No live games or tournaments at the moment</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <TournamentCreationButton tournamentType="snake_draft" className="w-full" />
+                  <TournamentCreationButton tournamentType="auction" className="w-full" />
+                  <TournamentCreationButton tournamentType="linear" className="w-full" />
+                </div>
               </div>
             )}
           </CardContent>

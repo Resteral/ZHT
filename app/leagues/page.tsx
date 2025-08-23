@@ -270,7 +270,7 @@ export default function LeaguesPage() {
           <Card className="bg-gradient-to-r from-green-500/10 to-teal-500/10 border-green-500/20 hover:shadow-lg transition-shadow cursor-pointer">
             <CardContent className="p-4 text-center">
               <Gavel className="h-8 w-8 text-green-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-1">Month-Long Tournaments</h3>
+              <h3 className="font-semibold mb-1">Tournaments</h3>
               <p className="text-xs text-muted-foreground">Host extended tournaments</p>
             </CardContent>
           </Card>
@@ -352,7 +352,7 @@ export default function LeaguesPage() {
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="browse">Browse Matches</TabsTrigger>
             <TabsTrigger value="solo-queue">Solo Queue</TabsTrigger>
-            <TabsTrigger value="tournaments">Month-Long Tournaments</TabsTrigger>
+            <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
             <TabsTrigger value="wager">Wager Matches</TabsTrigger>
             <TabsTrigger value="premade">Premade Teams</TabsTrigger>
           </TabsList>
@@ -700,9 +700,9 @@ export default function LeaguesPage() {
                   <Trophy className="h-6 w-6 text-purple-500" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold mb-1">Month-Long Tournaments</h3>
+                  <h3 className="font-semibold mb-1">Tournaments</h3>
                   <p className="text-sm text-muted-foreground">
-                    Host extended tournaments • Players buy team slots • Auction draft system • Compete over
+                    Host extended tournaments • Players buy team slots • Multiple draft styles • Compete over
                     weeks/months • Large prize pools
                   </p>
                 </div>
@@ -710,13 +710,96 @@ export default function LeaguesPage() {
                   <div className="text-2xl font-bold text-green-500">$100+</div>
                   <div className="text-xs text-muted-foreground">typical buy-in</div>
                 </div>
-                <Button asChild>
-                  <Link href="/leagues/tournaments/create">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Tournament
-                  </Link>
-                </Button>
               </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3 mb-6">
+              <Card className="hover:shadow-md transition-shadow border-2 border-blue-500/20 bg-blue-500/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gavel className="h-5 w-5 text-blue-500" />
+                    Auction Draft Tournament
+                  </CardTitle>
+                  <CardDescription>Players bid on team members with budget constraints</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="text-center py-2">
+                      <div className="text-lg font-bold text-blue-500">Auction Style</div>
+                      <div className="text-sm text-muted-foreground">Bidding system</div>
+                    </div>
+                    <ul className="text-sm space-y-1 text-muted-foreground">
+                      <li>• Budget-based player acquisition</li>
+                      <li>• Strategic bidding wars</li>
+                      <li>• Salary cap management</li>
+                    </ul>
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700" asChild>
+                      <Link href="/tournaments/create?type=auction">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Auction Tournament
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow border-2 border-green-500/20 bg-green-500/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Crown className="h-5 w-5 text-green-500" />
+                    Snake Draft Tournament
+                  </CardTitle>
+                  <CardDescription>Alternating pick order for balanced team building</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="text-center py-2">
+                      <div className="text-lg font-bold text-green-500">Snake Style</div>
+                      <div className="text-sm text-muted-foreground">Alternating picks</div>
+                    </div>
+                    <ul className="text-sm space-y-1 text-muted-foreground">
+                      <li>• Fair alternating draft order</li>
+                      <li>• Strategic positioning</li>
+                      <li>• Balanced team distribution</li>
+                    </ul>
+                    <Button className="w-full bg-green-600 hover:bg-green-700" asChild>
+                      <Link href="/tournaments/create?type=snake">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Snake Tournament
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow border-2 border-purple-500/20 bg-purple-500/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-purple-500" />
+                    Linear Draft Tournament
+                  </CardTitle>
+                  <CardDescription>Fixed order drafting with consistent turn sequence</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="text-center py-2">
+                      <div className="text-lg font-bold text-purple-500">Linear Style</div>
+                      <div className="text-sm text-muted-foreground">Fixed order</div>
+                    </div>
+                    <ul className="text-sm space-y-1 text-muted-foreground">
+                      <li>• Consistent draft position</li>
+                      <li>• Predictable turn order</li>
+                      <li>• Traditional draft format</li>
+                    </ul>
+                    <Button className="w-full bg-purple-600 hover:bg-purple-700" asChild>
+                      <Link href="/tournaments/create?type=linear">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Linear Tournament
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 mb-6">
@@ -735,7 +818,7 @@ export default function LeaguesPage() {
                       <div className="text-sm text-muted-foreground">Potential prize pools</div>
                     </div>
                     <Button className="w-full" asChild>
-                      <Link href="/leagues/tournaments/create">
+                      <Link href="/tournaments/create">
                         <Plus className="h-4 w-4 mr-2" />
                         Create Tournament
                       </Link>
@@ -750,7 +833,7 @@ export default function LeaguesPage() {
                     <Gavel className="h-5 w-5" />
                     Join Tournament
                   </CardTitle>
-                  <CardDescription>Buy team slots and participate in auction drafts</CardDescription>
+                  <CardDescription>Buy team slots and participate in drafts</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -759,7 +842,7 @@ export default function LeaguesPage() {
                       <div className="text-sm text-muted-foreground">Average buy-in</div>
                     </div>
                     <Button className="w-full" variant="secondary" asChild>
-                      <Link href="/leagues/tournaments">
+                      <Link href="/tournaments">
                         <Users className="h-4 w-4 mr-2" />
                         Browse Tournaments
                       </Link>
@@ -771,8 +854,10 @@ export default function LeaguesPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>How Month-Long Tournaments Work</CardTitle>
-                <CardDescription>Extended competition format with team ownership and auction drafts</CardDescription>
+                <CardTitle>How Tournaments Work</CardTitle>
+                <CardDescription>
+                  Extended competition format with team ownership and different draft styles
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -783,8 +868,8 @@ export default function LeaguesPage() {
                   </div>
                   <div className="text-center p-4 border rounded-lg">
                     <Gavel className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-                    <h4 className="font-semibold mb-1">2. Auction Draft</h4>
-                    <p className="text-sm text-muted-foreground">Bid on players to build your roster</p>
+                    <h4 className="font-semibold mb-1">2. Choose Draft Style</h4>
+                    <p className="text-sm text-muted-foreground">Auction, Snake, or Linear draft format</p>
                   </div>
                   <div className="text-center p-4 border rounded-lg">
                     <Calendar className="h-8 w-8 text-blue-500 mx-auto mb-2" />

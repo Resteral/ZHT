@@ -294,3 +294,62 @@ export function useRealtimeStream(streamId: string) {
 
   return { chatMessages, viewerCount }
 }
+
+export function useRealtimeTournamentDraft(tournamentId: string) {
+  const [draftState, setDraftState] = useState<any>(null)
+  const [picks, setPicks] = useState<any[]>([])
+  const [currentPick, setCurrentPick] = useState<number>(1)
+  const [auctionState, setAuctionState] = useState<any>(null)
+
+  useEffect(() => {
+    if (!tournamentId) return
+
+    const channel = supabase
+      .channel(`tournament_draft_${tournamentId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tournament_settings",
+          filter: `tournament_id=eq.${tournamentId}`,
+        },
+        async (payload) => {
+          if (payload.new?.setting_key === "draft_state") {
+            const state = JSON.parse(payload.new.setting_value)
+            setDraftState(state)
+            setCurrentPick(state.current_pick || 1)
+            setAuctionState(state.auction_state || null)
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "tournament_team_members",
+          filter: `team_id=in.(${tournamentId})`, // This would need proper team filtering
+        },
+        (payload) => {
+          // Handle new draft picks
+          setPicks((current) => [...current, payload.new])
+        },
+      )
+      .on("broadcast", { event: "draft_update" }, (payload) => {
+        setDraftState(payload.draft_state)
+        setCurrentPick(payload.draft_state?.current_pick || 1)
+        setAuctionState(payload.draft_state?.auction_state || null)
+      })
+      .on("broadcast", { event: "player_drafted" }, (payload) => {
+        setPicks((current) => [...current, payload.data.pick])
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [tournamentId])
+
+  return { draftState, picks, currentPick, auctionState }
+}
