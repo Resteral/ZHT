@@ -15,7 +15,6 @@ import { Switch } from "@/components/ui/switch"
 import { Trophy, Users, Calendar, DollarSign, ArrowLeft, Zap, Target, Settings } from "lucide-react"
 import { tournamentService } from "@/lib/services/tournament-service"
 import { createClient } from "@/lib/supabase/client"
-import { userManagementService } from "@/lib/services/user-management-service"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
@@ -97,8 +96,41 @@ export default function CreateTournamentPage() {
 
       console.log("[v0] Starting tournament creation for user:", user.id)
 
-      const dbUser = await userManagementService.ensureUserExists(user)
-      console.log("[v0] User verified in database:", dbUser.username)
+      const supabase = createClient()
+
+      // Ensure user exists in database with proper error handling
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from("users")
+        .select("id, username")
+        .eq("id", user.id)
+        .single()
+
+      if (userCheckError && userCheckError.code === "PGRST116") {
+        // User doesn't exist, create them
+        console.log("[v0] Creating user in database:", user.id)
+        const { data: newUser, error: createError } = await supabase
+          .from("users")
+          .insert({
+            id: user.id,
+            username: user.email?.split("@")[0] || `user_${user.id.slice(0, 8)}`,
+            email: user.email,
+            elo_rating: 1200,
+            total_games: 0,
+            wins: 0,
+            losses: 0,
+          })
+          .select()
+          .single()
+
+        if (createError) {
+          throw new Error(`Failed to create user: ${createError.message}`)
+        }
+        console.log("[v0] User created successfully:", newUser.username)
+      } else if (userCheckError) {
+        throw new Error(`Database error: ${userCheckError.message}`)
+      } else {
+        console.log("[v0] User verified in database:", existingUser.username)
+      }
 
       if (formData.tournament_type === "month_long_draft") {
         const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
@@ -115,7 +147,7 @@ export default function CreateTournamentPage() {
             entry_fee: formData.entry_fee,
             start_date: formData.start_date,
           },
-          dbUser.id, // Use verified database user ID
+          user.id, // Use auth user ID directly
         )
 
         if (formData.player_pool_settings.draft_type === "snake") {
@@ -126,14 +158,16 @@ export default function CreateTournamentPage() {
           router.push(`/tournaments/${tournament.id}`)
         }
       } else {
-        const tournament = await tournamentService.createTournament(formData, dbUser.id) // Use verified database user ID
+        const tournament = await tournamentService.createTournament(formData, user.id) // Use auth user ID directly
         router.push(`/tournaments/${tournament.id}`)
       }
 
       console.log("[v0] Tournament created successfully")
     } catch (error) {
       console.error("[v0] Error creating tournament:", error)
-      alert("Failed to create tournament. Please try again.")
+      alert(
+        `Failed to create tournament: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
+      )
     } finally {
       setLoading(false)
     }

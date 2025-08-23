@@ -412,7 +412,7 @@ export default function Dashboard() {
                   <Trophy className="h-6 w-6" />
                   <h3 className="text-lg font-bold">Snake Draft</h3>
                 </div>
-                <p className="text-purple-100 text-sm">Strategic picks in alternating order</p>
+                <p className="text-purple-100 text-sm">Create snake draft tournament</p>
               </div>
             </Link>
             <Link href="/tournaments/create?type=auction" className="w-full">
@@ -723,7 +723,7 @@ export default function Dashboard() {
                         <Trophy className="h-5 w-5" />
                         <h4 className="font-bold">Snake Draft</h4>
                       </div>
-                      <p className="text-purple-100 text-xs">Strategic picks in alternating order</p>
+                      <p className="text-purple-100 text-xs">Create snake draft tournament</p>
                     </div>
                   </Link>
                   <Link href="/tournaments/create?type=auction" className="w-full">
