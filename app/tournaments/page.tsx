@@ -139,98 +139,123 @@ export default function TournamentsPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 mb-8">
-        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 hover:shadow-lg transition-shadow">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/20 rounded-full">
-                  <Zap className="h-6 w-6 text-emerald-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-emerald-800">Snake Draft Championship</CardTitle>
-                  <CardDescription className="text-emerald-700">
-                    Month-long strategic drafting with reversing pick order
-                  </CardDescription>
-                </div>
-              </div>
-              <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-300">
-                $10K Prize Pool
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div className="text-center">
-                <div className="font-bold text-emerald-700">64</div>
-                <div className="text-emerald-600 text-xs">Max Players</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-emerald-700">30</div>
-                <div className="text-emerald-600 text-xs">Days</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-emerald-700">Free</div>
-                <div className="text-emerald-600 text-xs">Entry</div>
-              </div>
-            </div>
-            <p className="text-sm text-emerald-700">
-              Strategic captain selection with snake draft mechanics. Lower ELO captain gets first pick advantage.
+      <div className="space-y-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Tournaments</h2>
+            <p className="text-muted-foreground">
+              Join ongoing tournaments with different draft formats and prize pools
             </p>
-            <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700">
-              <Link href="/tournaments/snake-draft">
+          </div>
+          <div className="flex gap-2">
+            <Button asChild size="lg" variant="outline">
+              <Link href="/tournaments/create?type=snake_draft">
                 <Zap className="h-4 w-4 mr-2" />
-                Join Snake Draft Championship
+                Create Snake Tournament
               </Link>
             </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 hover:shadow-lg transition-shadow">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/20 rounded-full">
-                  <BarChart3 className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-blue-800">Linear Draft Masters</CardTitle>
-                  <CardDescription className="text-blue-700">
-                    Month-long tournament with consistent pick order strategy
-                  </CardDescription>
-                </div>
-              </div>
-              <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
-                $8K Prize Pool
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div className="text-center">
-                <div className="font-bold text-blue-700">48</div>
-                <div className="text-blue-600 text-xs">Max Players</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-blue-700">30</div>
-                <div className="text-blue-600 text-xs">Days</div>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-blue-700">Free</div>
-                <div className="text-blue-600 text-xs">Entry</div>
-              </div>
-            </div>
-            <p className="text-sm text-blue-700">
-              Master consistent draft positioning. Same pick order every round - strategy and skill determine success.
-            </p>
-            <Button asChild className="w-full bg-blue-600 hover:bg-blue-700">
-              <Link href="/tournaments/linear-draft">
+            <Button asChild size="lg" variant="outline">
+              <Link href="/tournaments/create?type=linear_draft">
                 <BarChart3 className="h-4 w-4 mr-2" />
-                Join Linear Draft Masters
+                Create Linear Tournament
               </Link>
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-500/20 rounded-full">
+                    <Zap className="h-6 w-6 text-emerald-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-emerald-800">Snake Draft Tournament</CardTitle>
+                    <CardDescription className="text-emerald-700">
+                      Strategic drafting with reversing pick order
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-300">
+                  $10K Prize Pool
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="text-center">
+                  <div className="font-bold text-emerald-700">64</div>
+                  <div className="text-emerald-600 text-xs">Max Players</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-emerald-700">30</div>
+                  <div className="text-emerald-600 text-xs">Days</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-emerald-700">Free</div>
+                  <div className="text-emerald-600 text-xs">Entry</div>
+                </div>
+              </div>
+              <p className="text-sm text-emerald-700">
+                Strategic captain selection with snake draft mechanics. Lower ELO captain gets first pick advantage.
+              </p>
+              <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700">
+                <Link href="/tournaments/snake-draft">
+                  <Zap className="h-4 w-4 mr-2" />
+                  Join Snake Draft Tournament
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500/20 rounded-full">
+                    <BarChart3 className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-blue-800">Linear Draft Tournament</CardTitle>
+                    <CardDescription className="text-blue-700">
+                      Consistent pick order strategy tournament
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+                  $8K Prize Pool
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="text-center">
+                  <div className="font-bold text-blue-700">48</div>
+                  <div className="text-blue-600 text-xs">Max Players</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-blue-700">30</div>
+                  <div className="text-blue-600 text-xs">Days</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-blue-700">Free</div>
+                  <div className="text-blue-600 text-xs">Entry</div>
+                </div>
+              </div>
+              <p className="text-sm text-blue-700">
+                Master consistent draft positioning. Same pick order every round - strategy and skill determine success.
+              </p>
+              <Button asChild className="w-full bg-blue-600 hover:bg-blue-700">
+                <Link href="/tournaments/linear-draft">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Join Linear Draft Tournament
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Tabs defaultValue="team-tournaments" className="space-y-6">
