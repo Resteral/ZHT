@@ -1,28 +1,42 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Users, Calendar, Trophy, DollarSign, Swords, Crown, Play, TrendingUp, Gavel, Zap } from "lucide-react"
+import { Trophy, DollarSign, Users, ArrowRight, Plus, Clock, Medal, Gamepad2 } from "lucide-react"
 import Link from "next/link"
-import { UserCreatedTeams } from "@/components/leagues/user-created-teams"
+import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/lib/auth-context"
 import { UnifiedDraftSelector } from "@/components/draft/unified-draft-selector"
 import { SoloQueuePool } from "@/components/leagues/solo-queue-pool"
-import { createClient } from "@/lib/supabase/client"
-import { useAuth } from "@/lib/auth-context" // Fixed import to use existing useAuth instead of non-existent useUser
+import { EloTeamManager } from "@/components/leagues/elo-team-manager"
+import { PlayerBiddingSystem } from "@/components/leagues/player-bidding-system"
+import { Leaderboards } from "@/components/leagues/leaderboards"
+import { Progress } from "@/components/ui/progress"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Calendar, Crown, Target, Star, BarChart3, TrendingUp } from "lucide-react"
+import { useRouter } from "next/navigation"
 
-interface League {
+interface Tournament {
   id: string
   name: string
-  description: string
+  game: string
   max_teams: number
   current_teams: number
-  team_price: number
+  entry_fee: number
   prize_pool: number
-  draft_date: string
+  start_date: string
   status: string
+  format: string
+  betting_enabled: boolean
+  total_bets: number
+  player_pool_size?: number
+  max_player_pool?: number
+  registration_open?: boolean
+  tournament_type?: string
 }
 
 interface WagerMatch {
@@ -46,51 +60,285 @@ interface CaptainDraft {
   current_pick?: number
   round?: number
   draft_start?: string
-  match_type?: string // Added to distinguish between lobbies and drafts
-  user_is_participant: boolean // Added to check user participation
+  match_type?: string
+  user_is_participant: boolean
   participant_names: string
   created_at: string
-  game_number?: number // Added to include game number
+  game_number?: number
+}
+
+interface EloLeague {
+  id: string
+  name: string
+  season: string
+  status: string
+  max_participants: number
+  current_participants: number
+  player_pool_size: number
+  prize_pool: number
+  entry_fee: number
+  start_date: string
+  end_date: string
+  registration_open: boolean
+  current_month: string
+  elo_cutoff_high: number
+  elo_cutoff_low: number
+}
+
+interface LeaguePlayer {
+  id: string
+  username: string
+  elo_rating: number
+  monthly_rank: number
+  season_points: number
+  is_captain: boolean
+  captain_type?: "high_elo" | "low_elo"
+  team_id?: string
+  status: "available" | "drafted" | "captain"
+  division: "premier" | "championship" | "league_one" | "league_two"
+}
+
+interface MonthlyRanking {
+  id: string
+  username: string
+  elo_rating: number
+  monthly_points: number
+  rank: number
+  division: string
+  trend: "up" | "down" | "stable"
 }
 
 export default function LeaguesPage() {
-  const [availableLeagues, setAvailableLeagues] = useState<League[]>([])
+  const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [activeWagerMatches, setActiveWagerMatches] = useState<WagerMatch[]>([])
   const [activeCaptainDrafts, setActiveCaptainDrafts] = useState<CaptainDraft[]>([])
   const [activeElos, setActiveElos] = useState<
     Array<{ id: string; username: string; elo_rating: number; status: string }>
   >([])
+  const [eloLeagues, setEloLeagues] = useState<EloLeague[]>([])
+  const [selectedLeague, setSelectedLeague] = useState<EloLeague | null>(null)
+  const [leaguePlayers, setLeaguePlayers] = useState<LeaguePlayer[]>([])
+  const [monthlyRankings, setMonthlyRankings] = useState<MonthlyRanking[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
-  const { user } = useAuth() // Fixed to use useAuth instead of useUser
+  const { user } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     fetchData()
   }, [])
 
+  const getDivisionFromElo = (elo: number): "premier" | "championship" | "league_one" | "league_two" => {
+    if (elo >= 1800) return "premier"
+    if (elo >= 1600) return "championship"
+    if (elo >= 1400) return "league_one"
+    return "league_two"
+  }
+
+  const getDivisionColor = (division: string) => {
+    switch (division) {
+      case "premier":
+        return "bg-gradient-to-r from-yellow-400 to-orange-500 text-white"
+      case "championship":
+        return "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+      case "league_one":
+        return "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+      case "league_two":
+        return "bg-gradient-to-r from-green-500 to-teal-500 text-white"
+      default:
+        return "bg-gray-500 text-white"
+    }
+  }
+
+  const getDivisionName = (division: string) => {
+    switch (division) {
+      case "premier":
+        return "Premier Division"
+      case "championship":
+        return "Championship"
+      case "league_one":
+        return "League One"
+      case "league_two":
+        return "League Two"
+      default:
+        return "Unranked"
+    }
+  }
+
+  const loadEloLeagueData = async () => {
+    try {
+      const currentMonth = new Date().toLocaleString("default", { month: "long", year: "numeric" })
+
+      const { data: leagueData } = await supabase
+        .from("tournaments")
+        .select(`
+          *,
+          tournament_player_pool(count)
+        `)
+        .eq("tournament_type", "elo_league")
+        .in("status", ["registration", "active", "monthly_ranking"])
+        .order("created_at", { ascending: false })
+
+      if (leagueData) {
+        const processedLeagues = leagueData.map((league) => ({
+          id: league.id,
+          name: `${currentMonth} Elo League`,
+          season: `Season ${new Date().getFullYear()}`,
+          status: league.status,
+          max_participants: 128,
+          current_participants: league.current_participants || 0,
+          player_pool_size: league.tournament_player_pool?.length || 0,
+          prize_pool: league.prize_pool || 5000,
+          entry_fee: 0,
+          start_date: league.start_date,
+          end_date: league.end_date,
+          registration_open: league.status === "registration",
+          current_month: currentMonth,
+          elo_cutoff_high: 1800,
+          elo_cutoff_low: 1200,
+        }))
+        setEloLeagues(processedLeagues)
+
+        if (processedLeagues.length > 0) {
+          setSelectedLeague(processedLeagues[0])
+          await loadLeaguePlayers(processedLeagues[0].id)
+          await loadMonthlyRankings()
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error loading Elo League data:", error)
+    }
+  }
+
+  const loadLeaguePlayers = async (leagueId: string) => {
+    try {
+      const { data: poolData } = await supabase
+        .from("tournament_player_pool")
+        .select(`
+          *,
+          users(username, elo_rating)
+        `)
+        .eq("tournament_id", leagueId)
+        .order("created_at", { ascending: true })
+
+      if (poolData) {
+        const processedPlayers = poolData.map((entry: any, index: number) => {
+          const eloRating = entry.users?.elo_rating || 1200
+          return {
+            id: entry.user_id,
+            username: entry.users?.username || "Unknown",
+            elo_rating: eloRating,
+            monthly_rank: index + 1,
+            season_points: Math.floor(eloRating / 10),
+            is_captain: entry.status === "captain",
+            captain_type: entry.captain_type,
+            team_id: entry.team_id,
+            status: entry.status,
+            division: getDivisionFromElo(eloRating),
+          }
+        })
+
+        setLeaguePlayers(processedPlayers.sort((a, b) => b.elo_rating - a.elo_rating))
+      }
+    } catch (error) {
+      console.error("Error loading league players:", error)
+    }
+  }
+
+  const loadMonthlyRankings = async () => {
+    try {
+      const { data: usersData } = await supabase
+        .from("users")
+        .select("id, username, elo_rating")
+        .gte("elo_rating", 1200)
+        .order("elo_rating", { ascending: false })
+        .limit(50)
+
+      if (usersData) {
+        const rankings = usersData.map((user, index) => ({
+          id: user.id,
+          username: user.username,
+          elo_rating: user.elo_rating,
+          monthly_points: Math.floor(user.elo_rating / 10),
+          rank: index + 1,
+          division: getDivisionFromElo(user.elo_rating),
+          trend: Math.random() > 0.5 ? "up" : Math.random() > 0.5 ? "down" : ("stable" as "up" | "down" | "stable"),
+        }))
+
+        setMonthlyRankings(rankings)
+      }
+    } catch (error) {
+      console.error("Error loading monthly rankings:", error)
+    }
+  }
+
+  const joinEloLeague = async (leagueId: string) => {
+    if (!user) {
+      router.push("/auth/login")
+      return
+    }
+
+    try {
+      const { data: userData } = await supabase.from("users").select("elo_rating").eq("id", user.id).single()
+
+      if (!userData || userData.elo_rating < 1200) {
+        alert("You need at least 1200 ELO to join the Elo League. Play more matches to increase your rating!")
+        return
+      }
+
+      const poolData = {
+        tournament_id: leagueId,
+        user_id: user.id,
+        status: "available",
+        created_at: new Date().toISOString(),
+      }
+
+      const { error: poolError } = await supabase.from("tournament_player_pool").insert(poolData)
+
+      if (poolError && !poolError.message.includes("duplicate")) {
+        throw poolError
+      }
+
+      await loadLeaguePlayers(leagueId)
+      console.log("[v0] User joined Elo League successfully")
+    } catch (error) {
+      console.error("[v0] Error joining Elo League:", error)
+      alert("Failed to join Elo League. Please try again.")
+    }
+  }
+
   const fetchData = async () => {
     try {
-      const { data: leagues } = await supabase
-        .from("leagues")
-        .select("*")
-        .eq("status", "registration")
+      const { data: tournamentData } = await supabase
+        .from("tournaments")
+        .select(`
+          *,
+          tournament_player_pool!inner(count)
+        `)
+        .in("status", ["registration", "team_building", "active", "draft"])
         .order("created_at", { ascending: false })
-        .limit(6)
+        .limit(10)
 
-      if (leagues) {
-        setAvailableLeagues(
-          leagues.map((league) => ({
-            id: league.id,
-            name: league.name,
-            description: league.description || "Fantasy league competition",
-            max_teams: league.max_teams || 12,
-            current_teams: league.current_teams || 0,
-            team_price: league.entry_fee || 50,
-            prize_pool: league.prize_pool || 500,
-            draft_date: league.draft_date || new Date().toISOString(),
-            status: league.status,
-          })),
-        )
+      if (tournamentData) {
+        const processedTournaments = tournamentData.map((tournament) => ({
+          id: tournament.id,
+          name: tournament.name || "Tournament",
+          game: tournament.game || "zealot_hockey",
+          max_teams: tournament.max_participants || 16,
+          current_teams: tournament.current_participants || 0,
+          entry_fee: tournament.entry_fee || 0,
+          prize_pool: tournament.prize_pool || 1000,
+          start_date: tournament.start_date || new Date().toISOString(),
+          status: tournament.status,
+          format: tournament.tournament_format || "bracket",
+          betting_enabled: tournament.betting_enabled || false,
+          total_bets: tournament.total_bets || 0,
+          player_pool_size: tournament.tournament_player_pool?.length || 0,
+          max_player_pool: tournament.max_player_pool || 64,
+          registration_open: tournament.status === "registration" || tournament.status === "draft",
+          tournament_type: tournament.tournament_type || "team",
+        }))
+        setTournaments(processedTournaments)
       }
 
       const { data: wagerMatches } = await supabase
@@ -155,7 +403,7 @@ export default function LeaguesPage() {
             participants: participantCount,
             max_participants: match.max_participants || 8,
             team_price: 0,
-            prize_pool: participantCount * 10, // Updated to $10 per participant
+            prize_pool: participantCount * 10,
             status: match.status,
             current_pick: match.current_pick,
             round: match.current_round,
@@ -196,6 +444,8 @@ export default function LeaguesPage() {
         }))
         setActiveElos(elosWithStatus)
       }
+
+      await loadEloLeagueData()
     } catch (error) {
       console.error("Error fetching data:", error)
     } finally {
@@ -203,294 +453,189 @@ export default function LeaguesPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8 pt-24">
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <div className="h-8 bg-muted rounded w-48 animate-pulse"></div>
-            <div className="h-4 bg-muted rounded w-96 animate-pulse"></div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-4 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 bg-muted rounded animate-pulse"></div>
-            ))}
-          </div>
+  return (
+    <div className="container mx-auto py-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Leagues</h1>
+          <p className="text-muted-foreground">
+            Tournaments, ELO teams, player bidding, and competitive leagues all in one place
+          </p>
         </div>
       </div>
-    )
-  }
 
-  return (
-    <div className="container mx-auto px-4 py-8 pt-24">
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Matches</h1>
-          <p className="text-muted-foreground">Join matches, wager in 1v1 battles, and earn real money</p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-4 mb-8">
-          <Card className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20 hover:shadow-lg transition-shadow cursor-pointer">
-            <CardContent className="p-4 text-center">
-              <Trophy className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-1">Join Matches</h3>
-              <p className="text-xs text-muted-foreground">Compete for prize pools</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border-red-500/20 hover:shadow-lg transition-shadow cursor-pointer">
-            <CardContent className="p-4 text-center">
-              <Swords className="h-8 w-8 text-red-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-1">Wager Matches</h3>
-              <p className="text-xs text-muted-foreground">1v1 battles with stakes</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500/20 hover:shadow-lg transition-shadow cursor-pointer">
-            <CardContent className="p-4 text-center">
-              <Crown className="h-8 w-8 text-yellow-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-1 flex items-center gap-2">
-                ELO Draft - Snake Draft Strategy!
-                <Badge variant="secondary" className="bg-green-500/20 text-green-700 border-green-500/30">
-                  FREE
-                </Badge>
-              </h3>
-              <p className="text-xs text-muted-foreground">FREE + $10 per game</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/20 hover:shadow-lg transition-shadow cursor-pointer">
-            <CardContent className="p-4 text-center">
-              <Users className="h-8 w-8 text-purple-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-1">Premade Teams</h3>
-              <p className="text-xs text-muted-foreground">Skip the draft</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-green-500/10 to-teal-500/10 border-green-500/20 hover:shadow-lg transition-shadow cursor-pointer">
-            <CardContent className="p-4 text-center">
-              <Gavel className="h-8 w-8 text-green-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-1">Tournaments</h3>
-              <p className="text-xs text-muted-foreground">Host extended tournaments</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-blue-500/10 to-green-500/10 border-blue-500/20 hover:shadow-lg transition-shadow cursor-pointer">
-            <CardContent className="p-4 text-center">
-              <Zap className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-              <h3 className="font-semibold mb-1">Solo Queue</h3>
-              <p className="text-xs text-muted-foreground">Automatic matchmaking for instant games</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="bg-gradient-to-r from-purple-500/5 to-blue-500/5 border-purple-500/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-purple-500" />
-              Active ELOs
-            </CardTitle>
-            <CardDescription>Players currently online and in matches</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 border rounded-lg animate-pulse">
-                    <div className="w-10 h-10 bg-muted rounded-full"></div>
-                    <div className="flex-1">
-                      <div className="h-4 bg-muted rounded w-20 mb-1"></div>
-                      <div className="h-3 bg-muted rounded w-16"></div>
-                    </div>
-                    <div className="h-6 bg-muted rounded w-12"></div>
-                  </div>
-                ))}
-              </div>
-            ) : activeElos.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No active players found</p>
-              </div>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {activeElos.map((player) => (
-                  <div
-                    key={player.id}
-                    className="flex items-center gap-3 p-3 border rounded-lg hover:shadow-sm transition-shadow"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Crown className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">{player.username}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <div
-                          className={`w-2 h-2 rounded-full ${player.status === "online" ? "bg-green-500" : "bg-blue-500"}`}
-                        ></div>
-                        {player.status === "online" ? "Online" : "In Match"}
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="font-bold">
-                      {player.elo_rating}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="pt-4 border-t mt-4">
-              <Button variant="outline" size="sm" asChild className="w-full bg-transparent">
-                <Link href="/leaderboard">
-                  <Trophy className="h-4 w-4 mr-2" />
-                  View Full ELO Leaderboard
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Tabs defaultValue="browse" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="browse">Browse Matches</TabsTrigger>
-            <TabsTrigger value="solo-queue">Solo Queue</TabsTrigger>
-            <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
-            <TabsTrigger value="wager">Wager Matches</TabsTrigger>
-            <TabsTrigger value="premade">Premade Teams</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="browse" className="space-y-6">
-            <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-6 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-                  <Trophy className="h-6 w-6 text-blue-500" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-1">Start Earning Today!</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Join matches to compete for prize pools • Earn $10 per game played • $25 per tournament • Start with
-                    $25 bonus
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-green-500">$10</div>
-                  <div className="text-xs text-muted-foreground">per game played</div>
-                </div>
-                <Button asChild size="lg">
-                  <Link href="/auth/sign-up">Start Earning</Link>
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-lg p-6 mb-6">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-full bg-yellow-500/20 flex items-center justify-center">
+            <Trophy className="h-6 w-6 text-yellow-500" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold mb-1">Leagues & Tournament Hub</h3>
+            <p className="text-sm text-muted-foreground">
+              Join tournaments, create ELO teams, bid on players, compete in leagues • Earn $10 per game played • Win
+              massive prize pools • Multiple formats and durations available
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="flex items-center gap-4">
               <div>
-                <h2 className="text-2xl font-bold">Available Matches</h2>
-                <p className="text-muted-foreground">Join a match and start competing</p>
+                <div className="text-lg font-bold text-green-500">$10</div>
+                <div className="text-xs text-muted-foreground">Per Game Played</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-blue-500">3-30 Days</div>
+                <div className="text-xs text-muted-foreground">Various Durations</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-yellow-500">Prize Pools</div>
+                <div className="text-xs text-muted-foreground">Winners</div>
               </div>
             </div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-4">
+          <Button asChild>
+            <Link href="/auth/sign-up">
+              <DollarSign className="h-4 w-4 mr-2" />
+              Start with $25
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/draft/3v3">
+              <Users className="h-4 w-4 mr-2" />
+              Join Draft
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <Tabs defaultValue="lobbies" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="lobbies">Lobbies</TabsTrigger>
+          <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
+          <TabsTrigger value="elo-league">Elo League</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="lobbies" className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-6 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <Trophy className="h-6 w-6 text-blue-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold mb-1">ELO Lobbies</h3>
+                <p className="text-sm text-muted-foreground">
+                  Competitive lobbies based on ELO ratings • 1v1 to 6v6 formats • Real-time matchmaking • Skill-based
+                  progression
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-blue-500">LOBBIES</div>
+                <div className="text-xs text-muted-foreground">1v1 to 6v6</div>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Gamepad2 className="h-5 w-5" />
+                  Quick Lobby
+                </CardTitle>
+                <CardDescription>Join or create ELO-based lobbies (1v1 to 6v6)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <UnifiedDraftSelector mode="both" />
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Crown className="h-5 w-5 text-yellow-500" />
-                  Available Draft Matches
+                  <Users className="h-5 w-5" />
+                  ELO Solo Pool
                 </CardTitle>
-                <CardDescription>
-                  All available draft lobbies and active matches you can join or spectate
-                </CardDescription>
+                <CardDescription>Browse active ELO lobbies including 5v5 and 6v6 formats</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {activeCaptainDrafts.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Crown className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>No draft matches available</p>
-                      <p className="text-sm">Create a new draft using the selector below!</p>
-                    </div>
-                  ) : (
-                    activeCaptainDrafts.map((draft) => (
-                      <div
-                        key={draft.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:shadow-sm transition-shadow"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <Crown className="h-4 w-4 text-yellow-500" />
-                            <div className="font-medium">{draft.name}</div>
-                            <Badge variant="outline">{draft.format}</Badge>
-                            <Badge variant="secondary" className="bg-green-500/20 text-green-700 border-green-500/30">
-                              FREE
-                            </Badge>
-                          </div>
+                <SoloQueuePool />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="tournaments" className="space-y-6">
+          <div className="space-y-6 mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Tournaments</h2>
+                <p className="text-muted-foreground">
+                  Join ongoing tournaments with different draft formats and prize pools
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button asChild size="lg">
+                  <Link href="/tournaments/create">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Tournament Creation Menu
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-64 w-full" />
+                ))}
+              </div>
+            ) : tournaments.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-semibold mb-2">No tournaments available</h3>
+                <p className="text-sm mb-4">Check back later for new tournaments!</p>
+                <Button asChild>
+                  <Link href="/tournaments/create?type=team">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Tournament
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {tournaments.map((tournament) => (
+                  <Card key={tournament.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <span className="text-2xl">{tournament.game}</span>
+                            {tournament.name}
+                          </CardTitle>
+                          <CardDescription>{tournament.game}</CardDescription>
+                        </div>
+                        <div className="flex flex-col gap-1">
                           <Badge
                             variant={
-                              draft.status === "waiting"
+                              tournament.status === "registration"
                                 ? "secondary"
-                                : draft.status === "active" || draft.status === "in_progress"
+                                : tournament.status === "team_building"
                                   ? "default"
                                   : "outline"
                             }
                           >
-                            {draft.status === "waiting"
-                              ? "Waiting for Players"
-                              : draft.status === "active" || draft.status === "in_progress"
-                                ? "In Progress"
-                                : draft.status === "drafting"
-                                  ? "Drafting"
-                                  : draft.status}
+                            {tournament.status === "registration"
+                              ? "Open"
+                              : tournament.status === "team_building"
+                                ? "Team Building"
+                                : "Live"}
                           </Badge>
-                          {draft.participant_names && (
-                            <div className="text-xs text-muted-foreground max-w-xs truncate">
-                              Players: {draft.participant_names}
-                            </div>
-                          )}
+                          <Badge variant="outline" className="text-xs">
+                            <Users className="h-3 w-3 mr-1" />
+                            {tournament.tournament_type === "team" ? "Team" : "Player"}
+                          </Badge>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <div className="font-bold text-green-500">${draft.prize_pool}</div>
-                            <div className="text-xs text-muted-foreground">total prize</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">
-                              {draft.participants}/{draft.max_participants}
-                            </div>
-                            <div className="text-xs text-muted-foreground">players</div>
-                          </div>
-                          <Button size="sm" asChild>
-                            <Link href={`/leagues/lobby/${draft.id}`}>
-                              <Play className="h-3 w-3 mr-1" />
-                              {draft.status === "waiting"
-                                ? "Join Match"
-                                : draft.user_is_participant
-                                  ? "Rejoin"
-                                  : "Spectate"}
-                            </Link>
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {availableLeagues.length === 0 ? (
-                <div className="col-span-full text-center py-12 text-muted-foreground">
-                  <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">No league matches available</h3>
-                  <p className="text-sm mb-4">Check back later for new league matches!</p>
-                </div>
-              ) : (
-                availableLeagues.map((league) => (
-                  <Card key={league.id} className="hover:shadow-lg transition-shadow">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <CardTitle className="text-lg">{league.name}</CardTitle>
-                          <CardDescription>{league.description}</CardDescription>
-                        </div>
-                        <Badge variant={league.status === "registration" ? "secondary" : "outline"}>
-                          {league.status === "registration" ? "Open" : "Closed"}
-                        </Badge>
                       </div>
                     </CardHeader>
 
@@ -499,548 +644,460 @@ export default function LeaguesPage() {
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
                           <span>
-                            {league.current_teams}/{league.max_teams} teams
+                            {tournament.tournament_type === "snake_draft" ||
+                            tournament.tournament_type === "linear_draft"
+                              ? `${tournament.player_pool_size}/${tournament.max_player_pool} players`
+                              : `${tournament.current_teams}/${tournament.max_teams} teams`}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-muted-foreground" />
-                          <span>${league.team_price} team cost</span>
-                        </div>
-                        <div className="flex items-center gap-2">
                           <Trophy className="h-4 w-4 text-muted-foreground" />
-                          <span>${league.prize_pool} prize</span>
+                          <span>{tournament.format}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>{new Date(league.draft_date).toLocaleDateString()}</span>
+                          <DollarSign className="h-4 w-4 text-muted-foreground" />
+                          <span>${tournament.prize_pool} prize</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span>{tournament.registration_open ? "Registration Open" : "Registration Closed"}</span>
                         </div>
                       </div>
 
+                      {tournament.betting_enabled && (
+                        <div className="p-2 bg-green-500/10 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-green-600 font-medium">
+                              <DollarSign className="h-3 w-3 inline mr-1" />
+                              Betting Available
+                            </p>
+                            <span className="text-xs text-muted-foreground">${tournament.total_bets} wagered</span>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="space-y-2">
                         <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Spots filled</span>
                           <span>
-                            {league.current_teams}/{league.max_teams}
+                            {tournament.tournament_type === "snake_draft" ||
+                            tournament.tournament_type === "linear_draft"
+                              ? "Players registered"
+                              : "Teams registered"}
+                          </span>
+                          <span>
+                            {tournament.tournament_type === "snake_draft" ||
+                            tournament.tournament_type === "linear_draft"
+                              ? `${tournament.player_pool_size}/${tournament.max_player_pool}`
+                              : `${tournament.current_teams}/${tournament.max_teams}`}
                           </span>
                         </div>
                         <div className="w-full bg-muted rounded-full h-2">
                           <div
                             className="bg-primary h-2 rounded-full transition-all"
-                            style={{ width: `${(league.current_teams / league.max_teams) * 100}%` }}
+                            style={{
+                              width: `${
+                                tournament.tournament_type === "snake_draft" ||
+                                tournament.tournament_type === "linear_draft"
+                                  ? (tournament.player_pool_size! / tournament.max_player_pool!) * 100
+                                  : (tournament.current_teams / tournament.max_teams) * 100
+                              }%`,
+                            }}
                           />
                         </div>
                       </div>
 
                       <div className="flex gap-2">
-                        <Button asChild className="flex-1" disabled={league.status !== "registration"}>
-                          <Link href={`/leagues/${league.id}/signup`}>
-                            {league.status === "registration" ? "Join Match" : "View Match"}
+                        <Button asChild className="flex-1">
+                          <Link href={`/tournaments/${tournament.id}`}>
+                            {tournament.status === "registration"
+                              ? "Join Tournament"
+                              : tournament.status === "team_building"
+                                ? "Build Team"
+                                : "View Bracket"}
                           </Link>
                         </Button>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/leagues/${league.id}`}>Details</Link>
-                        </Button>
+                        {tournament.betting_enabled && (
+                          <Button asChild variant="outline" size="sm">
+                            <Link href={`/betting?tournament=${tournament.id}`}>
+                              <DollarSign className="h-3 w-3" />
+                            </Link>
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Crown className="h-5 w-5 text-yellow-500" />
-                  Open Lobbies - Join Now!
-                </CardTitle>
-                <CardDescription>
-                  Active lobbies waiting for players. Join instantly and start playing when full!
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {activeCaptainDrafts.filter(
-                    (draft) => draft.status === "waiting" && draft.participants < draft.max_participants,
-                  ).length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Crown className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>No open lobbies available</p>
-                      <p className="text-sm">Create a lobby using the draft selector!</p>
-                    </div>
-                  ) : (
-                    activeCaptainDrafts
-                      .filter((draft) => draft.status === "waiting" && draft.participants < draft.max_participants)
-                      .map((draft) => (
-                        <div
-                          key={draft.id}
-                          className="flex items-center justify-between p-4 border-2 border-green-500/20 bg-green-500/5 rounded-lg hover:shadow-sm transition-shadow"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                              <Crown className="h-4 w-4 text-yellow-500" />
-                              <div className="font-medium">{draft.name}</div>
-                              <Badge variant="outline">{draft.format}</Badge>
-                              <Badge variant="secondary" className="bg-green-500/20 text-green-700 border-green-500/30">
-                                FREE
-                              </Badge>
-                            </div>
-                            <Badge variant="secondary" className="bg-green-500/20 text-green-700">
-                              {draft.max_participants - draft.participants} spots left
-                            </Badge>
-                            {draft.participant_names && (
-                              <div className="text-xs text-muted-foreground">Current: {draft.participant_names}</div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <div className="font-bold text-green-500">$10</div>
-                              <div className="text-xs text-muted-foreground">per player</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-medium text-green-600">
-                                {draft.participants}/{draft.max_participants}
-                              </div>
-                              <div className="text-xs text-muted-foreground">players</div>
-                            </div>
-                            <Button size="sm" asChild className="bg-green-600 hover:bg-green-700">
-                              <Link href={`/leagues/lobby/${draft.id}`}>
-                                <Play className="h-3 w-3 mr-1" />
-                                Join Now
-                              </Link>
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/20 rounded-lg p-6 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                  <Crown className="h-6 w-6 text-yellow-500" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-1 flex items-center gap-2">
-                    ELO Draft - Snake Draft Strategy!
-                    <Badge variant="secondary" className="bg-green-500/20 text-green-700 border-green-500/30">
-                      FREE
-                    </Badge>
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Snake draft picks players • Strategic team building • Earn $10 per game played • No entry fees!
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-green-500">$10</div>
-                  <div className="text-xs text-muted-foreground">per game played</div>
-                </div>
+        <TabsContent value="elo-league" className="space-y-6">
+          <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-lg p-6 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <Medal className="h-6 w-6 text-emerald-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold mb-1">Elo League</h3>
+                <p className="text-sm text-muted-foreground">
+                  Monthly competitive league based on ELO rankings • Climb divisions • Compete for prizes • Prove your
+                  skill
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-emerald-500">ELO LEAGUE</div>
+                <div className="text-xs text-muted-foreground">Monthly Seasons</div>
               </div>
             </div>
+          </div>
 
-            <div className="text-center mb-8">
-              <Card className="max-w-lg mx-auto">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-center gap-2">
-                    <Crown className="h-6 w-6 text-yellow-500" />
-                    Join ELO Draft
-                  </CardTitle>
-                  <CardDescription>
-                    Choose from 1v1 to 6v6 formats. All FREE with $10 rewards per player!
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <UnifiedDraftSelector buttonText="Select Draft Format" buttonSize="lg" className="w-full" />
-                  <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="bg-green-100 text-green-700">
-                        FREE Entry
-                      </Badge>
-                      <span>No cost to join</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="bg-green-100 text-green-700">
-                        $10 Reward
-                      </Badge>
-                      <span>Per player</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
+          <Tabs defaultValue="current-season" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="current-season">Current Season</TabsTrigger>
+              <TabsTrigger value="divisions">Divisions</TabsTrigger>
+              <TabsTrigger value="rankings">Monthly Rankings</TabsTrigger>
+              <TabsTrigger value="teams">My Teams</TabsTrigger>
+              <TabsTrigger value="bidding">Player Auction</TabsTrigger>
+              <TabsTrigger value="leaderboards">Leaderboards</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="solo-queue" className="space-y-6">
-            <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-6 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-                  <Zap className="h-6 w-6 text-blue-500" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-1">Solo Queue - Automatic Matchmaking</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Join the pool and get automatically matched • No lobby creation needed • Fair ELO-based matching •
-                    Instant games when pool fills
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-blue-500">Auto</div>
-                  <div className="text-xs text-muted-foreground">matchmaking</div>
-                </div>
-              </div>
-            </div>
-            <SoloQueuePool />
-          </TabsContent>
-
-          <TabsContent value="tournaments" className="space-y-6">
-            <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-lg p-6 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-                  <Trophy className="h-6 w-6 text-purple-500" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-1">Tournaments</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Host extended tournaments • Players buy team slots • Multiple draft styles • Compete over
-                    weeks/months • Large prize pools
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-green-500">$100+</div>
-                  <div className="text-xs text-muted-foreground">typical buy-in</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3 mb-6">
-              <Card className="hover:shadow-md transition-shadow border-2 border-blue-500/20 bg-blue-500/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Gavel className="h-5 w-5 text-blue-500" />
-                    Auction Draft Tournament
-                  </CardTitle>
-                  <CardDescription>Players bid on team members with budget constraints</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="text-center py-2">
-                      <div className="text-lg font-bold text-blue-500">Auction Style</div>
-                      <div className="text-sm text-muted-foreground">Bidding system</div>
-                    </div>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
-                      <li>• Budget-based player acquisition</li>
-                      <li>• Strategic bidding wars</li>
-                      <li>• Salary cap management</li>
-                    </ul>
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700" asChild>
-                      <Link href="/tournaments/create?type=auction">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Auction Tournament
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-md transition-shadow border-2 border-green-500/20 bg-green-500/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Crown className="h-5 w-5 text-green-500" />
-                    Snake Draft Tournament
-                  </CardTitle>
-                  <CardDescription>Alternating pick order for balanced team building</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="text-center py-2">
-                      <div className="text-lg font-bold text-green-500">Snake Style</div>
-                      <div className="text-sm text-muted-foreground">Alternating picks</div>
-                    </div>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
-                      <li>• Fair alternating draft order</li>
-                      <li>• Strategic positioning</li>
-                      <li>• Balanced team distribution</li>
-                    </ul>
-                    <Button className="w-full bg-green-600 hover:bg-green-700" asChild>
-                      <Link href="/tournaments/create?type=snake">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Snake Tournament
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-md transition-shadow border-2 border-purple-500/20 bg-purple-500/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-purple-500" />
-                    Linear Draft Tournament
-                  </CardTitle>
-                  <CardDescription>Fixed order drafting with consistent turn sequence</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="text-center py-2">
-                      <div className="text-lg font-bold text-purple-500">Linear Style</div>
-                      <div className="text-sm text-muted-foreground">Fixed order</div>
-                    </div>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
-                      <li>• Consistent draft position</li>
-                      <li>• Predictable turn order</li>
-                      <li>• Traditional draft format</li>
-                    </ul>
-                    <Button className="w-full bg-purple-600 hover:bg-purple-700" asChild>
-                      <Link href="/tournaments/create?type=linear">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Linear Tournament
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 mb-6">
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Trophy className="h-5 w-5" />
-                    Host Tournament
-                  </CardTitle>
-                  <CardDescription>Create your own month-long tournament with team purchasing</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="text-center py-4">
-                      <div className="text-2xl font-bold text-purple-500">$1000+</div>
-                      <div className="text-sm text-muted-foreground">Potential prize pools</div>
-                    </div>
-                    <Button className="w-full" asChild>
-                      <Link href="/tournaments/create">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Tournament
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Gavel className="h-5 w-5" />
-                    Join Tournament
-                  </CardTitle>
-                  <CardDescription>Buy team slots and participate in drafts</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="text-center py-4">
-                      <div className="text-2xl font-bold text-green-500">$100</div>
-                      <div className="text-sm text-muted-foreground">Average buy-in</div>
-                    </div>
-                    <Button className="w-full" variant="secondary" asChild>
-                      <Link href="/tournaments">
-                        <Users className="h-4 w-4 mr-2" />
-                        Browse Tournaments
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>How Tournaments Work</CardTitle>
-                <CardDescription>
-                  Extended competition format with team ownership and different draft styles
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <div className="text-center p-4 border rounded-lg">
-                    <DollarSign className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                    <h4 className="font-semibold mb-1">1. Buy Team</h4>
-                    <p className="text-sm text-muted-foreground">Purchase a team slot with buy-in fee</p>
-                  </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <Gavel className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-                    <h4 className="font-semibold mb-1">2. Choose Draft Style</h4>
-                    <p className="text-sm text-muted-foreground">Auction, Snake, or Linear draft format</p>
-                  </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <Calendar className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-                    <h4 className="font-semibold mb-1">3. Compete</h4>
-                    <p className="text-sm text-muted-foreground">Play matches over weeks/months</p>
-                  </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <Trophy className="h-8 w-8 text-purple-500 mx-auto mb-2" />
-                    <h4 className="font-semibold mb-1">4. Win Prizes</h4>
-                    <p className="text-sm text-muted-foreground">Top performers share prize pool</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="wager" className="space-y-6">
-            <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20 rounded-lg p-6 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-red-500/20 flex items-center justify-center">
-                  <Swords className="h-6 w-6 text-red-500" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-1">Wager Matches - High Stakes 1v1!</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Challenge players directly • Winner takes 75% of pot • Quick matches • Instant rewards • Test your
-                    skills
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-green-500">75%</div>
-                  <div className="text-xs text-muted-foreground">winner takes pot</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 mb-6">
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Plus className="h-5 w-5" />
-                    Join Wager Match
-                  </CardTitle>
-                  <CardDescription>Find and join existing wager matches</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium">Wager Amount</label>
-                      <div className="flex gap-2 mt-1">
-                        <Button variant="outline" size="sm">
-                          $25
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          $50
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          $100
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          Custom
-                        </Button>
-                      </div>
-                    </div>
-                    <Button className="w-full bg-transparent" variant="outline">
-                      <Swords className="h-4 w-4 mr-2" />
-                      Browse Wager Matches
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Trophy className="h-5 w-5" />
-                    Quick Wager
-                  </CardTitle>
-                  <CardDescription>Join the next available wager match automatically</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="text-center py-4">
-                      <div className="text-2xl font-bold text-green-500">$5</div>
-                      <div className="text-sm text-muted-foreground">Average wager size</div>
-                    </div>
-                    <Button className="w-full" variant="secondary">
-                      <Users className="h-4 w-4 mr-2" />
-                      Find Opponent
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Wager Matches</CardTitle>
-                <CardDescription>Join open wager matches or watch ongoing battles</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {activeWagerMatches.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Swords className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>No active wager matches</p>
-                      <p className="text-sm">Create the first wager match!</p>
-                    </div>
-                  ) : (
-                    activeWagerMatches.map((match) => (
-                      <div key={match.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium">{match.player1}</div>
-                            <span className="text-muted-foreground">vs</span>
-                            <div className="font-medium">{match.player2 || "Open Slot"}</div>
-                          </div>
-                          <Badge
-                            variant={
-                              match.status === "open"
-                                ? "secondary"
-                                : match.status === "in_progress"
-                                  ? "default"
-                                  : "outline"
-                            }
-                          >
-                            {match.status === "open" ? "Open" : match.status === "in_progress" ? "Live" : "Waiting"}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <div className="font-bold text-green-500">${match.pot}</div>
-                            <div className="text-xs text-muted-foreground">wager</div>
-                          </div>
-                          <Button size="sm" variant={match.status === "open" ? "default" : "outline"}>
-                            {match.status === "open" ? "Join Wager" : match.status === "in_progress" ? "Watch" : "View"}
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="premade" className="space-y-6">
-            <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-6 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-purple-500" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-1">Your Teams</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Compete with teams you've created. Rosters are filled through invitations only - no open
-                    registration.
-                  </p>
-                </div>
-                <Button asChild variant="outline">
-                  <Link href="/settings?tab=teams">
+            <TabsContent value="current-season" className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <Medal className="h-6 w-6 text-yellow-600" />
+                  Current Season
+                </h2>
+                <Button asChild>
+                  <Link href="/tournaments/create?type=elo_league">
                     <Plus className="h-4 w-4 mr-2" />
-                    Manage Teams
+                    Create New Season
                   </Link>
                 </Button>
               </div>
-            </div>
-            <UserCreatedTeams />
-          </TabsContent>
-        </Tabs>
-      </div>
+
+              {eloLeagues.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Medal className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>No active Elo League season</p>
+                      <p className="text-sm">New seasons start monthly</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-6">
+                  {eloLeagues.map((league) => (
+                    <Card
+                      key={league.id}
+                      className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 hover:shadow-lg transition-shadow"
+                    >
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-yellow-500/20 rounded-full">
+                              <Medal className="h-6 w-6 text-yellow-600" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-lg">{league.name}</CardTitle>
+                              <p className="text-sm text-muted-foreground">{league.season}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <Badge
+                              variant={league.registration_open ? "secondary" : "outline"}
+                              className={league.registration_open ? "bg-green-100 text-green-700" : ""}
+                            >
+                              {league.registration_open ? "Registration Open" : "Season Active"}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              ${league.prize_pool} Prize Pool
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span>
+                              {league.player_pool_size}/{league.max_participants} players
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                            <span>Min {league.elo_cutoff_low} ELO</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span>{league.current_month}</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Season progress</span>
+                            <span>
+                              {league.player_pool_size}/{league.max_participants}
+                            </span>
+                          </div>
+                          <Progress value={(league.player_pool_size / league.max_participants) * 100} className="h-2" />
+                        </div>
+
+                        <div className="flex gap-2">
+                          {league.registration_open && (
+                            <Button
+                              onClick={() => joinEloLeague(league.id)}
+                              className="flex-1 bg-yellow-600 hover:bg-yellow-700"
+                            >
+                              Join Season
+                            </Button>
+                          )}
+                          <Button variant="outline" onClick={() => router.push(`/tournaments/${league.id}`)}>
+                            View Season
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="divisions" className="space-y-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Trophy className="h-6 w-6 text-yellow-600" />
+                League Divisions
+              </h2>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Premier Division */}
+                <Card className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="p-2 bg-yellow-500/20 rounded-full">
+                        <Crown className="h-5 w-5 text-yellow-600" />
+                      </div>
+                      Premier Division ({leaguePlayers.filter((p) => p.division === "premier").length})
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">1800+ ELO • Elite Competition</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {leaguePlayers
+                      .filter((p) => p.division === "premier")
+                      .slice(0, 5)
+                      .map((player, index) => (
+                        <div key={player.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                          <div className="flex items-center justify-center w-8 h-8 bg-yellow-100 rounded-full text-yellow-700 font-bold text-sm">
+                            {index + 1}
+                          </div>
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-yellow-100 text-yellow-700">
+                              {player.username.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-medium">{player.username}</p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Star className="h-3 w-3" />
+                              <span>{player.elo_rating} ELO</span>
+                              <span>•</span>
+                              <span>{player.season_points} pts</span>
+                            </div>
+                          </div>
+                          <Crown className="h-5 w-5 text-yellow-500" />
+                        </div>
+                      ))}
+                    {leaguePlayers.filter((p) => p.division === "premier").length === 0 && (
+                      <div className="text-center py-6 text-muted-foreground">
+                        <Crown className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No players in Premier Division</p>
+                        <p className="text-sm">Reach 1800+ ELO to qualify</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Championship Division */}
+                <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="p-2 bg-purple-500/20 rounded-full">
+                        <Medal className="h-5 w-5 text-purple-600" />
+                      </div>
+                      Championship ({leaguePlayers.filter((p) => p.division === "championship").length})
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">1600-1799 ELO • High Competition</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {leaguePlayers
+                      .filter((p) => p.division === "championship")
+                      .slice(0, 5)
+                      .map((player, index) => (
+                        <div key={player.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                          <div className="flex items-center justify-center w-8 h-8 bg-purple-100 rounded-full text-purple-700 font-bold text-sm">
+                            {index + 1}
+                          </div>
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-purple-100 text-purple-700">
+                              {player.username.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{player.username}</p>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Star className="h-3 w-3" />
+                              <span>{player.elo_rating}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </CardContent>
+                </Card>
+
+                {/* League One */}
+                <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="p-2 bg-blue-500/20 rounded-full">
+                        <Target className="h-5 w-5 text-blue-600" />
+                      </div>
+                      League One ({leaguePlayers.filter((p) => p.division === "league_one").length})
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">1400-1599 ELO • Competitive</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {leaguePlayers
+                      .filter((p) => p.division === "league_one")
+                      .slice(0, 5)
+                      .map((player, index) => (
+                        <div key={player.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                          <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full text-blue-700 font-bold text-sm">
+                            {index + 1}
+                          </div>
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-blue-100 text-blue-700">
+                              {player.username.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{player.username}</p>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Star className="h-3 w-3" />
+                              <span>{player.elo_rating}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </CardContent>
+                </Card>
+
+                {/* League Two */}
+                <Card className="border-green-200 bg-gradient-to-br from-green-50 to-teal-50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="p-2 bg-green-500/20 rounded-full">
+                        <Users className="h-5 w-5 text-green-600" />
+                      </div>
+                      League Two ({leaguePlayers.filter((p) => p.division === "league_two").length})
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">1200-1399 ELO • Developing</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {leaguePlayers
+                      .filter((p) => p.division === "league_two")
+                      .slice(0, 5)
+                      .map((player, index) => (
+                        <div key={player.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                          <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full text-green-700 font-bold text-sm">
+                            {index + 1}
+                          </div>
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-green-100 text-green-700">
+                              {player.username.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{player.username}</p>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Star className="h-3 w-3" />
+                              <span>{player.elo_rating}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="rankings" className="space-y-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <BarChart3 className="h-6 w-6 text-yellow-600" />
+                Monthly Rankings
+              </h2>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top 50 Players</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Rankings based on current ELO rating • Updated in real-time
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {monthlyRankings.map((player) => (
+                      <div key={player.id} className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                        <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-full font-bold text-primary">
+                          {player.rank}
+                        </div>
+                        <Avatar className="h-12 w-12">
+                          <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-medium">{player.username}</p>
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Star className="h-3 w-3" />
+                              {player.elo_rating} ELO
+                            </span>
+                            <span>•</span>
+                            <span>{player.monthly_points} pts</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge className={getDivisionColor(player.division)}>
+                            {getDivisionName(player.division)}
+                          </Badge>
+                          <div className="flex items-center gap-1">
+                            {player.trend === "up" && <TrendingUp className="h-4 w-4 text-green-500" />}
+                            {player.trend === "down" && <TrendingUp className="h-4 w-4 text-red-500 rotate-180" />}
+                            {player.trend === "stable" && <div className="w-4 h-4 bg-gray-400 rounded-full" />}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="teams">
+              <EloTeamManager />
+            </TabsContent>
+
+            <TabsContent value="bidding">
+              <PlayerBiddingSystem />
+            </TabsContent>
+
+            <TabsContent value="leaderboards">
+              <Leaderboards />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

@@ -27,8 +27,6 @@ import {
   Menu,
   DollarSign,
   TrendingUp,
-  Swords,
-  Gavel,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import Image from "next/image"
@@ -36,9 +34,7 @@ import Image from "next/image"
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Players", href: "/players", icon: Users },
-  { name: "Matches", href: "/leagues", icon: Trophy }, // Changed "Leagues" to "Matches"
-  { name: "League", href: "/auction-draft", icon: Gavel }, // Changed "Auction Draft" to "League"
-  { name: "Lobbies", href: "/lobbies", icon: Swords }, // Replaced Tournaments tab with Lobbies tab
+  { name: "Leagues", href: "/leagues", icon: Trophy }, // Combined single Leagues entry
   { name: "Schedule", href: "/schedule", icon: Calendar },
   { name: "Betting", href: "/betting", icon: Target },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },

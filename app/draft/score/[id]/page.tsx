@@ -856,21 +856,25 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
                       id="csvCode"
                       value={csvCode}
                       onChange={(e) => setCsvCode(e.target.value)}
-                      placeholder="1,1-S2-1-5822233,-6,1,0,5,34,9,22,1.02,0,0,0,539&#10;2,1-S2-1-1839314,1,3,1,4,34,14,13,1.07,0,0,0,716"
+                      placeholder="1,1-S2-1-5822233,6,1,0,5,34,9,22,1.02,0,0,0,539/n2,1-S2-1-1839314,1,3,1,4,34,14,13,1.07,0,0,0,716"
                       rows={6}
                       className="font-mono text-sm"
                     />
                     <div className="text-xs text-muted-foreground space-y-1">
                       <p>
-                        <strong>Format:</strong>{" "}
-                        team,account_id,steals,goals,assists,shots,pickups,passes,passes_received,save_%,shots_on_goalie,shots_saved,goalie_minutes,skater_minutes
+                        <strong>Format:</strong> team,handle(or
+                        account_id),steals,goals,assists,shots,pick_ups,passes,passes_received,possession,saves_allowed,saves,GoalTended,Skating_Time
                       </p>
                       <p>
-                        <strong>Account ID:</strong> Use format like "1-S2-1-5822233" where the last part (5822233) is
-                        the player's account ID
+                        <strong>Handle/Account ID:</strong> Use format like "1-S2-1-5822233" where the last part
+                        (5822233) is the player's account ID, or use direct account ID/handle
                       </p>
                       <p>
-                        <strong>Team:</strong> 1 or 2 (ignored for team assignment, used only for statistics)
+                        <strong>Team:</strong> 1 or 2 (used for team assignment and statistics)
+                      </p>
+                      <p>
+                        <strong>Separator:</strong> Use /n to separate users and teams (will be converted to line
+                        breaks)
                       </p>
                     </div>
                   </div>

@@ -9,6 +9,8 @@ import { ArrowLeft, Users, Trophy, Settings, Target, Crown, Zap, Cross as Progre
 import { useAuth } from "@/lib/hooks/use-auth"
 import { createClient } from "@/lib/supabase/client"
 import { TournamentDraftRoom } from "@/components/tournaments/tournament-draft-room"
+import { TournamentBracket } from "@/components/tournaments/tournament-bracket"
+import { liveBracketIntegrationService } from "@/lib/services/live-bracket-integration-service"
 
 interface TournamentDraftPageProps {
   params: {
@@ -25,6 +27,8 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
   const [error, setError] = useState<string | null>(null)
   const [isLongTournament, setIsLongTournament] = useState(false)
   const [showScheduleEditor, setShowScheduleEditor] = useState(false)
+  const [bracketStats, setBracketStats] = useState<any>(null)
+  const [showLiveBracket, setShowLiveBracket] = useState(false)
 
   const supabase = createClient()
 
@@ -69,6 +73,12 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
       const isLong = calculateTournamentDuration(tournamentData)
       setIsLongTournament(isLong)
       console.log("[v0] Tournament duration - Long tournament:", isLong)
+
+      if (tournamentData.status === "active" || tournamentData.status === "in_progress") {
+        const stats = await liveBracketIntegrationService.getBracketStats(params.id)
+        setBracketStats(stats)
+        console.log("[v0] Loaded bracket stats:", stats)
+      }
 
       if (user) {
         console.log("[v0] Determining user role for:", user.id)
@@ -400,15 +410,54 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
               <CardTitle className="flex items-center gap-2">
                 <Trophy className="h-5 w-5 text-green-500" />
                 Live Tournament Bracket
+                {bracketStats && bracketStats.liveMatches > 0 && (
+                  <Badge variant="destructive" className="animate-pulse">
+                    {bracketStats.liveMatches} Live
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription>Real-time bracket progression with live match updates</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Live bracket will appear here once teams are formed</p>
-                <p className="text-sm mt-2">Teams will be automatically created from the player pool draft</p>
-              </div>
+              {bracketStats && bracketStats.totalMatches > 0 ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="text-center p-3 bg-blue-50 rounded-lg">
+                      <div className="font-bold text-lg text-blue-600">{bracketStats.totalMatches}</div>
+                      <div className="text-blue-800">Total Matches</div>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded-lg">
+                      <div className="font-bold text-lg text-green-600">{bracketStats.completedMatches}</div>
+                      <div className="text-green-800">Completed</div>
+                    </div>
+                    <div className="text-center p-3 bg-red-50 rounded-lg">
+                      <div className="font-bold text-lg text-red-600">{bracketStats.liveMatches}</div>
+                      <div className="text-red-800">Live Now</div>
+                    </div>
+                    <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                      <div className="font-bold text-lg text-yellow-600">{bracketStats.totalSpectators}</div>
+                      <div className="text-yellow-800">Spectators</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Tournament bracket with real-time match progression
+                    </div>
+                    <Button onClick={() => setShowLiveBracket(!showLiveBracket)} variant="outline">
+                      {showLiveBracket ? "Hide Bracket" : "Show Live Bracket"}
+                    </Button>
+                  </div>
+
+                  {showLiveBracket && <TournamentBracket tournamentId={params.id} tournament={tournament} />}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Live bracket will appear here once teams are formed</p>
+                  <p className="text-sm mt-2">Teams will be automatically created from the player pool draft</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

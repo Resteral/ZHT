@@ -21,6 +21,9 @@ import {
   BarChart3,
   Users,
   Download,
+  Medal,
+  Gavel,
+  Star,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { ProfileStats } from "@/components/profile/profile-stats"
@@ -76,6 +79,35 @@ interface PlayerFlag {
   last_flagged: string
 }
 
+interface FantasyTeam {
+  id: string
+  name: string
+  total_elo: number
+  average_elo: number
+  player_count: number
+  budget_used: number
+  budget_remaining: number
+  division: string
+  status: string
+  created_at: string
+  players: Array<{
+    username: string
+    elo_rating: number
+    acquisition_cost: number
+  }>
+}
+
+interface BiddingHistory {
+  id: string
+  auction_id: string
+  player_username: string
+  bid_amount: number
+  bid_time: string
+  is_winning: boolean
+  is_auto_bid: boolean
+  auction_status: string
+}
+
 export default function PlayerProfilePage() {
   const params = useParams()
   const router = useRouter()
@@ -85,6 +117,8 @@ export default function PlayerProfilePage() {
   const [csvStats, setCsvStats] = useState<CSVPlayerStats[]>([])
   const [mvpAwards, setMvpAwards] = useState<MVPAward[]>([])
   const [playerFlags, setPlayerFlags] = useState<PlayerFlag[]>([])
+  const [fantasyTeams, setFantasyTeams] = useState<FantasyTeam[]>([])
+  const [biddingHistory, setBiddingHistory] = useState<BiddingHistory[]>([])
   const [loadingCsvStats, setLoadingCsvStats] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -231,11 +265,105 @@ export default function PlayerProfilePage() {
       } else if (flagError) {
         console.error("[v0] Error loading player flags:", flagError)
       }
+
+      console.log("[v0] Loading fantasy teams for user:", userId)
+      const { data: teamsData, error: teamsError } = await supabase
+        .from("elo_teams")
+        .select(`
+          *,
+          elo_team_players(
+            *,
+            users(username, elo_rating)
+          )
+        `)
+        .eq("owner_id", userId)
+        .order("created_at", { ascending: false })
+
+      if (!teamsError && teamsData) {
+        const processedTeams = teamsData.map((team) => ({
+          id: team.id,
+          name: team.name,
+          total_elo: team.total_elo || 0,
+          average_elo: team.average_elo || 0,
+          player_count: team.elo_team_players?.length || 0,
+          budget_used: team.budget_used || 0,
+          budget_remaining: team.budget_remaining || 0,
+          division: getDivisionFromElo(team.average_elo || 0),
+          status: team.status || "active",
+          created_at: team.created_at,
+          players:
+            team.elo_team_players?.map((player: any) => ({
+              username: player.users?.username || "Unknown",
+              elo_rating: player.users?.elo_rating || 1200,
+              acquisition_cost: player.acquisition_cost || 0,
+            })) || [],
+        }))
+
+        setFantasyTeams(processedTeams)
+        console.log("[v0] Fantasy teams loaded:", processedTeams.length)
+      } else if (teamsError) {
+        console.error("[v0] Error loading fantasy teams:", teamsError)
+      }
+
+      console.log("[v0] Loading bidding history for user:", userId)
+      const { data: bidsData, error: bidsError } = await supabase
+        .from("player_bids")
+        .select(`
+          *,
+          player_auctions(
+            status,
+            highest_bidder_id,
+            users!player_auctions_player_id_fkey(username)
+          )
+        `)
+        .eq("bidder_id", userId)
+        .order("bid_time", { ascending: false })
+        .limit(50)
+
+      if (!bidsError && bidsData) {
+        const processedBids = bidsData.map((bid) => ({
+          id: bid.id,
+          auction_id: bid.auction_id,
+          player_username: bid.player_auctions?.users?.username || "Unknown",
+          bid_amount: bid.bid_amount,
+          bid_time: bid.bid_time,
+          is_winning: bid.player_auctions?.highest_bidder_id === userId,
+          is_auto_bid: bid.is_auto_bid || false,
+          auction_status: bid.player_auctions?.status || "unknown",
+        }))
+
+        setBiddingHistory(processedBids)
+        console.log("[v0] Bidding history loaded:", processedBids.length)
+      } else if (bidsError) {
+        console.error("[v0] Error loading bidding history:", bidsError)
+      }
     } catch (err) {
       console.error("Error loading player profile:", err)
       setError(err instanceof Error ? err.message : "Failed to load profile")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const getDivisionFromElo = (elo: number): string => {
+    if (elo >= 1800) return "Premier Division"
+    if (elo >= 1600) return "Championship"
+    if (elo >= 1400) return "League One"
+    return "League Two"
+  }
+
+  const getDivisionColor = (division: string): string => {
+    switch (division) {
+      case "Premier Division":
+        return "bg-gradient-to-r from-yellow-400 to-orange-500 text-white"
+      case "Championship":
+        return "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+      case "League One":
+        return "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+      case "League Two":
+        return "bg-gradient-to-r from-green-500 to-teal-500 text-white"
+      default:
+        return "bg-gray-500 text-white"
     }
   }
 
@@ -471,7 +599,7 @@ export default function PlayerProfilePage() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7 bg-muted">
+        <TabsList className="grid w-full grid-cols-9 bg-muted">
           <TabsTrigger value="overview" className="data-[state=active]:bg-card">
             Overview
           </TabsTrigger>
@@ -483,6 +611,12 @@ export default function PlayerProfilePage() {
           </TabsTrigger>
           <TabsTrigger value="betting" className="data-[state=active]:bg-card">
             Betting
+          </TabsTrigger>
+          <TabsTrigger value="fantasy-teams" className="data-[state=active]:bg-card">
+            Fantasy Teams
+          </TabsTrigger>
+          <TabsTrigger value="bidding-history" className="data-[state=active]:bg-card">
+            Bidding History
           </TabsTrigger>
           <TabsTrigger value="csv-stats" className="data-[state=active]:bg-card">
             CSV Stats
@@ -607,6 +741,177 @@ export default function PlayerProfilePage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="fantasy-teams" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Medal className="h-5 w-5 text-emerald-600" />
+                Fantasy Teams ({fantasyTeams.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {fantasyTeams.length > 0 ? (
+                <div className="grid gap-6 md:grid-cols-2">
+                  {fantasyTeams.map((team) => (
+                    <Card key={team.id} className="border-2">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg">{team.name}</CardTitle>
+                          <Badge className={getDivisionColor(team.division)}>{team.division}</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Players</p>
+                            <p className="font-medium">{team.player_count}/4</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Avg ELO</p>
+                            <p className="font-medium">{Math.round(team.average_elo)}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Budget Used</p>
+                            <p className="font-medium">${team.budget_used.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Remaining</p>
+                            <p className="font-medium text-green-600">${team.budget_remaining.toLocaleString()}</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Team Roster:</p>
+                          {team.players.length > 0 ? (
+                            <div className="space-y-1">
+                              {team.players.map((player, index) => (
+                                <div
+                                  key={index}
+                                  className="flex items-center justify-between text-sm bg-muted/50 p-2 rounded"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Star className="h-3 w-3 text-yellow-500" />
+                                    <span>{player.username}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-muted-foreground">
+                                    <span>{player.elo_rating} ELO</span>
+                                    <span>${player.acquisition_cost}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No players added yet</p>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-muted-foreground">
+                          Created: {new Date(team.created_at).toLocaleDateString()}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Medal className="h-16 w-16 text-muted-foreground opacity-50 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Fantasy Teams</h3>
+                  <p className="text-muted-foreground mb-4">
+                    This player hasn't created any ELO-based fantasy teams yet.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Fantasy teams allow players to build rosters based on ELO ratings and compete in leagues.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bidding-history" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Gavel className="h-5 w-5 text-blue-500" />
+                Bidding History ({biddingHistory.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {biddingHistory.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-3 mb-6">
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-blue-500">{biddingHistory.length}</div>
+                      <div className="text-sm text-muted-foreground">Total Bids</div>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-green-500">
+                        {biddingHistory.filter((bid) => bid.is_winning).length}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Winning Bids</div>
+                    </div>
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold text-yellow-500">
+                        ${biddingHistory.reduce((sum, bid) => sum + bid.bid_amount, 0).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Total Bid Amount</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {biddingHistory.slice(0, 20).map((bid) => (
+                      <div key={bid.id} className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                        <Avatar>
+                          <AvatarFallback>{bid.player_username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{bid.player_username}</p>
+                            {bid.is_auto_bid && (
+                              <Badge variant="outline" className="text-xs">
+                                Auto-Bid
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span>Bid: ${bid.bid_amount}</span>
+                            <span>{new Date(bid.bid_time).toLocaleDateString()}</span>
+                            <span>Auction: {bid.auction_status}</span>
+                          </div>
+                        </div>
+                        <Badge
+                          variant={
+                            bid.is_winning ? "default" : bid.auction_status === "completed" ? "outline" : "secondary"
+                          }
+                          className={bid.is_winning ? "bg-green-500" : ""}
+                        >
+                          {bid.is_winning ? "Winning" : bid.auction_status === "completed" ? "Outbid" : "Pending"}
+                        </Badge>
+                      </div>
+                    ))}
+                    {biddingHistory.length > 20 && (
+                      <div className="text-center text-sm text-muted-foreground">
+                        ... and {biddingHistory.length - 20} more bids
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Gavel className="h-16 w-16 text-muted-foreground opacity-50 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Bidding History</h3>
+                  <p className="text-muted-foreground mb-4">
+                    This player hasn't participated in any player auctions yet.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Bidding history shows all auction participation and outcomes.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="csv-stats" className="space-y-6">

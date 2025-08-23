@@ -9,14 +9,15 @@ export interface CSVPlayerStats {
   pickups: number
   passes: number
   passesReceived: number
-  savePercentage: number
-  shotsOnGoalie: number
-  shotsSaved: number
-  goalieMinutes: number
-  skaterMinutes: number
+  possession: number
+  savesAllowed: number
+  saves: number
+  goalTended: number
+  skatingTime: number
   matchId: string
   matchName: string
   submittedAt: string
+  gamesPlayed: number
 }
 
 export class CSVStatsService {
@@ -27,7 +28,7 @@ export class CSVStatsService {
     }
 
     console.log("[v0] Parsing CSV data:", csvCode.substring(0, 200) + "...")
-    const lines = csvCode.trim().split("\n")
+    const lines = csvCode.trim().replace(/\/n/g, "\n").split("\n")
     const stats: CSVPlayerStats[] = []
 
     console.log("[v0] Found", lines.length, "lines in CSV")
@@ -66,9 +67,9 @@ export class CSVStatsService {
         accountId = idParts[idParts.length - 1]?.trim() || ""
         console.log(`[v0] Extracted account ID from complex format: ${accountId}`)
       } else if (parts[1]?.trim()) {
-        // Direct account ID
+        // Direct account ID or handle
         accountId = parts[1].trim()
-        console.log(`[v0] Using direct account ID: ${accountId}`)
+        console.log(`[v0] Using direct account ID/handle: ${accountId}`)
       }
 
       if (!accountId && parts[0]?.includes("-")) {
@@ -101,14 +102,15 @@ export class CSVStatsService {
         pickups: this.parseNumber(parts[6], 0),
         passes: this.parseNumber(parts[7], 0),
         passesReceived: this.parseNumber(parts[8], 0),
-        savePercentage: this.parseNumber(parts[9], 0),
-        shotsOnGoalie: this.parseNumber(parts[10], 0),
-        shotsSaved: this.parseNumber(parts[11], 0),
-        goalieMinutes: this.parseNumber(parts[12], 0),
-        skaterMinutes: this.parseNumber(parts[13], 0),
+        possession: this.parseNumber(parts[9], 0),
+        savesAllowed: this.parseNumber(parts[10], 0),
+        saves: this.parseNumber(parts[11], 0),
+        goalTended: this.parseNumber(parts[12], 0),
+        skatingTime: this.parseNumber(parts[13], 0),
         matchId,
         matchName,
         submittedAt: new Date().toISOString(),
+        gamesPlayed: 1,
       }
 
       stats.push(stat)
@@ -188,10 +190,12 @@ export class CSVStatsService {
           existing.pickups += stat.pickups
           existing.passes += stat.passes
           existing.passesReceived += stat.passesReceived
-          existing.shotsOnGoalie += stat.shotsOnGoalie
-          existing.shotsSaved += stat.shotsSaved
-          existing.goalieMinutes += stat.goalieMinutes
-          existing.skaterMinutes += stat.skaterMinutes
+          existing.possession += stat.possession
+          existing.savesAllowed += stat.savesAllowed
+          existing.saves += stat.saves
+          existing.goalTended += stat.goalTended
+          existing.skatingTime += stat.skatingTime
+          existing.gamesPlayed += 1
           console.log(`[v0] Aggregated stats for ${stat.accountId}`)
         } else {
           playerStatsMap.set(stat.accountId, { ...stat })

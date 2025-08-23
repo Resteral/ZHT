@@ -884,8 +884,8 @@ export default function AnalyticsPage() {
                                     <th className="px-3 py-2 text-center text-slate-200">Shots</th>
                                     <th className="px-3 py-2 text-center text-slate-200">Steals</th>
                                     <th className="px-3 py-2 text-center text-slate-200">Passes</th>
-                                    <th className="px-3 py-2 text-center text-slate-200">G.Min</th>
-                                    <th className="px-3 py-2 text-center text-slate-200">S.Min</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">Possession</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">S.Time</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -917,8 +917,8 @@ export default function AnalyticsPage() {
                                       <td className="px-3 py-2 text-center text-slate-300">{stat.shots}</td>
                                       <td className="px-3 py-2 text-center text-slate-300">{stat.steals}</td>
                                       <td className="px-3 py-2 text-center text-slate-300">{stat.passes}</td>
-                                      <td className="px-3 py-2 text-center text-slate-300">{stat.goalie_minutes}</td>
-                                      <td className="px-3 py-2 text-center text-slate-300">{stat.skater_minutes}</td>
+                                      <td className="px-3 py-2 text-center text-slate-300"></td>
+                                      <td className="px-3 py-2 text-center text-slate-300"></td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -1327,10 +1327,10 @@ export default function AnalyticsPage() {
                       <Button
                         onClick={() => {
                           const csvContent = [
-                            "Account ID,Player Name,Team,Games Played,Steals,Goals,Assists,Shots,Pickups,Passes,Passes Received,Save %,Shots on Goalie,Shots Saved,Goalie Minutes,Skater Minutes,Match,Submitted At",
+                            "Account ID,Player Name,Team,Games Played,Steals,Goals,Assists,Shots,Pickups,Passes,Passes Received,Possession,Saves Allowed,Saves,Goal Tended,Skating Time,Match,Submitted At",
                             ...csvStats.map(
                               (stat) =>
-                                `${stat.accountId},"${stat.username}",${stat.team},${stat.gamesPlayed},${stat.steals},${stat.goals},${stat.assists},${stat.shots},${stat.pickups},${stat.passes},${stat.passesReceived},${stat.savePercentage},${stat.shotsOnGoalie},${stat.shotsSaved},${stat.goalieMinutes},${stat.skaterMinutes},"${stat.matchName}","${new Date(stat.submittedAt).toLocaleString()}"`,
+                                `${stat.accountId},"${stat.username}",${stat.team},${stat.gamesPlayed},${stat.steals},${stat.goals},${stat.assists},${stat.shots},${stat.pickups},${stat.passes},${stat.passesReceived},${stat.possession},${stat.savesAllowed},${stat.saves},${stat.goalTended},${stat.skatingTime},"${stat.matchName}","${new Date(stat.submittedAt).toLocaleString()}"`,
                             ),
                           ].join("\n")
 
@@ -1365,10 +1365,10 @@ export default function AnalyticsPage() {
                             <th className="px-4 py-3 text-center text-slate-200 font-semibold">Pickups</th>
                             <th className="px-4 py-3 text-center text-slate-200 font-semibold">Passes</th>
                             <th className="px-4 py-3 text-center text-slate-200 font-semibold">P. Received</th>
-                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">Save %</th>
-                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">Shots on G</th>
-                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">Shots Saved</th>
-                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">G. Min</th>
+                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">Possession</th>
+                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">Saves Allowed</th>
+                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">Saves</th>
+                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">Goal Tended</th>
                             <th className="px-4 py-3 text-center text-slate-200 font-semibold">S. Min</th>
                             <th className="px-4 py-3 text-left text-slate-200 font-semibold">Match</th>
                           </tr>
@@ -1404,13 +1404,11 @@ export default function AnalyticsPage() {
                               <td className="px-4 py-3 text-slate-300 text-center">{stat.pickups}</td>
                               <td className="px-4 py-3 text-slate-300 text-center">{stat.passes}</td>
                               <td className="px-4 py-3 text-slate-300 text-center">{stat.passesReceived}</td>
-                              <td className="px-4 py-3 text-slate-300 text-center">
-                                {stat.savePercentage.toFixed(1)}%
-                              </td>
-                              <td className="px-4 py-3 text-slate-300 text-center">{stat.shotsOnGoalie}</td>
-                              <td className="px-4 py-3 text-slate-300 text-center">{stat.shotsSaved}</td>
-                              <td className="px-4 py-3 text-slate-300 text-center">{stat.goalieMinutes}</td>
-                              <td className="px-4 py-3 text-slate-300 text-center">{stat.skaterMinutes}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.possession}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.savesAllowed}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.saves}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.goalTended}</td>
+                              <td className="px-4 py-3 text-slate-300 text-center">{stat.skatingTime}</td>
                               <td className="px-4 py-3 text-slate-300">{stat.matchName}</td>
                             </tr>
                           ))}

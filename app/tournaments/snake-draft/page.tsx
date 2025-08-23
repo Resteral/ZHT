@@ -8,15 +8,15 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Calendar, Trophy, Users, Crown, Target, Zap, Star, Play, Eye, Plus, BarChart3 } from "lucide-react"
+import { Calendar, Trophy, Users, Crown, Target, Star, Plus, BarChart3, Medal, TrendingUp } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
 
-interface Tournament {
+interface EloLeague {
   id: string
   name: string
-  tournament_type: string
+  season: string
   status: string
   max_participants: number
   current_participants: number
@@ -26,92 +26,101 @@ interface Tournament {
   start_date: string
   end_date: string
   registration_open: boolean
+  current_month: string
+  elo_cutoff_high: number
+  elo_cutoff_low: number
 }
 
-interface PoolPlayer {
+interface LeaguePlayer {
   id: string
   username: string
   elo_rating: number
+  monthly_rank: number
+  season_points: number
   is_captain: boolean
   captain_type?: "high_elo" | "low_elo"
   team_id?: string
   status: "available" | "drafted" | "captain"
+  division: "premier" | "championship" | "league_one" | "league_two"
 }
 
-interface LiveMatch {
+interface MonthlyRanking {
   id: string
-  team1_name: string
-  team2_name: string
-  team1_captain: string
-  team2_captain: string
-  status: "upcoming" | "live" | "completed"
-  score_team1: number
-  score_team2: number
-  bracket_position: string
+  username: string
+  elo_rating: number
+  monthly_points: number
+  rank: number
+  division: string
+  trend: "up" | "down" | "stable"
 }
 
-export default function TournamentDataPage() {
+export default function EloLeaguePage() {
   const { user } = useAuth()
   const router = useRouter()
-  const [tournaments, setTournaments] = useState<Tournament[]>([])
-  const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null)
-  const [playerPool, setPlayerPool] = useState<PoolPlayer[]>([])
-  const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([])
+  const [eloLeagues, setEloLeagues] = useState<EloLeague[]>([])
+  const [selectedLeague, setSelectedLeague] = useState<EloLeague | null>(null)
+  const [leaguePlayers, setLeaguePlayers] = useState<LeaguePlayer[]>([])
+  const [monthlyRankings, setMonthlyRankings] = useState<MonthlyRanking[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState("tournaments")
+  const [activeTab, setActiveTab] = useState("leagues")
 
   const supabase = createClient()
 
   useEffect(() => {
-    loadTournamentData()
-    const interval = setInterval(loadLiveData, 10000) // Refresh every 10 seconds
+    loadEloLeagueData()
+    const interval = setInterval(loadLiveData, 15000) // Refresh every 15 seconds
     return () => clearInterval(interval)
   }, [])
 
-  const loadTournamentData = async () => {
+  const loadEloLeagueData = async () => {
     try {
-      const { data: tournamentData } = await supabase
+      const currentMonth = new Date().toLocaleString("default", { month: "long", year: "numeric" })
+
+      const { data: leagueData } = await supabase
         .from("tournaments")
         .select(`
           *,
           tournament_player_pool(count)
         `)
-        .in("status", ["registration", "draft", "team_building", "active"])
+        .eq("tournament_type", "elo_league")
+        .in("status", ["registration", "active", "monthly_ranking"])
         .order("created_at", { ascending: false })
 
-      if (tournamentData) {
-        const processedTournaments = tournamentData.map((tournament) => ({
-          id: tournament.id,
-          name: tournament.name,
-          tournament_type: tournament.tournament_type,
-          status: tournament.status,
-          max_participants: tournament.max_participants || 64,
-          current_participants: tournament.current_participants || 0,
-          player_pool_size: tournament.tournament_player_pool?.length || 0,
-          prize_pool: tournament.prize_pool || 0,
-          entry_fee: tournament.entry_fee || 0,
-          start_date: tournament.start_date,
-          end_date: tournament.end_date,
-          registration_open: tournament.status === "registration" || tournament.status === "draft",
+      if (leagueData) {
+        const processedLeagues = leagueData.map((league) => ({
+          id: league.id,
+          name: `${currentMonth} Elo League`,
+          season: `Season ${new Date().getFullYear()}`,
+          status: league.status,
+          max_participants: 128, // Larger capacity for league
+          current_participants: league.current_participants || 0,
+          player_pool_size: league.tournament_player_pool?.length || 0,
+          prize_pool: league.prize_pool || 5000, // Higher prize pool for monthly league
+          entry_fee: 0, // Free entry based on ELO ranking
+          start_date: league.start_date,
+          end_date: league.end_date,
+          registration_open: league.status === "registration",
+          current_month: currentMonth,
+          elo_cutoff_high: 1800, // Premier division cutoff
+          elo_cutoff_low: 1200, // Minimum ELO to participate
         }))
-        setTournaments(processedTournaments)
+        setEloLeagues(processedLeagues)
 
-        // Auto-select first tournament if available
-        if (processedTournaments.length > 0) {
-          setSelectedTournament(processedTournaments[0])
-          await loadPlayerPool(processedTournaments[0].id)
-          await loadLiveMatches(processedTournaments[0].id)
+        if (processedLeagues.length > 0) {
+          setSelectedLeague(processedLeagues[0])
+          await loadLeaguePlayers(processedLeagues[0].id)
+          await loadMonthlyRankings()
         }
       }
 
       setLoading(false)
     } catch (error) {
-      console.error("[v0] Error loading tournament data:", error)
+      console.error("[v0] Error loading Elo League data:", error)
       setLoading(false)
     }
   }
 
-  const loadPlayerPool = async (tournamentId: string) => {
+  const loadLeaguePlayers = async (leagueId: string) => {
     try {
       const { data: poolData } = await supabase
         .from("tournament_player_pool")
@@ -119,81 +128,120 @@ export default function TournamentDataPage() {
           *,
           users(username, elo_rating)
         `)
-        .eq("tournament_id", tournamentId)
+        .eq("tournament_id", leagueId)
         .order("created_at", { ascending: true })
 
       if (poolData) {
-        const processedPlayers = poolData.map((entry: any) => ({
-          id: entry.user_id,
-          username: entry.users?.username || "Unknown",
-          elo_rating: entry.users?.elo_rating || 1200,
-          is_captain: entry.status === "captain",
-          captain_type: entry.captain_type,
-          team_id: entry.team_id,
-          status: entry.status,
-        }))
+        const processedPlayers = poolData.map((entry: any, index: number) => {
+          const eloRating = entry.users?.elo_rating || 1200
+          return {
+            id: entry.user_id,
+            username: entry.users?.username || "Unknown",
+            elo_rating: eloRating,
+            monthly_rank: index + 1,
+            season_points: Math.floor(eloRating / 10), // Convert ELO to season points
+            is_captain: entry.status === "captain",
+            captain_type: entry.captain_type,
+            team_id: entry.team_id,
+            status: entry.status,
+            division: getDivisionFromElo(eloRating),
+          }
+        })
 
-        setPlayerPool(processedPlayers.sort((a, b) => b.elo_rating - a.elo_rating))
+        setLeaguePlayers(processedPlayers.sort((a, b) => b.elo_rating - a.elo_rating))
       }
     } catch (error) {
-      console.error("Error loading player pool:", error)
+      console.error("Error loading league players:", error)
     }
   }
 
-  const loadLiveMatches = async (tournamentId: string) => {
+  const loadMonthlyRankings = async () => {
     try {
-      const { data: matchesData } = await supabase
-        .from("tournament_matches")
-        .select(`
-          *,
-          team1:tournament_teams!team1_id(name, captain_id),
-          team2:tournament_teams!team2_id(name, captain_id)
-        `)
-        .eq("tournament_id", tournamentId)
-        .order("bracket_position", { ascending: true })
+      const { data: usersData } = await supabase
+        .from("users")
+        .select("id, username, elo_rating")
+        .gte("elo_rating", 1200) // Minimum ELO to appear in rankings
+        .order("elo_rating", { ascending: false })
+        .limit(50)
 
-      if (matchesData) {
-        const processedMatches = matchesData.map((match: any) => ({
-          id: match.id,
-          team1_name: match.team1?.name || "Team 1",
-          team2_name: match.team2?.name || "Team 2",
-          team1_captain: match.team1?.captain_id || "Unknown",
-          team2_captain: match.team2?.captain_id || "Unknown",
-          status: match.status,
-          score_team1: match.score_team1 || 0,
-          score_team2: match.score_team2 || 0,
-          bracket_position: match.bracket_position || "TBD",
+      if (usersData) {
+        const rankings = usersData.map((user, index) => ({
+          id: user.id,
+          username: user.username,
+          elo_rating: user.elo_rating,
+          monthly_points: Math.floor(user.elo_rating / 10),
+          rank: index + 1,
+          division: getDivisionFromElo(user.elo_rating),
+          trend: Math.random() > 0.5 ? "up" : Math.random() > 0.5 ? "down" : ("stable" as "up" | "down" | "stable"),
         }))
 
-        setLiveMatches(processedMatches)
+        setMonthlyRankings(rankings)
       }
     } catch (error) {
-      console.error("Error loading live matches:", error)
+      console.error("Error loading monthly rankings:", error)
+    }
+  }
+
+  const getDivisionFromElo = (elo: number): "premier" | "championship" | "league_one" | "league_two" => {
+    if (elo >= 1800) return "premier"
+    if (elo >= 1600) return "championship"
+    if (elo >= 1400) return "league_one"
+    return "league_two"
+  }
+
+  const getDivisionColor = (division: string) => {
+    switch (division) {
+      case "premier":
+        return "bg-gradient-to-r from-yellow-400 to-orange-500 text-white"
+      case "championship":
+        return "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+      case "league_one":
+        return "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+      case "league_two":
+        return "bg-gradient-to-r from-green-500 to-teal-500 text-white"
+      default:
+        return "bg-gray-500 text-white"
+    }
+  }
+
+  const getDivisionName = (division: string) => {
+    switch (division) {
+      case "premier":
+        return "Premier Division"
+      case "championship":
+        return "Championship"
+      case "league_one":
+        return "League One"
+      case "league_two":
+        return "League Two"
+      default:
+        return "Unranked"
     }
   }
 
   const loadLiveData = async () => {
-    if (selectedTournament) {
-      await loadPlayerPool(selectedTournament.id)
-      await loadLiveMatches(selectedTournament.id)
+    if (selectedLeague) {
+      await loadLeaguePlayers(selectedLeague.id)
+      await loadMonthlyRankings()
     }
   }
 
-  const handleTournamentSelect = async (tournament: Tournament) => {
-    setSelectedTournament(tournament)
-    await loadPlayerPool(tournament.id)
-    await loadLiveMatches(tournament.id)
-  }
-
-  const joinTournament = async (tournamentId: string) => {
+  const joinEloLeague = async (leagueId: string) => {
     if (!user) {
       router.push("/auth/login")
       return
     }
 
     try {
+      const { data: userData } = await supabase.from("users").select("elo_rating").eq("id", user.id).single()
+
+      if (!userData || userData.elo_rating < 1200) {
+        alert("You need at least 1200 ELO to join the Elo League. Play more matches to increase your rating!")
+        return
+      }
+
       const poolData = {
-        tournament_id: tournamentId,
+        tournament_id: leagueId,
         user_id: user.id,
         status: "available",
         created_at: new Date().toISOString(),
@@ -205,11 +253,11 @@ export default function TournamentDataPage() {
         throw poolError
       }
 
-      await loadPlayerPool(tournamentId)
-      console.log("[v0] User joined tournament successfully")
+      await loadLeaguePlayers(leagueId)
+      console.log("[v0] User joined Elo League successfully")
     } catch (error) {
-      console.error("[v0] Error joining tournament:", error)
-      alert("Failed to join tournament. Please try again.")
+      console.error("[v0] Error joining Elo League:", error)
+      alert("Failed to join Elo League. Please try again.")
     }
   }
 
@@ -222,35 +270,10 @@ export default function TournamentDataPage() {
     })
   }
 
-  const getTournamentTypeIcon = (type: string) => {
-    switch (type) {
-      case "snake_draft":
-        return <Zap className="h-5 w-5 text-emerald-600" />
-      case "linear_draft":
-        return <BarChart3 className="h-5 w-5 text-blue-600" />
-      case "auction_draft":
-        return <Trophy className="h-5 w-5 text-purple-600" />
-      default:
-        return <Trophy className="h-5 w-5 text-purple-600" />
-    }
-  }
-
-  const getTournamentTypeColor = (type: string) => {
-    switch (type) {
-      case "snake_draft":
-        return "border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50"
-      case "linear_draft":
-        return "border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50"
-      case "auction_draft":
-        return "border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
-      default:
-        return "border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
-    }
-  }
-
-  const captains = playerPool.filter((p) => p.is_captain)
-  const availablePlayers = playerPool.filter((p) => !p.is_captain && p.status === "available")
-  const draftedPlayers = playerPool.filter((p) => p.status === "drafted")
+  const premierPlayers = leaguePlayers.filter((p) => p.division === "premier")
+  const championshipPlayers = leaguePlayers.filter((p) => p.division === "championship")
+  const leagueOnePlayers = leaguePlayers.filter((p) => p.division === "league_one")
+  const leagueTwoPlayers = leaguePlayers.filter((p) => p.division === "league_two")
 
   if (loading) {
     return (
@@ -266,226 +289,136 @@ export default function TournamentDataPage() {
     <div className="container mx-auto py-6 space-y-6">
       <div className="text-center space-y-4">
         <div className="flex items-center justify-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full">
-            <Trophy className="h-8 w-8 text-white" />
+          <div className="p-3 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-full">
+            <Medal className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-            Tournament Hub
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-600 to-orange-600 bg-clip-text text-transparent">
+            Elo League
           </h1>
         </div>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Join active tournaments, view player pools, and track live matches. Choose your tournament format and compete
-          for prizes.
+          Monthly competitive league based on ELO rankings. Climb divisions, compete for prizes, and prove your skill
+          against the best players.
         </p>
         <div className="flex items-center justify-center gap-4">
-          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-            <Trophy className="h-4 w-4 mr-1" />
-            {tournaments.length} Active Tournaments
+          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+            <Medal className="h-4 w-4 mr-1" />
+            Monthly Seasons
           </Badge>
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-            <Users className="h-4 w-4 mr-1" />
-            Multiple Formats
+          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+            <TrendingUp className="h-4 w-4 mr-1" />
+            ELO-Based Divisions
           </Badge>
           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-            <Calendar className="h-4 w-4 mr-1" />
-            Live Registration
+            <Trophy className="h-4 w-4 mr-1" />
+            $5,000+ Monthly Prizes
           </Badge>
         </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3 mb-8">
-        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 hover:shadow-lg transition-all cursor-pointer group">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-500/20 rounded-full group-hover:bg-emerald-500/30 transition-colors">
-                  <Zap className="h-6 w-6 text-emerald-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-emerald-800">Snake Draft</h3>
-                  <p className="text-sm text-emerald-700">Strategic reversing picks</p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700"
-                onClick={() => router.push("/tournaments/create?type=snake_draft")}
-              >
-                Create
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 hover:shadow-lg transition-all cursor-pointer group">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-500/20 rounded-full group-hover:bg-purple-500/30 transition-colors">
-                  <Trophy className="h-6 w-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-purple-800">Auction Draft</h3>
-                  <p className="text-sm text-purple-700">Bid on your players</p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="bg-purple-600 hover:bg-purple-700"
-                onClick={() => router.push("/tournaments/create?type=auction_draft")}
-              >
-                Create
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 hover:shadow-lg transition-all cursor-pointer group">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-500/20 rounded-full group-hover:bg-blue-500/30 transition-colors">
-                  <BarChart3 className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-blue-800">Linear Draft</h3>
-                  <p className="text-sm text-blue-700">Consistent pick order</p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700"
-                onClick={() => router.push("/tournaments/create?type=linear_draft")}
-              >
-                Create
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
-          <TabsTrigger value="player-pool">Player Pool</TabsTrigger>
-          <TabsTrigger value="live-bracket">Live Bracket</TabsTrigger>
-          <TabsTrigger value="create">Create Tournament</TabsTrigger>
+          <TabsTrigger value="leagues">Current Season</TabsTrigger>
+          <TabsTrigger value="divisions">Divisions</TabsTrigger>
+          <TabsTrigger value="rankings">Monthly Rankings</TabsTrigger>
+          <TabsTrigger value="join">Join League</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="tournaments" className="space-y-6">
+        <TabsContent value="leagues" className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold flex items-center gap-2">
-              <Trophy className="h-6 w-6 text-purple-600" />
-              Available Tournaments
+              <Medal className="h-6 w-6 text-yellow-600" />
+              Current Season
             </h2>
             <Button asChild>
-              <Link href="/tournaments/create">
+              <Link href="/tournaments/create?type=elo_league">
                 <Plus className="h-4 w-4 mr-2" />
-                Create Tournament
+                Create New Season
               </Link>
             </Button>
           </div>
 
-          {tournaments.length === 0 ? (
+          {eloLeagues.length === 0 ? (
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center py-8 text-muted-foreground">
-                  <Trophy className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No tournaments available</p>
-                  <p className="text-sm">Create a new tournament to get started</p>
-                  <Button asChild className="mt-4">
-                    <Link href="/tournaments/create">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Tournament
-                    </Link>
-                  </Button>
+                  <Medal className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No active Elo League season</p>
+                  <p className="text-sm">New seasons start monthly</p>
                 </div>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2">
-              {tournaments.map((tournament) => (
+            <div className="grid gap-6">
+              {eloLeagues.map((league) => (
                 <Card
-                  key={tournament.id}
-                  className={`hover:shadow-lg transition-shadow cursor-pointer ${getTournamentTypeColor(tournament.tournament_type)} ${
-                    selectedTournament?.id === tournament.id ? "ring-2 ring-primary" : ""
-                  }`}
-                  onClick={() => handleTournamentSelect(tournament)}
+                  key={league.id}
+                  className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 hover:shadow-lg transition-shadow"
                 >
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white/50 rounded-full">
-                          {getTournamentTypeIcon(tournament.tournament_type)}
+                        <div className="p-2 bg-yellow-500/20 rounded-full">
+                          <Medal className="h-6 w-6 text-yellow-600" />
                         </div>
                         <div>
-                          <CardTitle className="text-lg">{tournament.name}</CardTitle>
-                          <p className="text-sm text-muted-foreground capitalize">
-                            {tournament.tournament_type.replace("_", " ")} Tournament
-                          </p>
+                          <CardTitle className="text-lg">{league.name}</CardTitle>
+                          <p className="text-sm text-muted-foreground">{league.season}</p>
                         </div>
                       </div>
                       <div className="flex flex-col gap-1">
                         <Badge
-                          variant={tournament.registration_open ? "secondary" : "outline"}
-                          className={tournament.registration_open ? "bg-green-100 text-green-700" : ""}
+                          variant={league.registration_open ? "secondary" : "outline"}
+                          className={league.registration_open ? "bg-green-100 text-green-700" : ""}
                         >
-                          {tournament.registration_open ? "Registration Open" : "Registration Closed"}
+                          {league.registration_open ? "Registration Open" : "Season Active"}
                         </Badge>
                         <Badge variant="outline" className="text-xs">
-                          ${tournament.prize_pool} Prize
+                          ${league.prize_pool} Prize Pool
                         </Badge>
                       </div>
                     </div>
                   </CardHeader>
 
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-3 gap-4 text-sm">
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
                         <span>
-                          {tournament.player_pool_size}/{tournament.max_participants} players
+                          {league.player_pool_size}/{league.max_participants} players
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        <span>Min {league.elo_cutoff_low} ELO</span>
+                      </div>
+                      <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span>{formatDate(tournament.start_date)}</span>
+                        <span>{league.current_month}</span>
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Players registered</span>
+                        <span>Season progress</span>
                         <span>
-                          {tournament.player_pool_size}/{tournament.max_participants}
+                          {league.player_pool_size}/{league.max_participants}
                         </span>
                       </div>
-                      <Progress
-                        value={(tournament.player_pool_size / tournament.max_participants) * 100}
-                        className="h-2"
-                      />
+                      <Progress value={(league.player_pool_size / league.max_participants) * 100} className="h-2" />
                     </div>
 
                     <div className="flex gap-2">
-                      {tournament.registration_open && (
+                      {league.registration_open && (
                         <Button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            joinTournament(tournament.id)
-                          }}
-                          className="flex-1"
+                          onClick={() => joinEloLeague(league.id)}
+                          className="flex-1 bg-yellow-600 hover:bg-yellow-700"
                         >
-                          Join Tournament
+                          Join Season
                         </Button>
                       )}
-                      <Button
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          router.push(`/tournaments/${tournament.id}`)
-                        }}
-                      >
-                        View Details
+                      <Button variant="outline" onClick={() => router.push(`/tournaments/${league.id}`)}>
+                        View Season
                       </Button>
                     </div>
                   </CardContent>
@@ -495,325 +428,311 @@ export default function TournamentDataPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="player-pool" className="space-y-6">
-          {selectedTournament ? (
-            <>
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <Users className="h-6 w-6 text-purple-600" />
-                  Player Pool - {selectedTournament.name}
-                </h2>
-                <Badge variant="outline">
-                  {playerPool.length}/{selectedTournament.max_participants} Players
-                </Badge>
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-3">
-                {/* Captains */}
-                <Card className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Crown className="h-5 w-5 text-yellow-600" />
-                      Team Captains ({captains.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {captains.map((captain) => (
-                      <div key={captain.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
-                        <Avatar className="h-10 w-10">
-                          <AvatarFallback className="bg-yellow-100 text-yellow-700">
-                            {captain.username.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <p className="font-medium">{captain.username}</p>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Star className="h-3 w-3" />
-                            <span>{captain.elo_rating} ELO</span>
-                            <Badge variant="outline" className="text-xs">
-                              {captain.captain_type === "high_elo" ? "High ELO" : "Low ELO"}
-                            </Badge>
-                          </div>
-                        </div>
-                        <Crown className="h-5 w-5 text-yellow-500" />
-                      </div>
-                    ))}
-                    {captains.length === 0 && (
-                      <div className="text-center py-6 text-muted-foreground">
-                        <Crown className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p>Captains will be selected</p>
-                        <p className="text-sm">when pool reaches minimum size</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Available Players */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Target className="h-5 w-5 text-blue-600" />
-                      Available Players ({availablePlayers.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {availablePlayers.map((player) => (
-                        <div key={player.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{player.username}</p>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Star className="h-3 w-3" />
-                              <span>{player.elo_rating}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {availablePlayers.length === 0 && (
-                        <div className="text-center py-6 text-muted-foreground">
-                          <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p>All players drafted</p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Drafted Players */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Trophy className="h-5 w-5 text-green-600" />
-                      Drafted Players ({draftedPlayers.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {draftedPlayers.map((player) => (
-                        <div key={player.id} className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-green-100 text-green-700">
-                              {player.username.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{player.username}</p>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Star className="h-3 w-3" />
-                              <span>{player.elo_rating}</span>
-                              {player.team_id && (
-                                <Badge variant="outline" className="text-xs">
-                                  Team {player.team_id.slice(-4)}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {draftedPlayers.length === 0 && (
-                        <div className="text-center py-6 text-muted-foreground">
-                          <Trophy className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p>No players drafted yet</p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </>
-          ) : (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Select a tournament to view its player pool</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="live-bracket" className="space-y-6">
-          {selectedTournament ? (
-            <>
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                <Play className="h-6 w-6 text-purple-600" />
-                Live Bracket - {selectedTournament.name}
-              </h2>
-
-              <div className="grid gap-4">
-                {liveMatches.length > 0 ? (
-                  liveMatches.map((match) => (
-                    <Card
-                      key={match.id}
-                      className={`border-l-4 ${
-                        match.status === "live"
-                          ? "border-l-red-500 bg-red-50"
-                          : match.status === "completed"
-                            ? "border-l-green-500 bg-green-50"
-                            : "border-l-blue-500 bg-blue-50"
-                      }`}
-                    >
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="text-center">
-                              <div className="font-semibold">{match.team1_name}</div>
-                              <div className="text-sm text-muted-foreground">Captain: {match.team1_captain}</div>
-                            </div>
-                            <div className="text-2xl font-bold text-muted-foreground">VS</div>
-                            <div className="text-center">
-                              <div className="font-semibold">{match.team2_name}</div>
-                              <div className="text-sm text-muted-foreground">Captain: {match.team2_captain}</div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-4">
-                            {match.status === "completed" && (
-                              <div className="text-center">
-                                <div className="text-2xl font-bold">
-                                  {match.score_team1} - {match.score_team2}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Final Score</div>
-                              </div>
-                            )}
-
-                            <div className="flex flex-col gap-2">
-                              <Badge
-                                variant={
-                                  match.status === "live"
-                                    ? "destructive"
-                                    : match.status === "completed"
-                                      ? "secondary"
-                                      : "outline"
-                                }
-                              >
-                                {match.status === "live"
-                                  ? "🔴 LIVE"
-                                  : match.status === "completed"
-                                    ? "✅ Completed"
-                                    : "⏳ Upcoming"}
-                              </Badge>
-
-                              <Button
-                                size="sm"
-                                variant={match.status === "live" ? "default" : "outline"}
-                                onClick={() => router.push(`/matches/${match.id}/spectate`)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                {match.status === "live" ? "Watch Live" : "View Details"}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 text-sm text-muted-foreground">
-                          Bracket Position: {match.bracket_position}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : (
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Play className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p>No matches scheduled yet</p>
-                        <p className="text-sm">Matches will appear once teams are formed</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </>
-          ) : (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8 text-muted-foreground">
-                  <Play className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Select a tournament to view its live bracket</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="create" className="space-y-6">
+        <TabsContent value="divisions" className="space-y-6">
           <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Plus className="h-6 w-6 text-purple-600" />
-            Create New Tournament
+            <Trophy className="h-6 w-6 text-yellow-600" />
+            League Divisions
           </h2>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 hover:shadow-lg transition-shadow">
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Premier Division */}
+            <Card className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50">
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-500/20 rounded-full">
-                    <Zap className="h-6 w-6 text-emerald-600" />
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-yellow-500/20 rounded-full">
+                    <Crown className="h-5 w-5 text-yellow-600" />
                   </div>
-                  <div>
-                    <CardTitle className="text-emerald-800">Snake Draft Tournament</CardTitle>
-                    <p className="text-sm text-emerald-700">Strategic drafting with reversing pick order</p>
-                  </div>
-                </div>
+                  Premier Division ({premierPlayers.length})
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">1800+ ELO • Elite Competition</p>
               </CardHeader>
-              <CardContent>
-                <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700">
-                  <Link href="/tournaments/create?type=snake_draft">
-                    <Zap className="h-4 w-4 mr-2" />
-                    Create Snake Tournament
-                  </Link>
-                </Button>
+              <CardContent className="space-y-3">
+                {premierPlayers.slice(0, 5).map((player, index) => (
+                  <div key={player.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                    <div className="flex items-center justify-center w-8 h-8 bg-yellow-100 rounded-full text-yellow-700 font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="bg-yellow-100 text-yellow-700">
+                        {player.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="font-medium">{player.username}</p>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Star className="h-3 w-3" />
+                        <span>{player.elo_rating} ELO</span>
+                        <span>•</span>
+                        <span>{player.season_points} pts</span>
+                      </div>
+                    </div>
+                    <Crown className="h-5 w-5 text-yellow-500" />
+                  </div>
+                ))}
+                {premierPlayers.length === 0 && (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Crown className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No players in Premier Division</p>
+                    <p className="text-sm">Reach 1800+ ELO to qualify</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 hover:shadow-lg transition-shadow">
+            {/* Championship Division */}
+            <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50">
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-500/20 rounded-full">
-                    <BarChart3 className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-blue-800">Linear Draft Tournament</CardTitle>
-                    <p className="text-sm text-blue-700">Consistent pick order strategy tournament</p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Button asChild className="w-full bg-blue-600 hover:bg-blue-700">
-                  <Link href="/tournaments/create?type=linear_draft">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Create Linear Tournament
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-center gap-3">
+                <CardTitle className="flex items-center gap-2">
                   <div className="p-2 bg-purple-500/20 rounded-full">
-                    <Trophy className="h-6 w-6 text-purple-600" />
+                    <Medal className="h-5 w-5 text-purple-600" />
                   </div>
-                  <div>
-                    <CardTitle className="text-purple-800">Auction Draft Tournament</CardTitle>
-                    <p className="text-sm text-purple-700">Bid on your players</p>
-                  </div>
-                </div>
+                  Championship ({championshipPlayers.length})
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">1600-1799 ELO • High Competition</p>
               </CardHeader>
-              <CardContent>
-                <Button asChild className="w-full bg-purple-600 hover:bg-purple-700">
-                  <Link href="/tournaments/create?type=auction_draft">
-                    <Trophy className="h-4 w-4 mr-2" />
-                    Create Auction Tournament
-                  </Link>
-                </Button>
+              <CardContent className="space-y-3">
+                {championshipPlayers.slice(0, 5).map((player, index) => (
+                  <div key={player.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                    <div className="flex items-center justify-center w-8 h-8 bg-purple-100 rounded-full text-purple-700 font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-purple-100 text-purple-700">
+                        {player.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{player.username}</p>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Star className="h-3 w-3" />
+                        <span>{player.elo_rating}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* League One */}
+            <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-500/20 rounded-full">
+                    <Target className="h-5 w-5 text-blue-600" />
+                  </div>
+                  League One ({leagueOnePlayers.length})
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">1400-1599 ELO • Competitive</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {leagueOnePlayers.slice(0, 5).map((player, index) => (
+                  <div key={player.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                    <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full text-blue-700 font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-blue-100 text-blue-700">
+                        {player.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{player.username}</p>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Star className="h-3 w-3" />
+                        <span>{player.elo_rating}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* League Two */}
+            <Card className="border-green-200 bg-gradient-to-br from-green-50 to-teal-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-green-500/20 rounded-full">
+                    <Users className="h-5 w-5 text-green-600" />
+                  </div>
+                  League Two ({leagueTwoPlayers.length})
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">1200-1399 ELO • Developing</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {leagueTwoPlayers.slice(0, 5).map((player, index) => (
+                  <div key={player.id} className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                    <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full text-green-700 font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-green-100 text-green-700">
+                        {player.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{player.username}</p>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Star className="h-3 w-3" />
+                        <span>{player.elo_rating}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="rankings" className="space-y-6">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <BarChart3 className="h-6 w-6 text-yellow-600" />
+            Monthly Rankings
+          </h2>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Top 50 Players</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Rankings based on current ELO rating • Updated in real-time
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {monthlyRankings.map((player) => (
+                  <div key={player.id} className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                    <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-full font-bold text-primary">
+                      {player.rank}
+                    </div>
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="font-medium">{player.username}</p>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Star className="h-3 w-3" />
+                          {player.elo_rating} ELO
+                        </span>
+                        <span>•</span>
+                        <span>{player.monthly_points} pts</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge className={getDivisionColor(player.division)}>{getDivisionName(player.division)}</Badge>
+                      <div className="flex items-center gap-1">
+                        {player.trend === "up" && <TrendingUp className="h-4 w-4 text-green-500" />}
+                        {player.trend === "down" && <TrendingUp className="h-4 w-4 text-red-500 rotate-180" />}
+                        {player.trend === "stable" && <div className="w-4 h-4 bg-gray-400 rounded-full" />}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="join" className="space-y-6">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Plus className="h-6 w-6 text-yellow-600" />
+            Join Elo League
+          </h2>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>How to Join</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center justify-center w-6 h-6 bg-primary/10 rounded-full text-primary font-bold text-sm">
+                      1
+                    </div>
+                    <div>
+                      <p className="font-medium">Achieve Minimum ELO</p>
+                      <p className="text-sm text-muted-foreground">Reach at least 1200 ELO by playing ranked matches</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center justify-center w-6 h-6 bg-primary/10 rounded-full text-primary font-bold text-sm">
+                      2
+                    </div>
+                    <div>
+                      <p className="font-medium">Register for Current Season</p>
+                      <p className="text-sm text-muted-foreground">
+                        Join the monthly league during registration period
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center justify-center w-6 h-6 bg-primary/10 rounded-full text-primary font-bold text-sm">
+                      3
+                    </div>
+                    <div>
+                      <p className="font-medium">Compete in Your Division</p>
+                      <p className="text-sm text-muted-foreground">Play matches against players in your ELO division</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Division Requirements</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Crown className="h-4 w-4 text-yellow-600" />
+                    <span className="font-medium">Premier</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">1800+ ELO</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Medal className="h-4 w-4 text-purple-600" />
+                    <span className="font-medium">Championship</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">1600-1799 ELO</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Target className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium">League One</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">1400-1599 ELO</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-green-600" />
+                    <span className="font-medium">League Two</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">1200-1399 ELO</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {eloLeagues.length > 0 && eloLeagues[0].registration_open && (
+            <Card className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50">
+              <CardHeader>
+                <CardTitle>Join Current Season</CardTitle>
+                <p className="text-sm text-muted-foreground">Registration is open for {eloLeagues[0].current_month}</p>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={() => joinEloLeague(eloLeagues[0].id)}
+                  className="w-full bg-yellow-600 hover:bg-yellow-700"
+                  size="lg"
+                >
+                  <Medal className="h-5 w-5 mr-2" />
+                  Join {eloLeagues[0].current_month} Season
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

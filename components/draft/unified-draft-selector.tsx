@@ -12,7 +12,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Users, Clock, DollarSign, Gamepad2, Plus, Trophy } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Users, Clock, DollarSign, Gamepad2, Plus, Trophy, Target } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
@@ -87,7 +89,7 @@ interface UnifiedDraftSelectorProps {
   buttonVariant?: "default" | "outline" | "secondary"
   buttonSize?: "sm" | "default" | "lg"
   className?: string
-  mode?: "browse" | "create" | "both" // Added mode prop to control functionality
+  mode?: "browse" | "create" | "both" | "tournament" // Added tournament mode
 }
 
 export function UnifiedDraftSelector({
@@ -95,10 +97,11 @@ export function UnifiedDraftSelector({
   buttonVariant = "default",
   buttonSize = "default",
   className = "",
-  mode = "browse", // Default to browse mode for backward compatibility
+  mode = "browse",
 }: UnifiedDraftSelectorProps) {
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState<string | null>(null)
+  const [tournamentMode, setTournamentMode] = useState(mode === "tournament") // Added tournament mode state
   const router = useRouter()
   const supabase = createClient()
   const { user, isAuthenticated } = useAuth()
@@ -118,18 +121,26 @@ export function UnifiedDraftSelector({
 
     setCreating(format.name)
     try {
-      console.log(`[v0] Creating ${format.name} lobby...`)
+      console.log(`[v0] Creating ${tournamentMode ? "tournament" : "lobby"} for ${format.name}...`)
+
+      const lobbyName = tournamentMode
+        ? `${format.name} Tournament - ${new Date().toLocaleDateString()}`
+        : `${format.name} Draft Lobby - ${new Date().toLocaleTimeString()}`
 
       const { data: match, error: matchError } = await supabase
         .from("matches")
         .insert({
-          name: `${format.name} Draft Lobby - ${new Date().toLocaleTimeString()}`,
+          name: lobbyName,
           match_type: format.matchType,
           max_participants: format.players,
-          prize_pool: format.players * 10, // $10 per player
+          prize_pool: tournamentMode ? format.players * 50 : format.players * 10, // Higher prize for tournaments
           status: "waiting",
           creator_id: user.id,
           game: "Omega Strikers",
+          tournament_mode: tournamentMode, // Set tournament mode flag
+          description: tournamentMode
+            ? `Tournament with player pool and ELO-based captain selection. Join the player pool to be drafted!`
+            : `Quick ${format.name} draft lobby. Join and play immediately!`,
         })
         .select()
         .single()
@@ -143,21 +154,43 @@ export function UnifiedDraftSelector({
 
       if (participantError) throw participantError
 
-      console.log(`[v0] Created ${format.name} lobby:`, match.id)
+      console.log(`[v0] Created ${tournamentMode ? "tournament" : "lobby"}:`, match.id)
       setOpen(false)
-      router.push(`/leagues/lobby/${match.id}`)
+
+      if (tournamentMode) {
+        router.push(`/tournaments/lobby/${match.id}`)
+        toast.success(`Tournament created! Share the link for others to join the player pool.`)
+      } else {
+        router.push(`/leagues/lobby/${match.id}`)
+        toast.success(`${format.name} lobby created successfully!`)
+      }
     } catch (error) {
       console.error("Error creating lobby:", error)
-      toast.error(`Failed to create ${format.name} lobby: ${error.message}`)
+      toast.error(`Failed to create ${format.name} ${tournamentMode ? "tournament" : "lobby"}: ${error.message}`)
     } finally {
       setCreating(null)
     }
   }
 
   const getButtonText = () => {
+    if (mode === "tournament") return "Create Tournament"
     if (mode === "create") return "Create Lobby"
     if (mode === "both") return "Draft Options"
     return buttonText
+  }
+
+  const getDialogTitle = () => {
+    if (mode === "tournament") return "Create Tournament"
+    if (mode === "create") return "Create Draft Lobby"
+    if (mode === "both") return "Draft Options"
+    return "Select Draft Format"
+  }
+
+  const getDialogDescription = () => {
+    if (mode === "tournament") return "Create tournaments with player pools and ELO-based captain selection!"
+    if (mode === "create") return "Create a new lobby for any draft format. All formats are FREE with rewards!"
+    if (mode === "both") return "Browse existing lobbies or create new ones. All formats are FREE with rewards!"
+    return "Choose your preferred team format for ELO draft matches. All formats are FREE with rewards!"
   }
 
   return (
@@ -172,16 +205,26 @@ export function UnifiedDraftSelector({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Gamepad2 className="h-5 w-5" />
-            {mode === "create" ? "Create Draft Lobby" : mode === "both" ? "Draft Options" : "Select Draft Format"}
+            {getDialogTitle()}
           </DialogTitle>
-          <DialogDescription>
-            {mode === "create"
-              ? "Create a new lobby for any draft format. All formats are FREE with rewards!"
-              : mode === "both"
-                ? "Browse existing lobbies or create new ones. All formats are FREE with rewards!"
-                : "Choose your preferred team format for ELO draft matches. All formats are FREE with rewards!"}
-          </DialogDescription>
+          <DialogDescription>{getDialogDescription()}</DialogDescription>
         </DialogHeader>
+
+        {(mode === "create" || mode === "both") && (
+          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+            <div className="space-y-1">
+              <Label htmlFor="tournament-mode" className="text-sm font-medium">
+                Tournament Mode
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {tournamentMode
+                  ? "Create tournament with player pool and captain draft system"
+                  : "Create quick lobby for immediate play"}
+              </p>
+            </div>
+            <Switch id="tournament-mode" checked={tournamentMode} onCheckedChange={setTournamentMode} />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
           {draftFormats.map((format) => (
@@ -197,29 +240,53 @@ export function UnifiedDraftSelector({
                   </div>
                   <Badge variant="secondary">{format.players} Players</Badge>
                 </div>
-                <CardTitle className="text-lg">{format.name} Draft</CardTitle>
-                <CardDescription>{format.description}</CardDescription>
+                <CardTitle className="text-lg">
+                  {format.name}{" "}
+                  {tournamentMode && (mode === "create" || mode === "both" || mode === "tournament")
+                    ? "Tournament"
+                    : "Draft"}
+                </CardTitle>
+                <CardDescription>
+                  {tournamentMode && (mode === "create" || mode === "both" || mode === "tournament")
+                    ? `Tournament with player pool and captain selection`
+                    : format.description}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    <span>{format.duration}</span>
+                    <span>{tournamentMode ? "Variable" : format.duration}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <DollarSign className="h-3 w-3" />
-                    <span className="text-green-600 font-medium">{format.reward}</span>
+                    <span className="text-green-600 font-medium">
+                      {tournamentMode ? `$${format.players * 50}` : format.reward}
+                    </span>
                   </div>
                 </div>
 
-                {format.special && (
+                {tournamentMode && (mode === "create" || mode === "both" || mode === "tournament") && (
+                  <div className="space-y-1">
+                    <Badge variant="outline" className="w-full justify-center text-xs">
+                      <Target className="h-3 w-3 mr-1" />
+                      Player Pool System
+                    </Badge>
+                    <Badge variant="outline" className="w-full justify-center text-xs">
+                      <Trophy className="h-3 w-3 mr-1" />
+                      ELO-Based Captains
+                    </Badge>
+                  </div>
+                )}
+
+                {format.special && !tournamentMode && (
                   <Badge variant="outline" className="w-full justify-center text-xs">
                     {format.special}
                   </Badge>
                 )}
 
                 <div className="space-y-2">
-                  {(mode === "create" || mode === "both") && (
+                  {(mode === "create" || mode === "both" || mode === "tournament") && (
                     <Button
                       size="sm"
                       className="w-full"
@@ -230,7 +297,9 @@ export function UnifiedDraftSelector({
                       disabled={creating === format.name}
                     >
                       <Plus className="h-3 w-3 mr-1" />
-                      {creating === format.name ? "Creating..." : `Create ${format.name}`}
+                      {creating === format.name
+                        ? "Creating..."
+                        : `Create ${tournamentMode ? "Tournament" : format.name}`}
                     </Button>
                   )}
 
@@ -262,9 +331,11 @@ export function UnifiedDraftSelector({
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="bg-green-100 text-green-700">
-                $10-$50 Reward
+                {tournamentMode && (mode === "create" || mode === "both" || mode === "tournament")
+                  ? "$50-$600 Prize"
+                  : "$10-$50 Reward"}
               </Badge>
-              <span>Per player</span>
+              <span>Per {tournamentMode ? "tournament" : "player"}</span>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="bg-purple-100 text-purple-700">

@@ -1,0 +1,405 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { Users, Trophy, Crown, Target, Zap, ArrowRight } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
+import { toast } from "sonner"
+
+interface TournamentDraftIntegrationProps {
+  tournamentId: string
+  onDraftStarted?: (draftId: string) => void
+}
+
+export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: TournamentDraftIntegrationProps) {
+  const [tournament, setTournament] = useState<any>(null)
+  const [participants, setParticipants] = useState<any[]>([])
+  const [captains, setCaptains] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [starting, setStarting] = useState(false)
+  const supabase = createClient()
+  const router = useRouter()
+  const { user } = useAuth()
+
+  const loadTournamentData = async () => {
+    try {
+      console.log("[v0] Loading tournament data for draft integration:", tournamentId)
+
+      // Load tournament details
+      const { data: tournamentData, error: tournamentError } = await supabase
+        .from("matches")
+        .select(`
+          id,
+          name,
+          match_type,
+          max_participants,
+          prize_pool,
+          status,
+          tournament_mode,
+          creator_id,
+          match_participants (
+            user_id,
+            users (
+              username,
+              elo_rating
+            )
+          )
+        `)
+        .eq("id", tournamentId)
+        .single()
+
+      if (tournamentError) throw tournamentError
+
+      setTournament(tournamentData)
+      setParticipants(tournamentData.match_participants || [])
+
+      // Check if there's already an active captain draft
+      const { data: existingDraft } = await supabase
+        .from("captain_drafts")
+        .select("id, status")
+        .eq("match_id", tournamentId)
+        .single()
+
+      if (existingDraft && existingDraft.status === "drafting") {
+        console.log("[v0] Found existing draft, redirecting:", existingDraft.id)
+        if (onDraftStarted) {
+          onDraftStarted(existingDraft.id)
+        } else {
+          router.push(`/draft/room/${existingDraft.id}`)
+        }
+        return
+      }
+
+      console.log("[v0] Tournament data loaded successfully")
+    } catch (err) {
+      console.error("[v0] Error loading tournament data:", err)
+      toast.error("Failed to load tournament data")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const startTournamentDraft = async () => {
+    if (!tournament || !user) return
+
+    setStarting(true)
+    try {
+      console.log("[v0] Starting tournament draft with ELO-based captain selection")
+
+      const sortedByElo = participants.sort((a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200))
+
+      if (sortedByElo.length < 4) {
+        toast.error("Need at least 4 players to start tournament draft")
+        return
+      }
+
+      const highestElo = sortedByElo[0] // Tournament owner
+      const lowestElo = sortedByElo[sortedByElo.length - 1] // First pick captain
+
+      console.log(
+        "[v0] Selected captains - Owner (highest ELO):",
+        highestElo.users?.username,
+        "ELO:",
+        highestElo.users?.elo_rating,
+        "First pick (lowest ELO):",
+        lowestElo.users?.username,
+        "ELO:",
+        lowestElo.users?.elo_rating,
+      )
+
+      const { data: captainDraft, error: draftError } = await supabase
+        .from("captain_drafts")
+        .insert({
+          match_id: tournament.id,
+          captain1_id: lowestElo.user_id, // Lowest ELO gets first pick advantage
+          captain2_id: highestElo.user_id, // Highest ELO is tournament owner
+          format: tournament.match_type.replace("_draft", ""),
+          max_rounds: Math.floor(participants.length / 2),
+          current_round: 1,
+          current_pick: 1,
+          current_captain: lowestElo.user_id, // Lowest ELO starts drafting
+          status: "drafting",
+          tournament_owner: highestElo.user_id, // Track tournament owner
+          tournament_mode: true, // Flag as tournament draft
+          elo_difference: (highestElo.users?.elo_rating || 1200) - (lowestElo.users?.elo_rating || 1200),
+          created_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (draftError) throw draftError
+
+      const draftParticipants = participants.map((p) => ({
+        draft_id: captainDraft.id,
+        user_id: p.user_id,
+        is_captain: p.user_id === highestElo.user_id || p.user_id === lowestElo.user_id,
+        team: null, // Will be assigned during draft
+        elo_rating: p.users?.elo_rating || 1200,
+      }))
+
+      const { error: participantsError } = await supabase.from("captain_draft_participants").insert(draftParticipants)
+
+      if (participantsError) throw participantsError
+
+      const { error: statusError } = await supabase
+        .from("matches")
+        .update({
+          status: "drafting",
+          start_date: new Date().toISOString(),
+        })
+        .eq("id", tournament.id)
+
+      if (statusError) throw statusError
+
+      console.log("[v0] Tournament draft created successfully:", captainDraft.id)
+      toast.success("Tournament draft started! Redirecting to draft room...")
+
+      if (onDraftStarted) {
+        onDraftStarted(captainDraft.id)
+      } else {
+        router.push(`/draft/room/${captainDraft.id}`)
+      }
+    } catch (err) {
+      console.error("[v0] Error starting tournament draft:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to start tournament draft")
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  useEffect(() => {
+    loadTournamentData()
+  }, [tournamentId])
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading tournament draft integration...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!tournament) {
+    return (
+      <Card>
+        <CardContent className="text-center py-8">
+          <p className="text-red-600">Tournament not found</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const currentParticipants = participants.length
+  const isCreator = tournament.creator_id === user?.id
+  const canStartDraft = currentParticipants >= 4 && tournament.status === "waiting"
+
+  // Sort participants by ELO for preview
+  const sortedParticipants = [...participants].sort(
+    (a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200),
+  )
+  const highestEloPlayer = sortedParticipants[0]
+  const lowestEloPlayer = sortedParticipants[sortedParticipants.length - 1]
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-l-4 border-l-purple-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-purple-500" />
+            Tournament Draft Integration
+          </CardTitle>
+          <CardDescription>
+            Seamlessly transition from player pool to captain draft with ELO-based selection
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <Users className="h-8 w-8 mx-auto mb-2 text-blue-500" />
+              <div className="text-2xl font-bold text-blue-700">{currentParticipants}</div>
+              <div className="text-sm text-blue-600">Players Registered</div>
+            </div>
+            <div className="text-center p-4 bg-green-50 border border-green-200 rounded-lg">
+              <Target className="h-8 w-8 mx-auto mb-2 text-green-500" />
+              <div className="text-2xl font-bold text-green-700">{tournament.max_participants}</div>
+              <div className="text-sm text-green-600">Max Capacity</div>
+            </div>
+            <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <Trophy className="h-8 w-8 mx-auto mb-2 text-purple-500" />
+              <div className="text-2xl font-bold text-purple-700">${tournament.prize_pool}</div>
+              <div className="text-sm text-purple-600">Prize Pool</div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Draft Readiness</span>
+              <span className="font-medium">{Math.min(currentParticipants, 4)}/4 minimum players</span>
+            </div>
+            <Progress value={(Math.min(currentParticipants, 4) / 4) * 100} className="h-2" />
+          </div>
+
+          {canStartDraft && isCreator && (
+            <Button onClick={startTournamentDraft} disabled={starting} className="w-full" size="lg">
+              <Zap className="h-4 w-4 mr-2" />
+              {starting ? "Starting Draft..." : "Start Tournament Draft"}
+            </Button>
+          )}
+
+          {!canStartDraft && (
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-muted-foreground">
+                {currentParticipants < 4
+                  ? `Need ${4 - currentParticipants} more players to start draft`
+                  : tournament.status !== "waiting"
+                    ? "Tournament has already started"
+                    : !isCreator
+                      ? "Only the tournament creator can start the draft"
+                      : "Ready to start draft"}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {currentParticipants >= 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-yellow-500" />
+              Captain Selection Preview
+            </CardTitle>
+            <CardDescription>Preview of ELO-based captain assignments for the draft</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-center gap-3 mb-3">
+                  <Crown className="h-6 w-6 text-yellow-600" />
+                  <div>
+                    <div className="font-medium text-yellow-800">Tournament Owner</div>
+                    <div className="text-sm text-yellow-600">Highest ELO Player</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <span className="font-medium text-yellow-700">
+                      {(highestEloPlayer?.users?.username || "?").charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="font-medium">{highestEloPlayer?.users?.username || "TBD"}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {highestEloPlayer?.users?.elo_rating || 1200} ELO
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-3 mb-3">
+                  <Target className="h-6 w-6 text-blue-600" />
+                  <div>
+                    <div className="font-medium text-blue-800">First Pick Captain</div>
+                    <div className="text-sm text-blue-600">Lowest ELO Player</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="font-medium text-blue-700">
+                      {(lowestEloPlayer?.users?.username || "?").charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="font-medium">{lowestEloPlayer?.users?.username || "TBD"}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {lowestEloPlayer?.users?.elo_rating || 1200} ELO
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">ELO Difference:</span>
+                <span className="font-medium">
+                  {(highestEloPlayer?.users?.elo_rating || 1200) - (lowestEloPlayer?.users?.elo_rating || 1200)} points
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm mt-1">
+                <span className="text-muted-foreground">Draft Advantage:</span>
+                <span className="font-medium text-blue-600">Lower ELO gets first pick</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowRight className="h-5 w-5 text-green-500" />
+            Draft Flow Integration
+          </CardTitle>
+          <CardDescription>How the tournament integrates with the draft system</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-700">
+                1
+              </div>
+              <div>
+                <div className="font-medium">Player Pool Registration</div>
+                <div className="text-sm text-muted-foreground">
+                  Players join the tournament player pool and are ranked by ELO
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center text-xs font-medium text-yellow-700">
+                2
+              </div>
+              <div>
+                <div className="font-medium">Captain Selection</div>
+                <div className="text-sm text-muted-foreground">
+                  Highest ELO becomes owner, lowest ELO gets first pick advantage
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-xs font-medium text-green-700">
+                3
+              </div>
+              <div>
+                <div className="font-medium">Draft Room Transition</div>
+                <div className="text-sm text-muted-foreground">
+                  Seamless transition to captain draft room with all participants
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-medium text-purple-700">
+                4
+              </div>
+              <div>
+                <div className="font-medium">Team Formation</div>
+                <div className="text-sm text-muted-foreground">
+                  Teams are automatically created from draft results for tournament play
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
