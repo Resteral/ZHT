@@ -23,20 +23,10 @@ interface Tournament {
   format: string
   betting_enabled: boolean
   total_bets: number
-}
-
-const gameIcons = {
-  zealot_hockey: "🏒",
-  call_of_duty: "🎯",
-  rainbow_six_siege: "🛡️",
-  counter_strike: "💥",
-}
-
-const gameNames = {
-  zealot_hockey: "Zealot Hockey",
-  call_of_duty: "Call of Duty",
-  rainbow_six_siege: "Rainbow Six Siege",
-  counter_strike: "Counter Strike",
+  player_pool_size?: number
+  max_player_pool?: number
+  registration_open?: boolean
+  tournament_type?: string
 }
 
 export default function TournamentsPage() {
@@ -51,10 +41,12 @@ export default function TournamentsPage() {
   const fetchTournaments = async () => {
     try {
       const { data: tournamentData } = await supabase
-        .from("matches")
-        .select("*")
-        .eq("match_type", "tournament")
-        .in("status", ["registration", "team_building", "active"])
+        .from("tournaments")
+        .select(`
+          *,
+          tournament_player_pool!inner(count)
+        `)
+        .in("status", ["registration", "team_building", "active", "draft"])
         .order("created_at", { ascending: false })
         .limit(10)
 
@@ -65,13 +57,17 @@ export default function TournamentsPage() {
           game: tournament.game || "zealot_hockey",
           max_teams: tournament.max_participants || 16,
           current_teams: tournament.current_participants || 0,
-          entry_fee: tournament.entry_fee || 50,
-          prize_pool: tournament.prize_pool || 800,
+          entry_fee: tournament.entry_fee || 0,
+          prize_pool: tournament.prize_pool || 1000,
           start_date: tournament.start_date || new Date().toISOString(),
           status: tournament.status,
           format: tournament.tournament_format || "bracket",
           betting_enabled: tournament.betting_enabled || false,
           total_bets: tournament.total_bets || 0,
+          player_pool_size: tournament.tournament_player_pool?.length || 0,
+          max_player_pool: tournament.max_player_pool || 64,
+          registration_open: tournament.status === "registration" || tournament.status === "draft",
+          tournament_type: tournament.tournament_type || "team",
         }))
         setTournaments(processedTournaments)
       }
@@ -178,9 +174,14 @@ export default function TournamentsPage() {
                     </CardDescription>
                   </div>
                 </div>
-                <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-300">
-                  $10K Prize Pool
-                </Badge>
+                <div className="flex flex-col gap-1">
+                  <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-300">
+                    $10K Prize Pool
+                  </Badge>
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
+                    Registration Open
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -190,8 +191,8 @@ export default function TournamentsPage() {
                   <div className="text-emerald-600 text-xs">Max Players</div>
                 </div>
                 <div className="text-center">
-                  <div className="font-bold text-emerald-700">30</div>
-                  <div className="text-emerald-600 text-xs">Days</div>
+                  <div className="font-bold text-emerald-700">12</div>
+                  <div className="text-emerald-600 text-xs">In Pool</div>
                 </div>
                 <div className="text-center">
                   <div className="font-bold text-emerald-700">Free</div>
@@ -202,9 +203,9 @@ export default function TournamentsPage() {
                 Strategic captain selection with snake draft mechanics. Lower ELO captain gets first pick advantage.
               </p>
               <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700">
-                <Link href="/tournaments/snake-draft">
+                <Link href="/tournaments/create?type=snake_draft">
                   <Zap className="h-4 w-4 mr-2" />
-                  Join Snake Draft Tournament
+                  Create Snake Tournament
                 </Link>
               </Button>
             </CardContent>
@@ -224,9 +225,14 @@ export default function TournamentsPage() {
                     </CardDescription>
                   </div>
                 </div>
-                <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
-                  $8K Prize Pool
-                </Badge>
+                <div className="flex flex-col gap-1">
+                  <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+                    $8K Prize Pool
+                  </Badge>
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
+                    Registration Open
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -236,8 +242,8 @@ export default function TournamentsPage() {
                   <div className="text-blue-600 text-xs">Max Players</div>
                 </div>
                 <div className="text-center">
-                  <div className="font-bold text-blue-700">30</div>
-                  <div className="text-blue-600 text-xs">Days</div>
+                  <div className="font-bold text-blue-700">8</div>
+                  <div className="text-blue-600 text-xs">In Pool</div>
                 </div>
                 <div className="text-center">
                   <div className="font-bold text-blue-700">Free</div>
@@ -248,9 +254,9 @@ export default function TournamentsPage() {
                 Master consistent draft positioning. Same pick order every round - strategy and skill determine success.
               </p>
               <Button asChild className="w-full bg-blue-600 hover:bg-blue-700">
-                <Link href="/tournaments/linear-draft">
+                <Link href="/tournaments/create?type=linear_draft">
                   <BarChart3 className="h-4 w-4 mr-2" />
-                  Join Linear Draft Tournament
+                  Create Linear Tournament
                 </Link>
               </Button>
             </CardContent>
@@ -320,10 +326,10 @@ export default function TournamentsPage() {
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
                         <CardTitle className="text-lg flex items-center gap-2">
-                          <span className="text-2xl">{gameIcons[tournament.game as keyof typeof gameIcons]}</span>
+                          <span className="text-2xl">{tournament.game}</span>
                           {tournament.name}
                         </CardTitle>
-                        <CardDescription>{gameNames[tournament.game as keyof typeof gameNames]}</CardDescription>
+                        <CardDescription>{tournament.game}</CardDescription>
                       </div>
                       <div className="flex flex-col gap-1">
                         <Badge
@@ -343,7 +349,7 @@ export default function TournamentsPage() {
                         </Badge>
                         <Badge variant="outline" className="text-xs">
                           <Users className="h-3 w-3 mr-1" />
-                          Team
+                          {tournament.tournament_type === "team" ? "Team" : "Player"}
                         </Badge>
                       </div>
                     </div>
@@ -354,7 +360,9 @@ export default function TournamentsPage() {
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
                         <span>
-                          {tournament.current_teams}/{tournament.max_teams} teams
+                          {tournament.tournament_type === "snake_draft" || tournament.tournament_type === "linear_draft"
+                            ? `${tournament.player_pool_size}/${tournament.max_player_pool} players`
+                            : `${tournament.current_teams}/${tournament.max_teams} teams`}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -367,7 +375,7 @@ export default function TournamentsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span>3 days</span>
+                        <span>{tournament.registration_open ? "Registration Open" : "Registration Closed"}</span>
                       </div>
                     </div>
 
@@ -385,15 +393,28 @@ export default function TournamentsPage() {
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Teams registered</span>
                         <span>
-                          {tournament.current_teams}/{tournament.max_teams}
+                          {tournament.tournament_type === "snake_draft" || tournament.tournament_type === "linear_draft"
+                            ? "Players registered"
+                            : "Teams registered"}
+                        </span>
+                        <span>
+                          {tournament.tournament_type === "snake_draft" || tournament.tournament_type === "linear_draft"
+                            ? `${tournament.player_pool_size}/${tournament.max_player_pool}`
+                            : `${tournament.current_teams}/${tournament.max_teams}`}
                         </span>
                       </div>
                       <div className="w-full bg-muted rounded-full h-2">
                         <div
                           className="bg-primary h-2 rounded-full transition-all"
-                          style={{ width: `${(tournament.current_teams / tournament.max_teams) * 100}%` }}
+                          style={{
+                            width: `${
+                              tournament.tournament_type === "snake_draft" ||
+                              tournament.tournament_type === "linear_draft"
+                                ? (tournament.player_pool_size! / tournament.max_player_pool!) * 100
+                                : (tournament.current_teams / tournament.max_teams) * 100
+                            }%`,
+                          }}
                         />
                       </div>
                     </div>

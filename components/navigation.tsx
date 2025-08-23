@@ -38,7 +38,7 @@ const navigation = [
   { name: "Players", href: "/players", icon: Users },
   { name: "Matches", href: "/leagues", icon: Trophy }, // Changed "Leagues" to "Matches"
   { name: "League", href: "/auction-draft", icon: Gavel }, // Changed "Auction Draft" to "League"
-  { name: "Tournaments", href: "/tournaments", icon: Swords },
+  { name: "Lobbies", href: "/lobbies", icon: Swords }, // Replaced Tournaments tab with Lobbies tab
   { name: "Schedule", href: "/schedule", icon: Calendar },
   { name: "Betting", href: "/betting", icon: Target },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },

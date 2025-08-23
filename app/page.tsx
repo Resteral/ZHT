@@ -19,6 +19,7 @@ import {
   Timer,
   Eye,
   CheckCircle,
+  Gamepad2,
 } from "lucide-react"
 import Link from "next/link"
 import { QuickStats } from "@/components/dashboard/quick-stats"
@@ -27,7 +28,7 @@ import { UpcomingEvents } from "@/components/dashboard/upcoming-events"
 import { createClient } from "@/lib/supabase/client"
 import { isSupabaseConfigured } from "@/lib/supabase/client"
 import { formatDateEST } from "@/lib/utils/timezone"
-import { UnifiedGameCreator } from "@/components/game-creation/unified-game-creator"
+import { InteractiveHockeyNet } from "@/components/interactive-hockey-net"
 
 interface LiveGame {
   id: string
@@ -688,10 +689,11 @@ export default function Dashboard() {
             ELO Rankings
           </Badge>
 
-          <div className="pt-4">
-            <UnifiedGameCreator />
+          <div className="pt-8">
+            <InteractiveHockeyNet />
           </div>
 
+          {/*
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link href="/tournaments/create?type=snake_draft" className="w-full">
               <div className="bg-gradient-to-br from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white p-6 rounded-xl transition-all duration-300 hover:scale-105 cursor-pointer">
@@ -721,6 +723,7 @@ export default function Dashboard() {
               </div>
             </Link>
           </div>
+          */}
         </div>
       </div>
 
@@ -737,9 +740,9 @@ export default function Dashboard() {
                   <CardDescription>Active lobbies, drafts, and scoring games</CardDescription>
                 </div>
               </div>
-              <Link href="/leagues">
+              <Link href="/lobbies">
                 <Button variant="outline" className="gaming-button-secondary bg-transparent">
-                  View All Games
+                  View All Live Content
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </Link>
@@ -863,13 +866,13 @@ export default function Dashboard() {
                               />
                             </div>
                           </div>
-                          <Link href={statusInfo.action.href}>
+                          <Link href="/lobbies">
                             <Button
                               size="sm"
                               className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold border-2 border-white/30 shadow-lg"
                             >
-                              {statusInfo.icon}
-                              {statusInfo.action.text}
+                              <Trophy className="h-4 w-4 mr-1" />
+                              View Live Content
                             </Button>
                           </Link>
                         </div>
@@ -984,13 +987,13 @@ export default function Dashboard() {
                               </div>
                             </div>
                           )}
-                          <Link href={stateInfo.action.href}>
+                          <Link href="/lobbies">
                             <Button
                               size="sm"
                               className="w-full bg-red-600 hover:bg-red-700 text-white font-bold border-2 border-white/30 shadow-lg"
                             >
-                              {stateInfo.icon}
-                              {stateInfo.action.text}
+                              <Gamepad2 className="h-4 w-4 mr-1" />
+                              Join Live Games
                             </Button>
                           </Link>
                         </div>
@@ -1002,36 +1005,8 @@ export default function Dashboard() {
             ) : (
               <div className="text-center py-8">
                 <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No live games or tournaments at the moment</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Link href="/tournaments/create?type=snake_draft" className="w-full">
-                    <div className="bg-gradient-to-br from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white p-4 rounded-lg transition-all duration-300 hover:scale-105 cursor-pointer">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Trophy className="h-5 w-5" />
-                        <h4 className="font-bold">Snake Draft</h4>
-                      </div>
-                      <p className="text-purple-100 text-xs">Create snake draft tournament</p>
-                    </div>
-                  </Link>
-                  <Link href="/tournaments/create?type=auction" className="w-full">
-                    <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 hover:from-emerald-700 hover:to-emerald-900 text-white p-4 rounded-lg transition-all duration-300 hover:scale-105 cursor-pointer">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Trophy className="h-5 w-5" />
-                        <h4 className="font-bold">Auction Draft</h4>
-                      </div>
-                      <p className="text-emerald-100 text-xs">Bid on players with budget management</p>
-                    </div>
-                  </Link>
-                  <Link href="/tournaments/create?type=linear" className="w-full">
-                    <div className="bg-gradient-to-br from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white p-4 rounded-lg transition-all duration-300 hover:scale-105 cursor-pointer">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Trophy className="h-5 w-5" />
-                        <h4 className="font-bold">Linear Draft</h4>
-                      </div>
-                      <p className="text-blue-100 text-xs">First-come-first-served selection</p>
-                    </div>
-                  </Link>
-                </div>
+                <p className="text-muted-foreground mb-2">No live games or tournaments at the moment</p>
+                <p className="text-sm text-muted-foreground">Check back later or create a new game!</p>
               </div>
             )}
           </CardContent>
@@ -1049,9 +1024,9 @@ export default function Dashboard() {
                   <CardDescription>Players currently online and in matches</CardDescription>
                 </div>
               </div>
-              <Link href="/leaderboard">
+              <Link href="/lobbies">
                 <Button variant="outline" className="gaming-button-secondary bg-transparent">
-                  View All Players
+                  View Live Content
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </Link>
@@ -1205,9 +1180,9 @@ export default function Dashboard() {
               <div className="text-center py-8">
                 <BarChart3 className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">No recent match results</p>
-                <Link href="/leagues">
+                <Link href="/lobbies">
                   <Button className="mt-4 gaming-button-primary">
-                    Start New Match
+                    Join Live Lobbies
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </Link>
@@ -1331,9 +1306,9 @@ export default function Dashboard() {
                 size="lg"
                 className="border-white text-white hover:bg-white/10 bg-transparent"
               >
-                <Link href="/leagues">
+                <Link href="/lobbies">
                   <Crown className="h-4 w-4 mr-2" />
-                  Join ELO Draft
+                  View Live Lobbies
                 </Link>
               </Button>
             </div>
@@ -1380,13 +1355,13 @@ export default function Dashboard() {
                 <div className="text-sm">
                   <span className="font-medium">Live</span> drafts available
                 </div>
-                <Link href="/leagues">
+                <Link href="/lobbies">
                   <Button
                     size="sm"
                     variant="outline"
                     className="group-hover:bg-primary group-hover:text-primary-foreground gaming-button-secondary bg-transparent"
                   >
-                    Join Draft
+                    Join Live Content
                     <ArrowRight className="h-3 w-3 ml-1" />
                   </Button>
                 </Link>

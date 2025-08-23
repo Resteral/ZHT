@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, Clock, Plus, Gamepad2 } from "lucide-react"
+import { Users, Clock, Gamepad2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
+import { UnifiedDraftSelector } from "@/components/draft/unified-draft-selector"
 
 interface DraftLobby {
   id: string
@@ -122,10 +123,7 @@ export default function OneVOnePage() {
         user_id: user.id,
       })
 
-      if (participantError) {
-        console.error("[v0] Error adding participant:", participantError)
-        throw participantError
-      }
+      if (participantError) throw participantError
 
       console.log("[v0] Participant added, redirecting to lobby")
       router.push(`/leagues/lobby/${match.id}`)
@@ -179,23 +177,25 @@ export default function OneVOnePage() {
         <p className="text-muted-foreground">Quick 1-on-1 matches. Earn $10 per game and improve your ELO rating.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Create Lobby Card */}
-        <Card className="border-dashed border-2 hover:border-primary/50 transition-colors">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Plus className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="font-semibold mb-2">Create New Match</h3>
-            <p className="text-sm text-muted-foreground text-center mb-4">
-              Start a new 1v1 lobby and wait for an opponent
-            </p>
-            <Button onClick={createLobby} disabled={creating} className="w-full">
-              <Plus className="h-4 w-4 mr-2" />
-              {creating ? "Creating..." : "Create Lobby"}
-            </Button>
+      <div className="mb-6">
+        <Card className="max-w-md mx-auto">
+          <CardHeader className="text-center">
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>Create a new 1v1 lobby or browse all formats</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <UnifiedDraftSelector buttonText="Create 1v1 Lobby" className="w-full" mode="create" />
+            <UnifiedDraftSelector
+              buttonText="Browse All Formats"
+              buttonVariant="outline"
+              className="w-full"
+              mode="both"
+            />
           </CardContent>
         </Card>
+      </div>
 
-        {/* Active Lobbies */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {lobbies.map((lobby) => {
           const currentParticipants = lobby.match_participants?.length || 0
           const isUserInLobby = lobby.match_participants?.some((p) => p.user_id === user?.id)
@@ -228,7 +228,7 @@ export default function OneVOnePage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span>Reward:</span>
-                    <span className="text-green-500 font-medium">$10</span> {/* Updated from $5 to $10 */}
+                    <span className="text-green-500 font-medium">$10</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span>ELO:</span>
@@ -254,7 +254,7 @@ export default function OneVOnePage() {
         <div className="text-center py-12">
           <Gamepad2 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">No Active 1v1 Matches</h3>
-          <p className="text-muted-foreground mb-4">Be the first to create a 1v1 lobby!</p>
+          <p className="text-muted-foreground mb-4">Create the first 1v1 lobby using the button above!</p>
         </div>
       )}
 

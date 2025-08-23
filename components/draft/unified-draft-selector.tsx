@@ -12,8 +12,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Users, Clock, DollarSign, Gamepad2 } from "lucide-react"
+import { Users, Clock, DollarSign, Gamepad2, Plus, Trophy } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/lib/auth-context"
+import { toast } from "sonner"
 
 const draftFormats = [
   {
@@ -21,27 +24,30 @@ const draftFormats = [
     players: 2,
     description: "Head-to-head draft",
     duration: "15-20 min",
-    reward: "$50",
+    reward: "$10",
     href: "/draft/1v1",
     color: "bg-blue-500",
+    matchType: "1v1_draft",
   },
   {
     name: "2v2",
     players: 4,
     description: "Small team tactics",
     duration: "20-25 min",
-    reward: "$50",
+    reward: "$10",
     href: "/draft/2v2",
     color: "bg-green-500",
+    matchType: "2v2_draft",
   },
   {
     name: "3v3",
     players: 6,
     description: "Balanced gameplay",
     duration: "25-30 min",
-    reward: "$50",
+    reward: "$10",
     href: "/draft/3v3",
     color: "bg-purple-500",
+    matchType: "3v3_draft",
   },
   {
     name: "4v4",
@@ -52,24 +58,27 @@ const draftFormats = [
     href: "/draft/4v4",
     color: "bg-orange-500",
     special: "Pass First Pick",
+    matchType: "4v4_draft",
   },
   {
     name: "5v5",
     players: 10,
     description: "Full team experience",
     duration: "35-40 min",
-    reward: "$50",
+    reward: "$10",
     href: "/draft/5v5",
     color: "bg-red-500",
+    matchType: "5v5_draft",
   },
   {
     name: "6v6",
     players: 12,
     description: "Large scale battles",
     duration: "40-45 min",
-    reward: "$50",
+    reward: "$10",
     href: "/draft/6v6",
     color: "bg-indigo-500",
+    matchType: "6v6_draft",
   },
 ]
 
@@ -78,6 +87,7 @@ interface UnifiedDraftSelectorProps {
   buttonVariant?: "default" | "outline" | "secondary"
   buttonSize?: "sm" | "default" | "lg"
   className?: string
+  mode?: "browse" | "create" | "both" // Added mode prop to control functionality
 }
 
 export function UnifiedDraftSelector({
@@ -85,13 +95,69 @@ export function UnifiedDraftSelector({
   buttonVariant = "default",
   buttonSize = "default",
   className = "",
+  mode = "browse", // Default to browse mode for backward compatibility
 }: UnifiedDraftSelectorProps) {
   const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState<string | null>(null)
   const router = useRouter()
+  const supabase = createClient()
+  const { user, isAuthenticated } = useAuth()
 
   const handleFormatSelect = (format: (typeof draftFormats)[0]) => {
-    setOpen(false)
-    router.push(format.href)
+    if (mode === "browse") {
+      setOpen(false)
+      router.push(format.href)
+    }
+  }
+
+  const createLobby = async (format: (typeof draftFormats)[0]) => {
+    if (!isAuthenticated || !user) {
+      toast.error("Please log in to create a lobby")
+      return
+    }
+
+    setCreating(format.name)
+    try {
+      console.log(`[v0] Creating ${format.name} lobby...`)
+
+      const { data: match, error: matchError } = await supabase
+        .from("matches")
+        .insert({
+          name: `${format.name} Draft Lobby - ${new Date().toLocaleTimeString()}`,
+          match_type: format.matchType,
+          max_participants: format.players,
+          prize_pool: format.players * 10, // $10 per player
+          status: "waiting",
+          creator_id: user.id,
+          game: "Omega Strikers",
+        })
+        .select()
+        .single()
+
+      if (matchError) throw matchError
+
+      const { error: participantError } = await supabase.from("match_participants").insert({
+        match_id: match.id,
+        user_id: user.id,
+      })
+
+      if (participantError) throw participantError
+
+      console.log(`[v0] Created ${format.name} lobby:`, match.id)
+      setOpen(false)
+      router.push(`/leagues/lobby/${match.id}`)
+    } catch (error) {
+      console.error("Error creating lobby:", error)
+      toast.error(`Failed to create ${format.name} lobby: ${error.message}`)
+    } finally {
+      setCreating(null)
+    }
+  }
+
+  const getButtonText = () => {
+    if (mode === "create") return "Create Lobby"
+    if (mode === "both") return "Draft Options"
+    return buttonText
   }
 
   return (
@@ -99,17 +165,21 @@ export function UnifiedDraftSelector({
       <DialogTrigger asChild>
         <Button variant={buttonVariant} size={buttonSize} className={className}>
           <Gamepad2 className="h-4 w-4 mr-2" />
-          {buttonText}
+          {getButtonText()}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Gamepad2 className="h-5 w-5" />
-            Select Draft Format
+            {mode === "create" ? "Create Draft Lobby" : mode === "both" ? "Draft Options" : "Select Draft Format"}
           </DialogTitle>
           <DialogDescription>
-            Choose your preferred team format for ELO draft matches. All formats are FREE with $50 rewards!
+            {mode === "create"
+              ? "Create a new lobby for any draft format. All formats are FREE with rewards!"
+              : mode === "both"
+                ? "Browse existing lobbies or create new ones. All formats are FREE with rewards!"
+                : "Choose your preferred team format for ELO draft matches. All formats are FREE with rewards!"}
           </DialogDescription>
         </DialogHeader>
 
@@ -118,7 +188,7 @@ export function UnifiedDraftSelector({
             <Card
               key={format.name}
               className="hover:shadow-md transition-all cursor-pointer hover:scale-105"
-              onClick={() => handleFormatSelect(format)}
+              onClick={() => (mode === "browse" ? handleFormatSelect(format) : undefined)}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between mb-2">
@@ -148,9 +218,37 @@ export function UnifiedDraftSelector({
                   </Badge>
                 )}
 
-                <Button size="sm" className="w-full">
-                  Join {format.name}
-                </Button>
+                <div className="space-y-2">
+                  {(mode === "create" || mode === "both") && (
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        createLobby(format)
+                      }}
+                      disabled={creating === format.name}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      {creating === format.name ? "Creating..." : `Create ${format.name}`}
+                    </Button>
+                  )}
+
+                  {(mode === "browse" || mode === "both") && (
+                    <Button
+                      size="sm"
+                      variant={mode === "both" ? "outline" : "default"}
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleFormatSelect(format)
+                      }}
+                    >
+                      <Trophy className="h-3 w-3 mr-1" />
+                      Browse {format.name}
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -164,7 +262,7 @@ export function UnifiedDraftSelector({
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="bg-green-100 text-green-700">
-                $50 Reward
+                $10-$50 Reward
               </Badge>
               <span>Per player</span>
             </div>
