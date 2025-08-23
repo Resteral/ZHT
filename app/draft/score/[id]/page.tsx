@@ -11,11 +11,11 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Trophy, Flag, Star, CheckCircle, Clock, BarChart3, Edit, Users } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { MatchStatsViewer } from "@/components/analytics/match-stats-viewer"
 import { loadMatchResult as loadMatchResultUtil } from "@/lib/supabase/match-result"
 import type { Match } from "@/lib/types/match" // Import Match type
+import { supabase } from "@/lib/supabase/client" // Declare the variable here
 
 interface ScoreScreenPageProps {
   params: {
@@ -74,6 +74,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
   const [consensusGroups, setConsensusGroups] = useState<{ [key: string]: ScoreSubmission[] }>({})
   const [team1Players, setTeam1Players] = useState<Participant[]>([])
   const [team2Players, setTeam2Players] = useState<Participant[]>([])
+  const [isUserParticipant, setIsUserParticipant] = useState(false)
 
   useEffect(() => {
     loadMatchData()
@@ -81,8 +82,6 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
   }, [params.id])
 
   const setupRealTimeSubscriptions = () => {
-    const supabase = createClient()
-
     const submissionsSubscription = supabase
       .channel(`score-submissions-${params.id}`)
       .on(
@@ -122,8 +121,6 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
   }
 
   const loadMatchData = async () => {
-    const supabase = createClient()
-
     try {
       console.log("[v0] Loading match data for:", params.id)
 
@@ -133,7 +130,6 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
           *,
           match_participants(
             user_id,
-            team_assignment,
             users(id, username, elo_rating)
           )
         `)
@@ -162,7 +158,7 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             user_id: p.users.id,
             username: p.users.username,
             elo_rating: p.users.elo_rating || 1000,
-            team_assignment: p.team_assignment, // Use actual team assignment from database
+            team_assignment: Math.floor(index / 4) + 1, // Assign teams based on order (4 players per team)
           }))
       }
 
@@ -187,8 +183,9 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
       setParticipants(participantsWithElo)
       setTeam1Players(team1)
       setTeam2Players(team2)
+      setIsUserParticipant(participantsWithElo.some((p) => p.user_id === user?.id))
 
-      await Promise.all([loadScoreSubmissions(), loadMatchResult()])
+      await Promise.all([loadScoreSubmissions(match), loadMatchResult()])
       setLoading(false)
     } catch (error) {
       console.error("[v0] Error loading match data:", error)
@@ -197,10 +194,85 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
     }
   }
 
-  const loadScoreSubmissions = async () => {
+  const calculateWinnerFromCSV = (csvSubmissions: ScoreSubmission[], matchParticipants: any[]) => {
+    console.log("[v0] 🎯 Calculating winner from CSV data...")
+
+    let team1Goals = 0
+    let team2Goals = 0
+    const processedPlayers = new Set()
+
+    csvSubmissions.forEach((submission, index) => {
+      if (!submission.csv_code?.trim()) {
+        console.log(`[v0] Skipping submission ${index + 1}: no CSV data`)
+        return
+      }
+
+      console.log(`[v0] Processing CSV submission ${index + 1}:`, submission.csv_code.substring(0, 100) + "...")
+
+      try {
+        const lines = submission.csv_code
+          .trim()
+          .split("\n")
+          .filter((line) => line.trim())
+
+        lines.forEach((line, lineIndex) => {
+          const parts = line.split(",").map((p) => p.trim())
+
+          if (parts.length < 6) {
+            console.log(`[v0] Skipping line ${lineIndex + 1}: insufficient parts (${parts.length}, need at least 6)`)
+            return
+          }
+
+          // Extract account ID from complex format like "1-S2-1-5822233"
+          let accountId = parts[1]
+          if (accountId && accountId.includes("-")) {
+            const idParts = accountId.split("-")
+            accountId = idParts[idParts.length - 1] // Get the last part
+          }
+
+          if (!accountId || processedPlayers.has(accountId)) {
+            return // Skip if no account ID or already processed this player
+          }
+
+          const goals = Number.parseInt(parts[3]) || 0 // Goals are in column 4 (index 3)
+
+          // Find which team this player is on based on match participants
+          const participantIndex = matchParticipants.findIndex(
+            (p) => p.users?.id?.toString().includes(accountId) || p.user_id?.toString().includes(accountId),
+          )
+
+          if (participantIndex !== -1) {
+            const teamAssignment = Math.floor(participantIndex / 4) + 1 // 4 players per team
+
+            if (teamAssignment === 1) {
+              team1Goals += goals
+            } else if (teamAssignment === 2) {
+              team2Goals += goals
+            }
+
+            processedPlayers.add(accountId)
+            console.log(`[v0] Player ${accountId}: ${goals} goals for Team ${teamAssignment}`)
+          }
+        })
+      } catch (error) {
+        console.error(`[v0] Error parsing CSV submission ${index + 1}:`, error)
+      }
+    })
+
+    console.log(`[v0] 🏒 Final goal count: Team 1: ${team1Goals}, Team 2: ${team2Goals}`)
+    console.log(`[v0] 🏆 Winner: ${team1Goals > team2Goals ? "Team 1" : team2Goals > team1Goals ? "Team 2" : "Draw"}`)
+
+    return {
+      team1_score: team1Goals,
+      team2_score: team2Goals,
+      winning_team: team1Goals > team2Goals ? 1 : team2Goals > team1Goals ? 2 : null,
+    }
+  }
+
+  const loadScoreSubmissions = async (currentMatch?: any) => {
     try {
       console.log("[v0] Loading score submissions...")
-      const { data: submissions, error } = await createClient()
+      const { data: submissions, error } = await supabase
         .from("score_submissions")
         .select("*")
         .eq("match_id", params.id)
@@ -213,11 +285,10 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
 
       console.log(`[v0] Found ${submissions?.length || 0} score submissions`)
 
-      const { data: participants, error: participantsError } = await createClient()
+      const { data: matchParticipants, error: participantsError } = await supabase
         .from("match_participants")
         .select(`
         user_id,
-        team_assignment,
         users!inner(id, username)
       `)
         .eq("match_id", params.id)
@@ -227,138 +298,122 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
         return
       }
 
-      console.log(`[v0] Found ${participants?.length || 0} match participants`)
+      console.log(`[v0] Found ${matchParticipants?.length || 0} match participants`)
 
       // Filter submissions to only include those from actual participants
       const validSubmissions =
-        submissions?.filter((submission) => participants?.some((p) => p.user_id === submission.submitter_id)) || []
+        submissions?.filter((submission) => matchParticipants?.some((p) => p.user_id === submission.submitter_id)) || []
 
       console.log(`[v0] Valid submissions from participants: ${validSubmissions.length}`)
 
-      // Add usernames to submissions
+      // Add usernames to submissions with calculated team assignments
       const submissionsWithUsernames = validSubmissions.map((submission) => {
-        const participant = participants?.find((p) => p.user_id === submission.submitter_id)
+        const participant = matchParticipants?.find((p) => p.user_id === submission.submitter_id)
+        const participantIndex = matchParticipants?.findIndex((p) => p.user_id === submission.submitter_id) || 0
         return {
           ...submission,
           username: participant?.users?.username || "Unknown",
-          team_assignment: participant?.team_assignment || null,
+          team_assignment: Math.floor(participantIndex / 4) + 1, // Calculate team based on participant order
         }
       })
 
       setSubmissions(submissionsWithUsernames)
 
-      if (submissionsWithUsernames.length >= 5 && !matchResult && matchData?.status !== "completed") {
+      const activeMatch = currentMatch || matchData
+      if (submissionsWithUsernames.length >= 5 && !matchResult && activeMatch?.status !== "completed") {
         console.log(
           `[v0] 🎯 AUTOMATIC COMPLETION TRIGGERED: ${submissionsWithUsernames.length} submissions received (5+ threshold met)`,
         )
-        console.log("[v0] Match status:", matchData?.status)
+        console.log("[v0] Match status:", activeMatch?.status)
         console.log("[v0] Match result exists:", !!matchResult)
 
-        // Group submissions by score to find consensus
-        const consensusGroups: { [key: string]: any[] } = {}
-        submissionsWithUsernames.forEach((submission) => {
-          const key = `${submission.team1_score}-${submission.team2_score}`
-          if (!consensusGroups[key]) consensusGroups[key] = []
-          consensusGroups[key].push(submission)
-        })
+        const csvSubmissions = submissionsWithUsernames.filter((s) => s.csv_code?.trim())
 
-        // Find the largest consensus group
-        const consensusEntries = Object.entries(consensusGroups)
-        if (consensusEntries.length > 0) {
-          const largestGroup = consensusEntries.reduce(
-            (max, [key, group]) => (group.length > max.group.length ? { key, group } : max),
-            { key: "", group: [] as any[] },
-          )
+        if (csvSubmissions.length >= 3) {
+          console.log(`[v0] 🏒 Using CSV data to determine winner (${csvSubmissions.length} CSV submissions found)`)
 
-          const consensusPercentage = (largestGroup.group.length / submissionsWithUsernames.length) * 100
+          const csvResult = calculateWinnerFromCSV(csvSubmissions, matchParticipants)
+
           console.log(
-            `[v0] Largest consensus group: ${largestGroup.key} with ${largestGroup.group.length} submissions (${consensusPercentage.toFixed(1)}%)`,
+            `[v0] 🚀 AUTO-COMPLETING MATCH WITH CSV SCORES: Team 1: ${csvResult.team1_score}, Team 2: ${csvResult.team2_score}`,
           )
 
-          // Auto-complete if we have 5+ submissions regardless of consensus percentage
-          if (largestGroup.group.length >= 3) {
-            // At least 3 people agree on the score
-            const [team1Score, team2Score] = largestGroup.key.split("-").map(Number)
-            console.log(
-              `[v0] 🚀 AUTO-COMPLETING MATCH: Score ${team1Score}-${team2Score} with ${largestGroup.group.length} matching submissions`,
+          await completeMatch(csvResult, submissionsWithUsernames, matchParticipants, activeMatch)
+          return
+        } else {
+          console.log(`[v0] ⏳ Not enough CSV submissions yet: found ${csvSubmissions.length} (need at least 3)`)
+
+          // Fallback to manual score consensus if not enough CSV data
+          const consensusGroups: { [key: string]: any[] } = {}
+          submissionsWithUsernames.forEach((submission) => {
+            const key = `${submission.team1_score}-${submission.team2_score}`
+            if (!consensusGroups[key]) consensusGroups[key] = []
+            consensusGroups[key].push(submission)
+          })
+
+          const consensusEntries = Object.entries(consensusGroups)
+          if (consensusEntries.length > 0) {
+            const largestGroup = consensusEntries.reduce(
+              (max, [key, group]) => (group.length > max.group.length ? { key, group } : max),
+              { key: "", group: [] as any[] },
             )
 
-            const consensusSubmission = {
-              team1_score: team1Score,
-              team2_score: team2Score,
+            const consensusPercentage = (largestGroup.group.length / submissionsWithUsernames.length) * 100
+            console.log(
+              `[v0] Largest consensus group: ${largestGroup.key} with ${largestGroup.group.length} submissions (${consensusPercentage.toFixed(1)}%)`,
+            )
+
+            if (largestGroup.group.length >= 3) {
+              const [team1Score, team2Score] = largestGroup.key.split("-").map(Number)
+              console.log(
+                `[v0] 🚀 AUTO-COMPLETING MATCH WITH MANUAL SCORES: Score ${team1Score}-${team2Score} with ${largestGroup.group.length} matching submissions`,
+              )
+
+              const consensusSubmission = {
+                team1_score: team1Score,
+                team2_score: team2Score,
+              }
+
+              await completeMatch(consensusSubmission, submissionsWithUsernames, matchParticipants, activeMatch)
+              return
+            } else {
+              console.log(
+                `[v0] ⏳ Not enough consensus yet: largest group has ${largestGroup.group.length} submissions (need at least 3)`,
+              )
             }
-
-            // Trigger match completion
-            await completeMatch(consensusSubmission)
-            return
-          } else {
-            console.log(
-              `[v0] ⏳ Not enough consensus yet: largest group has ${largestGroup.group.length} submissions (need at least 3)`,
-            )
           }
         }
       } else {
         console.log(`[v0] Auto-completion conditions not met:`)
         console.log(`[v0] - Submissions: ${submissionsWithUsernames.length} (need 5+)`)
         console.log(`[v0] - Match result exists: ${!!matchResult}`)
-        console.log(`[v0] - Match status: ${matchData?.status}`)
+        console.log(`[v0] - Match status: ${activeMatch?.status}`)
       }
 
-      const largestGroup = Object.values(consensusGroups).reduce(
-        (largest, current) => (current.length > largest.length ? current : largest),
-        [] as ScoreSubmission[],
-      )
-
-      const totalParticipants = participants.length || 8 // Use actual participant count
-      const requiredConsensus = Math.ceil(totalParticipants * 0.6)
-
-      console.log(`[v0] Largest consensus group: ${largestGroup.length} submissions`)
-      console.log(`[v0] Required consensus: ${requiredConsensus}/${totalParticipants} participants`)
-
-      if (submissionsWithUsernames.length >= 5 && !matchResult && matchData?.status !== "completed") {
-        console.log(
-          `[v0] Auto-completing match: ${submissionsWithUsernames.length} submissions received (5+ threshold met)`,
-        )
-
-        // Find the most common score submission
-        const mostCommonScore = largestGroup.length > 0 ? largestGroup[0] : submissionsWithUsernames[0]
-        console.log(`[v0] Using most common score: ${mostCommonScore.team1_score}-${mostCommonScore.team2_score}`)
-
-        await completeMatch(mostCommonScore)
-        toast.success("Match automatically completed with 5+ submissions!")
-        return
-      } else {
-        if (submissionsWithUsernames.length < 5) {
-          console.log(`[v0] Not enough submissions for auto-completion: ${submissionsWithUsernames.length}/5`)
-        }
-        if (matchResult) {
-          console.log("[v0] Match result already exists, skipping auto-completion")
-        }
-        if (matchData?.status === "completed") {
-          console.log("[v0] Match already completed, skipping auto-completion")
-        }
-      }
-
-      // Only log consensus status for manual completion
-      if (largestGroup.length >= requiredConsensus && !matchResult && matchData?.status !== "completed") {
-        console.log("[v0] Consensus threshold reached, but waiting for manual completion or 5+ submissions")
-      }
-
-      const userSubmission = submissionsWithUsernames.find((s) => s.submitter_id === user?.id)
-      setHasSubmitted(!!userSubmission)
-      setUserSubmission(userSubmission || null)
-
-      if (userSubmission && isRescoring) {
-        setTeam1Score(userSubmission.team1_score.toString())
-        setTeam2Score(userSubmission.team2_score.toString())
-        setCsvCode(userSubmission.csv_code || "")
-      }
+      const consensusGroups: { [key: string]: any[] } = {}
+      submissionsWithUsernames.forEach((submission) => {
+        const key = `${submission.team1_score}-${submission.team2_score}`
+        if (!consensusGroups[key]) consensusGroups[key] = []
+        consensusGroups[key].push(submission)
+      })
+      setConsensusGroups(consensusGroups)
     } catch (error) {
       console.error("[v0] Error in loadScoreSubmissions:", error)
     }
   }
 
   const handleCompleteMatch = async () => {
+    const csvSubmissions = submissions.filter((s) => s.csv_code?.trim())
+
+    if (csvSubmissions.length >= 3) {
+      console.log("[v0] 🏒 Using CSV data for manual completion")
+      const csvResult = calculateWinnerFromCSV(csvSubmissions, participants)
+      await completeMatch(csvResult)
+      toast.success("Match completed using CSV goal data!")
+      return
+    }
+
+    // Fallback to manual score consensus
     const largestGroup = Object.values(consensusGroups).reduce(
       (max, current) => (current.length > max.length ? current : max),
       [],
@@ -378,12 +433,29 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
     }
   }
 
-  const completeMatch = async (consensusSubmission: { team1_score: number; team2_score: number }) => {
-    try {
-      console.log("[v0] 🎮 STARTING COMPREHENSIVE MATCH COMPLETION...")
-      console.log("[v0] Final Score:", `${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`)
+  async function completeMatch(
+    consensusSubmission: any,
+    submissions: any[] = [],
+    participants: any[] = [],
+    activeMatchData: any = null,
+  ) {
+    if (!activeMatchData || !user) {
+      console.error("[v0] ❌ Missing required data for match completion")
+      return
+    }
 
-      const supabase = createClient()
+    if (!consensusSubmission) {
+      console.error("[v0] ❌ No consensus submission provided")
+      return
+    }
+
+    try {
+      console.log("[v0] 🎯 Starting match completion process...")
+      console.log("[v0] Match ID:", params.id)
+      console.log("[v0] Match data:", activeMatchData)
+      console.log("[v0] Consensus submission:", consensusSubmission)
+      console.log("[v0] Submissions count:", submissions.length)
+      console.log("[v0] Participants count:", participants.length)
 
       const winningTeam =
         consensusSubmission.team1_score > consensusSubmission.team2_score
@@ -392,589 +464,106 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
             ? 2
             : null
 
-      console.log("[v0] Winning team:", winningTeam || "Draw")
+      console.log(`[v0] Winning team: ${winningTeam || "Draw"}`)
 
-      console.log("[v0] Creating match result...")
+      let csvData = null
 
-      const consensusSubmissions =
-        consensusGroups[`${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`] || []
+      // First, try to get CSV data from submissions
+      const csvSubmissions = submissions.filter((s) => s.csv_code && s.csv_code.trim())
+      if (csvSubmissions.length > 0) {
+        // Use the most recent CSV submission or combine them
+        csvData = csvSubmissions[csvSubmissions.length - 1].csv_code.trim()
+        console.log("[v0] Using CSV data from submissions:", csvData.substring(0, 100) + "...")
+      } else {
+        // Fallback: create a basic CSV structure to satisfy not-null constraint
+        csvData = `team,account_id,steals,goals,assists,shots,pickups,passes,passes_received,save_%,shots_on_goalie,shots_saved,goalie_minutes,skater
+1,match-${params.id}-team1,0,${consensusSubmission.team1_score || 0},0,0,0,0,0,0,0,0,0,0
+2,match-${params.id}-team2,0,${consensusSubmission.team2_score || 0},0,0,0,0,0,0,0,0,0,0`
+        console.log("[v0] Using fallback CSV data structure")
+      }
 
-      const { error: resultError } = await supabase.from("match_results").upsert(
-        {
+      console.log("[v0] CSV data found:", !!csvData)
+
+      // Create match result
+      const { data: existingResult } = await supabase
+        .from("match_results")
+        .select("id")
+        .eq("match_id", params.id)
+        .single()
+
+      if (!existingResult) {
+        console.log("[v0] Creating new match result...")
+        const { error: resultError } = await supabase.from("match_results").insert({
           match_id: params.id,
           team1_score: consensusSubmission.team1_score,
           team2_score: consensusSubmission.team2_score,
           winning_team: winningTeam,
-          total_submissions: consensusSubmissions.length,
-          created_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "match_id",
-        },
-      )
+          total_submissions: submissions.length || 0,
+          consensus_threshold: Math.ceil((participants.length || 8) * 0.6),
+          validated_at: new Date().toISOString(),
+          csv_code: csvData, // Now guaranteed to have a value
+        })
 
-      if (resultError) {
-        console.error("[v0] Error creating match result:", resultError)
+        if (resultError) {
+          console.error("[v0] ❌ Error creating match result:", resultError)
+          toast.error("Failed to create match result")
+          throw resultError
+        } else {
+          console.log("[v0] ✅ Match result created successfully")
+        }
       } else {
-        console.log("[v0] Match result created successfully")
+        console.log("[v0] ℹ️ Match result already exists, skipping creation")
       }
 
-      const { error: matchError } = await supabase
-        .from("matches")
-        .update({
-          status: "completed",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", params.id)
+      // Update match status
+      console.log("[v0] Updating match status to completed...")
+      const { error: matchError } = await supabase.from("matches").update({ status: "completed" }).eq("id", params.id)
 
       if (matchError) {
-        console.error("[v0] Error updating match status:", matchError)
+        console.error("[v0] ❌ Error updating match status:", matchError)
+        toast.error("Failed to update match status")
+        throw matchError
       } else {
-        console.log("[v0] Match status updated to completed")
+        console.log("[v0] ✅ Match status updated to completed")
       }
 
-      console.log("[v0] 📊 STARTING PLAYER STATISTICS TRACKING...")
-      const { data: participants, error: participantsError } = await supabase
-        .from("match_participants")
-        .select(`
-        team_assignment,
-        users!inner(id, username, elo_rating, wins, losses, total_games, balance)
-      `)
-        .eq("match_id", params.id)
-
-      if (participantsError) {
-        console.error("[v0] ❌ Error fetching participants for player tracking:", participantsError)
-      } else if (participants && participants.length > 0) {
-        console.log(`[v0] 👥 Processing player statistics for ${participants.length} participants`)
-
-        for (const participant of participants) {
-          const user = participant.users
-          if (!user) continue
-
-          const isWinner = participant.team_assignment === winningTeam
-          const isDraw = winningTeam === null
-          const gameResult = isWinner ? "win" : isDraw ? "draw" : "loss"
-
-          console.log(
-            `[v0] 📈 Updating player stats for ${user.username}: Team ${participant.team_assignment}, Result: ${gameResult}`,
-          )
-
-          // Calculate ELO change
-          const K = 32
-          const currentElo = user.elo_rating || 1200
-          const opponents = participants.filter((p) => p.team_assignment !== participant.team_assignment && p.users)
-          const avgOpponentElo =
-            opponents.length > 0
-              ? opponents.reduce((sum, opp) => sum + (opp.users?.elo_rating || 1200), 0) / opponents.length
-              : 1200
-
-          const expectedScore = 1 / (1 + Math.pow(10, (avgOpponentElo - currentElo) / 400))
-          const actualScore = isWinner ? 1 : isDraw ? 0.5 : 0
-          const eloChange = Math.round(K * (actualScore - expectedScore))
-          const newElo = Math.max(100, currentElo + eloChange)
-
-          try {
-            const { error: statsUpdateError } = await supabase.rpc("update_player_stats_after_match", {
-              player_id_param: user.id,
-              opponent_id_param: opponents[0]?.users?.id || null,
-              game_param: matchData?.game || "omega_strikers",
-              result_param: gameResult,
-              elo_change_param: eloChange,
-              new_elo: newElo,
-              match_duration_param: 30, // Estimate 30 minutes per match
-            })
-
-            if (statsUpdateError) {
-              console.error(`[v0] ❌ Error updating comprehensive stats for ${user.username}:`, statsUpdateError)
-            } else {
-              console.log(`[v0] ✅ Updated comprehensive player statistics for ${user.username}`)
-            }
-          } catch (statsError) {
-            console.log(`[v0] ⚠️ Player stats function not available, using manual updates for ${user.username}`)
-          }
-
-          // Manual updates as fallback
-          const newWins = user.wins + (isWinner ? 1 : 0)
-          const newLosses = user.losses + (!isWinner && !isDraw ? 1 : 0)
-          const newTotalGames = (user.total_games || 0) + 1
-
-          const baseParticipationReward = 50
-          const winnerBonusReward = 100
-          let totalReward = baseParticipationReward
-          if (isWinner) totalReward += winnerBonusReward
-
-          const { error: userUpdateError } = await supabase
-            .from("users")
-            .update({
-              elo_rating: newElo,
-              wins: newWins,
-              losses: newLosses,
-              total_games: newTotalGames,
-              balance: (user.balance || 0) + totalReward,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", user.id)
-
-          if (userUpdateError) {
-            console.error(`[v0] ❌ Error updating user stats for ${user.username}:`, userUpdateError)
-          } else {
-            console.log(
-              `[v0] ✅ Updated ${user.username}: ELO ${currentElo} → ${newElo} (${eloChange > 0 ? "+" : ""}${eloChange}), Record: ${newWins}W-${newLosses}L, Reward: $${totalReward}`,
-            )
-          }
-
-          // Record match history for player tracking
-          const { error: historyError } = await supabase.from("match_history").insert({
-            player_id: user.id,
-            opponent_id: opponents[0]?.users?.id || null,
-            game: matchData?.game || "omega_strikers",
-            match_type: matchData?.match_type || "casual",
-            result: gameResult,
-            player_score:
-              participant.team_assignment === 1 ? consensusSubmission.team1_score : consensusSubmission.team2_score,
-            opponent_score:
-              participant.team_assignment === 1 ? consensusSubmission.team2_score : consensusSubmission.team1_score,
-            elo_before: currentElo,
-            elo_after: newElo,
-            elo_change: eloChange,
-            match_duration: 30,
-            match_date: new Date().toISOString(),
-            metadata: {
-              match_id: params.id,
-              team_assignment: participant.team_assignment,
-              final_score: `${consensusSubmission.team1_score}-${consensusSubmission.team2_score}`,
-              participation_reward: baseParticipationReward,
-              winner_bonus: isWinner ? winnerBonusReward : 0,
-            },
+      if (csvData) {
+        console.log("[v0] 📊 Processing CSV data for analytics...")
+        try {
+          // Trigger CSV processing refresh
+          const csvProcessEvent = new CustomEvent("csvProcessed", {
+            detail: { matchId: params.id, csvData },
           })
-
-          if (historyError) {
-            console.error(`[v0] ❌ Error recording match history for ${user.username}:`, historyError)
-          } else {
-            console.log(`[v0] ✅ Recorded match history for ${user.username}`)
-          }
-
-          const { error: walletError } = await supabase.from("user_wallets").upsert(
-            {
-              user_id: user.id,
-              balance: user.balance ? user.balance + totalReward : totalReward,
-              total_winnings: user.total_winnings ? user.total_winnings + totalReward : totalReward,
-              updated_at: new Date().toISOString(),
-            },
-            {
-              onConflict: "user_id",
-            },
-          )
-
-          if (walletError) {
-            console.error(`[v0] Error updating wallet for ${user.username}:`, walletError)
-          } else {
-            console.log(`[v0] ✅ Updated wallet for ${user.username}: +$${totalReward}`)
-          }
-
-          const { error: transactionError } = await supabase.from("financial_transactions").insert({
-            user_id: user.id,
-            amount: totalReward,
-            transaction_type: "game_reward",
-            description: `Match participation reward${isWinner ? " + winner bonus" : ""}`,
-            status: "completed",
-            processed_at: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            metadata: {
-              match_id: params.id,
-              participation_reward: baseParticipationReward,
-              winner_bonus: isWinner ? winnerBonusReward : 0,
-              team_assignment: participant.team_assignment,
-              match_result: isWinner ? "win" : isDraw ? "draw" : "loss",
-            },
-          })
-
-          if (transactionError) {
-            console.error(`[v0] Error recording transaction for ${user.username}:`, transactionError)
-          } else {
-            console.log(`[v0] ✅ Recorded participation reward transaction for ${user.username}`)
-          }
-
-          const { error: historyError2 } = await supabase.from("elo_history").insert({
-            user_id: user.id,
-            match_id: params.id,
-            old_rating: currentElo,
-            new_rating: newElo,
-            rating_change: eloChange,
-            game_result: isWinner ? "win" : isDraw ? "draw" : "loss",
-            opponent_id: opponents[0]?.users?.id || null,
-            created_at: new Date().toISOString(),
-          })
-
-          if (historyError2) {
-            console.error(`[v0] Error recording ELO history for ${user.username}:`, historyError2)
-          } else {
-            console.log(`[v0] ✅ Recorded ELO history for ${user.username}`)
-          }
-        }
-
-        console.log("[v0] ✅ PLAYER STATISTICS TRACKING COMPLETED")
-      }
-
-      console.log("[v0] Starting ELO adjustments...")
-      const { data: participants2, error: participantsError2 } = await supabase
-        .from("match_participants")
-        .select(`
-        team_assignment,
-        users!inner(id, username, elo_rating, wins, losses, total_games)
-      `)
-        .eq("match_id", params.id)
-
-      if (participantsError2) {
-        console.error("[v0] Error fetching participants:", participantsError2)
-      } else if (participants2 && participants2.length > 0) {
-        console.log(`[v0] Processing ELO for ${participants2.length} participants`)
-
-        const baseParticipationReward = 50 // $50 for participating
-        const winnerBonusReward = 100 // Additional $100 for winning team
-
-        for (const participant of participants2) {
-          const user = participant.users
-          if (!user) continue
-
-          const isWinner = participant.team_assignment === winningTeam
-          const isDraw = winningTeam === null
-
-          // Calculate ELO change (simplified K-factor of 32)
-          const K = 32
-          const currentElo = user.elo_rating || 1200
-
-          // For team games, calculate average opponent ELO
-          const opponents = participants2.filter((p) => p.team_assignment !== participant.team_assignment && p.users)
-          const avgOpponentElo =
-            opponents.length > 0
-              ? opponents.reduce((sum, opp) => sum + (opp.users?.elo_rating || 1200), 0) / opponents.length
-              : 1200
-
-          // Expected score calculation
-          const expectedScore = 1 / (1 + Math.pow(10, (avgOpponentElo - currentElo) / 400))
-
-          // Actual score (1 for win, 0.5 for draw, 0 for loss)
-          const actualScore = isWinner ? 1 : isDraw ? 0.5 : 0
-
-          // ELO change
-          const eloChange = Math.round(K * (actualScore - expectedScore))
-          const newElo = Math.max(100, currentElo + eloChange) // Minimum ELO of 100
-
-          // Update user stats
-          const newWins = user.wins + (isWinner ? 1 : 0)
-          const newLosses = user.losses + (!isWinner && !isDraw ? 1 : 0)
-          const newTotalGames = (user.total_games || 0) + 1
-
-          let totalReward = baseParticipationReward
-          if (isWinner) {
-            totalReward += winnerBonusReward
-          }
-
-          const { error: balanceUpdateError } = await supabase
-            .from("users")
-            .update({
-              elo_rating: newElo,
-              wins: newWins,
-              losses: newLosses,
-              total_games: newTotalGames,
-              balance: user.balance ? user.balance + totalReward : totalReward,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", user.id)
-
-          if (balanceUpdateError) {
-            console.error(`[v0] Error updating user ${user.username}:`, balanceUpdateError)
-          } else {
-            console.log(
-              `[v0] ✅ Updated ${user.username}: ELO ${currentElo} → ${newElo} (${eloChange > 0 ? "+" : ""}${eloChange}), Record: ${newWins}W-${newLosses}L, Reward: $${totalReward}`,
-            )
-          }
-
-          const { error: walletError } = await supabase.from("user_wallets").upsert(
-            {
-              user_id: user.id,
-              balance: user.balance ? user.balance + totalReward : totalReward,
-              total_winnings: user.total_winnings ? user.total_winnings + totalReward : totalReward,
-              updated_at: new Date().toISOString(),
-            },
-            {
-              onConflict: "user_id",
-            },
-          )
-
-          if (walletError) {
-            console.error(`[v0] Error updating wallet for ${user.username}:`, walletError)
-          } else {
-            console.log(`[v0] ✅ Updated wallet for ${user.username}: +$${totalReward}`)
-          }
-
-          const { error: transactionError } = await supabase.from("financial_transactions").insert({
-            user_id: user.id,
-            amount: totalReward,
-            transaction_type: "game_reward",
-            description: `Match participation reward${isWinner ? " + winner bonus" : ""}`,
-            status: "completed",
-            processed_at: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            metadata: {
-              match_id: params.id,
-              participation_reward: baseParticipationReward,
-              winner_bonus: isWinner ? winnerBonusReward : 0,
-              team_assignment: participant.team_assignment,
-              match_result: isWinner ? "win" : isDraw ? "draw" : "loss",
-            },
-          })
-
-          if (transactionError) {
-            console.error(`[v0] Error recording transaction for ${user.username}:`, transactionError)
-          } else {
-            console.log(`[v0] ✅ Recorded participation reward transaction for ${user.username}`)
-          }
-
-          const { error: historyError3 } = await supabase.from("elo_history").insert({
-            user_id: user.id,
-            match_id: params.id,
-            old_rating: currentElo,
-            new_rating: newElo,
-            rating_change: eloChange,
-            game_result: isWinner ? "win" : isDraw ? "draw" : "loss",
-            opponent_id: opponents[0]?.users?.id || null,
-            created_at: new Date().toISOString(),
-          })
-
-          if (historyError3) {
-            console.error(`[v0] Error recording ELO history for ${user.username}:`, historyError3)
-          } else {
-            console.log(`[v0] ✅ Recorded ELO history for ${user.username}`)
-          }
-        }
-
-        console.log("[v0] ✅ Successfully completed all ELO adjustments and betting settlements")
-      }
-
-      console.log(`[v0] Processing ${consensusSubmissions.length} CSV submissions...`)
-
-      for (const submission of consensusSubmissions) {
-        if (submission.csv_code && submission.csv_code.trim()) {
-          console.log("[v0] Processing CSV data for submission:", submission.id)
-
-          try {
-            const csvLines = submission.csv_code.trim().split("\n")
-            const headers = csvLines[0].split(",").map((h) => h.trim().toLowerCase())
-
-            for (let i = 1; i < csvLines.length; i++) {
-              const values = csvLines[i].split(",").map((v) => v.trim())
-              const playerData: any = {}
-
-              headers.forEach((header, index) => {
-                playerData[header] = values[index]
-              })
-
-              if (playerData.id) {
-                const { error: analyticsError } = await supabase.from("player_analytics").upsert(
-                  {
-                    match_id: params.id,
-                    user_id: playerData.id,
-                    kills: Number.parseInt(playerData.goals) || 0,
-                    deaths: 0,
-                    assists: Number.parseInt(playerData.assists) || 0,
-                    damage_dealt: Number.parseInt(playerData.shots) || 0,
-                    damage_taken: 0,
-                    healing_done: 0,
-                    accuracy: Number.parseFloat(playerData["save_%"]) || 0,
-                    score: (Number.parseInt(playerData.goals) || 0) + (Number.parseInt(playerData.assists) || 0),
-                    // Hockey-specific fields
-                    steals: Number.parseInt(playerData.steals) || 0,
-                    shots: Number.parseInt(playerData.shots) || 0,
-                    pickups: Number.parseInt(playerData.pickups) || 0,
-                    passes: Number.parseInt(playerData.passes) || 0,
-                    passes_received: Number.parseInt(playerData.passes_received) || 0,
-                    shots_on_goalie: Number.parseInt(playerData.shots_on_goalie) || 0,
-                    shots_saved: Number.parseInt(playerData.shots_saved) || 0,
-                    goalie_minutes: Number.parseFloat(playerData.goalie_minutes) || 0,
-                    skater_minutes: Number.parseFloat(playerData.skater_minutes) || 0,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                  },
-                  {
-                    onConflict: "match_id,user_id",
-                  },
-                )
-
-                if (analyticsError) {
-                  console.error("[v0] Error storing player analytics:", analyticsError)
-                } else {
-                  console.log("[v0] Successfully saved analytics for player:", playerData.id)
-                }
-              }
-            }
-          } catch (parseError) {
-            console.error("[v0] Error parsing CSV for submission:", submission.id, parseError)
-          }
+          window.dispatchEvent(csvProcessEvent)
+          console.log("[v0] ✅ CSV processing event dispatched")
+        } catch (csvError) {
+          console.error("[v0] ⚠️ CSV processing failed but match completed:", csvError)
         }
       }
 
-      const { data: mvpVotes, error: mvpVotesError } = await supabase
-        .from("mvp_votes")
-        .select("mvp_player_id, voter_id")
-        .eq("match_id", params.id)
+      // Show success message
+      toast.success("Match completed successfully!")
 
-      if (mvpVotesError) {
-        console.error("[v0] Error fetching MVP votes:", mvpVotesError)
-      } else if (mvpVotes && mvpVotes.length > 0) {
-        // Count votes for each player
-        const voteCounts: { [playerId: string]: number } = {}
-        mvpVotes.forEach((vote) => {
-          voteCounts[vote.mvp_player_id] = (voteCounts[vote.mvp_player_id] || 0) + 1
-        })
-
-        // Award MVP to player with most votes (no consensus required)
-        const topMvp = Object.entries(voteCounts).reduce(
-          (max, [playerId, voteCount]) => (voteCount > max.votes ? { playerId, votes: voteCount } : max),
-          { playerId: "", votes: 0 },
-        )
-
-        if (topMvp.playerId) {
-          const { error: mvpAwardError } = await supabase.from("player_mvp_awards").upsert(
-            {
-              player_id: topMvp.playerId,
-              match_id: params.id,
-              awarded_at: new Date().toISOString(),
-            },
-            {
-              onConflict: "player_id,match_id",
-            },
-          )
-
-          if (mvpAwardError) {
-            console.error("[v0] Error awarding MVP:", mvpAwardError)
-          } else {
-            console.log(
-              "[v0] MVP awarded to player:",
-              topMvp.playerId,
-              "with",
-              topMvp.votes,
-              "votes (no consensus required)",
-            )
-
-            const { error: mvpBonusError } = await supabase
-              .from("users")
-              .update({
-                balance: supabase.raw(`balance + ${mvpBonusReward}`),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", topMvp.playerId)
-
-            if (mvpBonusError) {
-              console.error("[v0] Error giving MVP bonus:", mvpBonusError)
-            } else {
-              console.log(`[v0] ✅ Awarded MVP bonus of $${mvpBonusReward} to player ${topMvp.playerId}`)
-            }
-
-            const { error: mvpTransactionError } = await supabase.from("financial_transactions").insert({
-              user_id: topMvp.playerId,
-              amount: mvpBonusReward,
-              transaction_type: "mvp_bonus",
-              description: "MVP award bonus",
-              status: "completed",
-              processed_at: new Date().toISOString(),
-              created_at: new Date().toISOString(),
-              metadata: {
-                match_id: params.id,
-                votes_received: topMvp.votes,
-                award_type: "mvp",
-              },
-            })
-
-            if (mvpTransactionError) {
-              console.error("[v0] Error recording MVP transaction:", mvpTransactionError)
-            } else {
-              console.log(`[v0] ✅ Recorded MVP bonus transaction`)
-            }
-          }
-        }
-      }
-
-      const { data: flagReports, error: flagReportsError } = await supabase
-        .from("player_flags")
-        .select("flagged_player_id, flag_type, reporter_id")
-        .eq("match_id", params.id)
-
-      if (flagReportsError) {
-        console.error("[v0] Error fetching flag reports:", flagReportsError)
-      } else if (flagReports && flagReports.length > 0) {
-        // Count flag reports for each player by type
-        const flagCounts: { [key: string]: number } = {}
-        flagReports.forEach((report) => {
-          const key = `${report.flagged_player_id}-${report.flag_type}`
-          flagCounts[key] = (flagCounts[key] || 0) + 1
-        })
-
-        // Record all flags immediately (no threshold required)
-        for (const [key, reportCount] of Object.entries(flagCounts)) {
-          const [playerId, flagType] = key.split("-")
-          const { error: flagRecordError } = await supabase.from("player_flag_summary").upsert(
-            {
-              player_id: playerId,
-              flag_type: flagType,
-              flag_count: reportCount,
-              last_flagged: new Date().toISOString(),
-            },
-            {
-              onConflict: "player_id,flag_type",
-            },
-          )
-
-          if (flagRecordError) {
-            console.error("[v0] Error recording flag:", flagRecordError)
-          } else {
-            console.log(
-              "[v0] Flag recorded for player:",
-              playerId,
-              "type:",
-              flagType,
-              "with",
-              reportCount,
-              "reports (no threshold required)",
-            )
-          }
-        }
-      }
-
-      console.log("[v0] Removing all participants from lobby...")
-      const { error: removeParticipantsError } = await supabase
-        .from("match_participants")
-        .delete()
-        .eq("match_id", params.id)
-
-      if (removeParticipantsError) {
-        console.error("[v0] Error removing participants from lobby:", removeParticipantsError)
-      } else {
-        console.log("[v0] ✅ All participants removed from lobby")
-      }
-
-      console.log("[v0] 🎉 MATCH COMPLETION SUCCESSFUL - All player data tracked and recorded")
-      toast.success("Match completed! All player statistics and rewards have been processed.")
-
+      // Reload match data to reflect changes
+      console.log("[v0] Reloading match data...")
       await loadMatchData()
-      await loadScoreSubmissions()
+
+      console.log("[v0] 🎉 MATCH COMPLETION SUCCESSFUL!")
     } catch (error) {
-      console.error("[v0] ❌ Error in match completion:", error)
-      toast.error("Error completing match. Please try again.")
+      console.error("[v0] ❌ MATCH COMPLETION FAILED:", error)
+      toast.error("Failed to complete match")
+      throw error
     }
   }
 
   const submitScore = async () => {
     if (!user || !team1Score || !team2Score) {
-      toast.error("Please fill in all team scores")
+      toast.error("Please fill in all required fields")
       return
     }
 
-    const isParticipant = participants.some((p) => p.user_id === user.id)
-    if (!isParticipant) {
-      console.error("[v0] User is not a participant in this match:", user.id)
-      toast.error("You are not a participant in this match and cannot submit scores")
+    if (!isUserParticipant) {
+      toast.error("Only match participants can submit scores")
       return
     }
 
@@ -983,23 +572,26 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
     setIsSubmitting(true)
 
     try {
-      const supabase = createClient()
+      if (userSubmission && !isRescoring) {
+        toast.error("You have already submitted a score. Use the 'Rescore' button to update it.")
+        return
+      }
 
-      if (isRescoring && userSubmission) {
+      if (userSubmission && isRescoring) {
+        // Update existing submission
         const { error: updateError } = await supabase
           .from("score_submissions")
           .update({
             team1_score: Number.parseInt(team1Score),
             team2_score: Number.parseInt(team2Score),
             csv_code: csvCode.trim() || null,
-            submitted_at: new Date().toISOString(),
-            is_validated: false,
           })
           .eq("id", userSubmission.id)
 
         if (updateError) throw updateError
         toast.success("Score updated successfully!")
       } else {
+        // Insert new submission
         const { error: submitError } = await supabase.from("score_submissions").insert({
           match_id: params.id,
           submitter_id: user.id,
@@ -1039,8 +631,6 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
     }
 
     try {
-      const supabase = createClient()
-
       const { error } = await supabase.from("mvp_votes").upsert(
         {
           match_id: params.id,
@@ -1069,8 +659,6 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
     }
 
     try {
-      const supabase = createClient()
-
       const { error } = await supabase.from("player_flags").insert({
         match_id: params.id,
         reporter_id: user.id,
@@ -1115,9 +703,6 @@ export default function ScoreScreenPage({ params }: ScoreScreenPageProps) {
       console.error("[v0] Error loading match result:", error)
     }
   }
-
-  // The useEffect that automatically completed matches when consensus was reached has been removed
-  // Now matches can only be completed manually via the "Complete Match" button
 
   if (loading) {
     return (

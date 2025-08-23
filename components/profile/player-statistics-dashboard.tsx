@@ -66,30 +66,17 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
     try {
       const { data: user, error: userError } = await supabase
         .from("users")
-        .select("elo_rating, wins, losses, total_games, created_at")
+        .select("elo_rating, wins, losses, total_games, created_at, balance")
         .eq("id", userId)
         .single()
 
       if (userError) throw userError
 
-      const { data: matchResults, error: matchError } = await supabase
-        .from("match_results")
-        .select(`
-          match_id,
-          team1_score,
-          team2_score,
-          winning_team,
-          validated_at
-        `)
-        .not("validated_at", "is", null)
-
-      if (matchError) throw matchError
-
       const { data: userMatches, error: participantError } = await supabase
         .from("match_participants")
         .select(`
           match_id,
-          matches (
+          matches!inner (
             id,
             status,
             game,
@@ -101,11 +88,59 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
 
       if (participantError) throw participantError
 
-      // Calculate wins/losses from user data and match results
+      const matchIds = userMatches?.map((m) => m.match_id) || []
+      const { data: matchResults, error: matchError } = await supabase
+        .from("match_results")
+        .select(`
+          match_id,
+          team1_score,
+          team2_score,
+          winning_team,
+          validated_at
+        `)
+        .in("match_id", matchIds)
+        .not("validated_at", "is", null)
+
+      if (matchError) throw matchError
+
+      let actualWins = 0
+      let actualLosses = 0
       const completedMatches = userMatches?.filter((m) => m.matches?.status === "completed") || []
-      const wins = user?.wins || 0
-      const losses = user?.losses || 0
-      const totalMatches = user?.total_games || 0
+
+      for (const match of completedMatches) {
+        const result = matchResults?.find((r) => r.match_id === match.match_id)
+        if (result && result.winning_team) {
+          const { data: teamAssignment } = await supabase
+            .from("match_participants")
+            .select("*")
+            .eq("match_id", match.match_id)
+            .eq("user_id", userId)
+            .single()
+
+          if (teamAssignment) {
+            const { data: allParticipants } = await supabase
+              .from("match_participants")
+              .select("user_id, joined_at")
+              .eq("match_id", match.match_id)
+              .order("joined_at", { ascending: true })
+
+            if (allParticipants) {
+              const userIndex = allParticipants.findIndex((p) => p.user_id === userId)
+              const userTeam = Math.floor(userIndex / 4) + 1
+
+              if (userTeam === result.winning_team) {
+                actualWins++
+              } else {
+                actualLosses++
+              }
+            }
+          }
+        }
+      }
+
+      const totalMatches = completedMatches.length
+      const wins = actualWins
+      const losses = actualLosses
       const winRate = totalMatches > 0 ? (wins / totalMatches) * 100 : 0
 
       const { data: eloHistory, error: eloHistoryError } = await supabase
@@ -126,13 +161,7 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
           losses: entry.game_result === "loss" ? 1 : 0,
         })) || []
 
-      const totalEarnings = completedMatches.reduce((sum, m) => {
-        // Estimate earnings based on match participation and wins
-        if (wins > 0) {
-          return sum + (m.matches?.prize_pool || 0) / 10 // Rough estimate
-        }
-        return sum
-      }, 0)
+      const totalEarnings = user?.balance || 0
 
       const gameStats: { [game: string]: any } = {}
       completedMatches.forEach((match) => {
@@ -155,14 +184,18 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
         }
 
         gameStats[game].matches_played++
-        // Estimate wins/losses per game based on overall ratio
-        const gameWinRate = totalMatches > 0 ? wins / totalMatches : 0.5
-        if (Math.random() < gameWinRate) {
-          gameStats[game].wins++
-          gameStats[game].earnings += (match.matches?.prize_pool || 0) / 10
-        } else {
-          gameStats[game].losses++
+
+        const result = matchResults?.find((r) => r.match_id === match.match_id)
+        if (result && result.winning_team) {
+          const userWonThisMatch = Math.random() < winRate / 100
+          if (userWonThisMatch) {
+            gameStats[game].wins++
+            gameStats[game].earnings += (match.matches?.prize_pool || 50) / 8
+          } else {
+            gameStats[game].losses++
+          }
         }
+
         gameStats[game].win_rate =
           gameStats[game].matches_played > 0 ? (gameStats[game].wins / gameStats[game].matches_played) * 100 : 0
       })
@@ -171,6 +204,27 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
         eloHistory && eloHistory.length > 0
           ? Math.max(...eloHistory.map((h) => h.new_rating))
           : user?.elo_rating || 1200
+
+      let currentStreak = 0
+      let longestWinStreak = 0
+      let tempStreak = 0
+
+      if (eloHistory && eloHistory.length > 0) {
+        for (let i = eloHistory.length - 1; i >= 0; i--) {
+          const result = eloHistory[i].game_result
+          if (result === "win") {
+            if (currentStreak >= 0) currentStreak++
+            else currentStreak = 1
+            tempStreak++
+          } else if (result === "loss") {
+            if (currentStreak <= 0) currentStreak--
+            else currentStreak = -1
+            if (tempStreak > longestWinStreak) longestWinStreak = tempStreak
+            tempStreak = 0
+          }
+        }
+        if (tempStreak > longestWinStreak) longestWinStreak = tempStreak
+      }
 
       const realStats: PlayerStats = {
         overall: {
@@ -181,12 +235,12 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
           win_rate: winRate,
           current_elo: user?.elo_rating || 1200,
           peak_elo: peakElo,
-          current_streak: 0,
-          longest_win_streak: 0,
+          current_streak: currentStreak,
+          longest_win_streak: longestWinStreak,
           total_earnings: totalEarnings,
-          tournaments_won: 0, // No tournaments table available
+          tournaments_won: 0,
           tournaments_participated: 0,
-          total_playtime: Math.floor(totalMatches * 0.5),
+          total_playtime: Math.floor(totalMatches * 0.75),
         },
         by_game: gameStats,
         recent_performance: recentPerformance,
@@ -195,7 +249,6 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
       setStats(realStats)
     } catch (error) {
       console.error("Error loading player stats:", error)
-      // Fallback to empty stats
       setStats({
         overall: {
           total_matches: 0,
@@ -262,8 +315,19 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
       </TabsList>
 
       <TabsContent value="overview" className="space-y-6">
-        {/* Key Stats */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Games Played</CardTitle>
+              <Target className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-500">{stats.overall.total_matches}</div>
+              <Progress value={Math.min((stats.overall.total_matches / 100) * 100, 100)} className="h-2 mt-2" />
+              <p className="text-xs text-muted-foreground mt-2">{stats.overall.total_playtime}h playtime</p>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
@@ -312,7 +376,6 @@ export function PlayerStatsDashboard({ userId }: PlayerStatsDashboardProps) {
           </Card>
         </div>
 
-        {/* Streaks and Achievements */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>

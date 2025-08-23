@@ -19,6 +19,13 @@ interface ProfileStatsProps {
 export function ProfileStats({ user }: ProfileStatsProps) {
   const stats = [
     {
+      title: "Games Played",
+      value: user.totalGames.toString(),
+      icon: Target,
+      color: "text-blue-500",
+      progress: Math.min((user.totalGames / 100) * 100, 100),
+    },
+    {
       title: "Win Rate",
       value: `${user.winRate}%`,
       icon: Trophy,

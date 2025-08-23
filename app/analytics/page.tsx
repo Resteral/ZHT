@@ -10,7 +10,50 @@ import { MatchStatsViewer } from "@/components/analytics/match-stats-viewer"
 import { createClient } from "@/lib/supabase/client"
 import { analyticsService, type PlayerAnalytics, type TeamAnalytics } from "@/lib/services/analytics-service"
 import type { CSVPlayerStats } from "@/lib/services/csv-stats-service"
-import { Search, TrendingUp, Users, Target, Download } from "lucide-react"
+import { Search, TrendingUp, Users, Target, Download, Trophy, DollarSign } from "lucide-react"
+
+interface DetailedMatch {
+  id: string
+  name: string
+  match_type: string
+  status: string
+  created_at: string
+  team1_score: number
+  team2_score: number
+  winner: string
+  team1_players: Array<{
+    id: string
+    username: string
+    display_name: string
+    account_id: string
+  }>
+  team2_players: Array<{
+    id: string
+    username: string
+    display_name: string
+    account_id: string
+  }>
+  betting_info: {
+    total_bets: number
+    total_volume: number
+    winning_bets: number
+    losing_bets: number
+  }
+  individual_csv_stats: Array<{
+    player_id: string
+    player_name: string
+    account_id: string
+    team: number
+    goals: number
+    assists: number
+    saves: number
+    shots: number
+    steals: number
+    passes: number
+    goalie_minutes: number
+    skater_minutes: number
+  }>
+}
 
 interface Match {
   id: string
@@ -75,6 +118,10 @@ export default function AnalyticsPage() {
   const [csvStats, setCsvStats] = useState<CSVPlayerStats[]>([])
   const [loadingCsvStats, setLoadingCsvStats] = useState(false)
 
+  const [detailedMatches, setDetailedMatches] = useState<DetailedMatch[]>([])
+  const [loadingDetailedMatches, setLoadingDetailedMatches] = useState(false)
+  const [selectedDetailedMatch, setSelectedDetailedMatch] = useState<string | null>(null)
+
   const supabase = createClient()
 
   const loadEloStats = async () => {
@@ -122,51 +169,99 @@ export default function AnalyticsPage() {
         return
       }
 
-      const csvStatsData: CSVPlayerStats[] = []
+      const aggregatedStats = new Map()
+
+      const { data: allUsers } = await supabase
+        .from("users")
+        .select("account_id, username, display_name")
+        .not("account_id", "is", null)
+
+      const accountIdMap = new Map()
+      allUsers?.forEach((user) => {
+        if (user.account_id) {
+          accountIdMap.set(user.account_id, user.display_name || user.username)
+        }
+      })
+
+      console.log(`[v0] Created account ID mapping for ${accountIdMap.size} users`)
 
       for (const submission of submissions || []) {
         if (!submission.csv_code?.trim()) continue
 
         try {
           const csvLines = submission.csv_code.trim().split("\n")
-          const headers = csvLines[0].split(",").map((h) => h.trim().toLowerCase())
 
-          for (let i = 1; i < csvLines.length; i++) {
-            const values = csvLines[i].split(",").map((v) => v.trim())
-            const playerData: any = {}
+          for (let i = 0; i < csvLines.length; i++) {
+            const line = csvLines[i].trim()
+            if (!line) continue
 
-            headers.forEach((header, index) => {
-              playerData[header] = values[index]
-            })
+            const values = line.split(/[,;\t]/).map((v) => v.trim())
 
-            // Extract account ID from the format "1-S2-1-5822233"
-            let accountId = playerData.id || playerData.account_id || ""
-            if (accountId.includes("-")) {
-              const parts = accountId.split("-")
-              accountId = parts[parts.length - 1] // Get the last part (the actual account ID)
+            if (values.length < 6) {
+              console.log(`[v0] Skipping line ${i}: insufficient data (${values.length} parts)`)
+              continue
             }
 
-            if (accountId) {
-              csvStatsData.push({
-                accountId,
-                username: submission.users?.username || `Player ${accountId}`,
-                team: Number.parseInt(playerData.team) || 1,
-                steals: Number.parseInt(playerData.steals) || 0,
-                goals: Number.parseInt(playerData.goals) || 0,
-                assists: Number.parseInt(playerData.assists) || 0,
-                shots: Number.parseInt(playerData.shots) || 0,
-                pickups: Number.parseInt(playerData.pickups) || 0,
-                passes: Number.parseInt(playerData.passes) || 0,
-                passesReceived: Number.parseInt(playerData.passes_received) || 0,
-                savePercentage: Number.parseFloat(playerData["save_%"]) || 0,
-                shotsOnGoalie: Number.parseInt(playerData.shots_on_goalie) || 0,
-                shotsSaved: Number.parseInt(playerData.shots_saved) || 0,
-                goalieMinutes: Number.parseFloat(playerData.goalie_minutes) || 0,
-                skaterMinutes: Number.parseFloat(playerData.skater_minutes) || 0,
-                matchId: submission.match_id,
-                matchName: submission.matches?.name || "Unknown Match",
-                submittedAt: submission.submitted_at,
-              })
+            let accountId = values[1] || values[0] || ""
+
+            // Handle different account ID formats
+            if (accountId.includes("-")) {
+              const parts = accountId.split("-")
+              accountId = parts[parts.length - 1] // Get the last part
+            }
+
+            // Remove any non-numeric characters for account ID
+            accountId = accountId.replace(/[^0-9]/g, "")
+
+            if (accountId && accountId.length > 3) {
+              const mappedUsername = accountIdMap.get(accountId) || submission.users?.username || `Player ${accountId}`
+
+              const existingStats = aggregatedStats.get(accountId)
+
+              const newStats = {
+                steals: Number.parseInt(values[2]) || 0,
+                goals: Number.parseInt(values[3]) || 0,
+                assists: Number.parseInt(values[4]) || 0,
+                shots: Number.parseInt(values[5]) || 0,
+                pickups: Number.parseInt(values[6]) || 0,
+                passes: Number.parseInt(values[7]) || 0,
+                passesReceived: Number.parseInt(values[8]) || 0,
+                savePercentage: Number.parseFloat(values[9]) || 0,
+                shotsOnGoalie: Number.parseInt(values[10]) || 0,
+                shotsSaved: Number.parseInt(values[11]) || 0,
+                goalieMinutes: Number.parseFloat(values[12]) || 0,
+                skaterMinutes: Number.parseFloat(values[13]) || 0,
+              }
+
+              if (existingStats) {
+                aggregatedStats.set(accountId, {
+                  ...existingStats,
+                  steals: existingStats.steals + newStats.steals,
+                  goals: existingStats.goals + newStats.goals,
+                  assists: existingStats.assists + newStats.assists,
+                  shots: existingStats.shots + newStats.shots,
+                  pickups: existingStats.pickups + newStats.pickups,
+                  passes: existingStats.passes + newStats.passes,
+                  passesReceived: existingStats.passesReceived + newStats.passesReceived,
+                  savePercentage: (existingStats.savePercentage + newStats.savePercentage) / 2, // Average save percentage
+                  shotsOnGoalie: existingStats.shotsOnGoalie + newStats.shotsOnGoalie,
+                  shotsSaved: existingStats.shotsSaved + newStats.shotsSaved,
+                  goalieMinutes: existingStats.goalieMinutes + newStats.goalieMinutes,
+                  skaterMinutes: existingStats.skaterMinutes + newStats.skaterMinutes,
+                  gamesPlayed: existingStats.gamesPlayed + 1, // Increment games played
+                })
+              } else {
+                aggregatedStats.set(accountId, {
+                  accountId,
+                  username: mappedUsername,
+                  team: Number.parseInt(values[0]) || 1,
+                  ...newStats,
+                  gamesPlayed: 1, // Initialize games played counter
+                  matchId: submission.match_id,
+                  matchName: submission.matches?.name || "Unknown Match",
+                  submittedAt: submission.submitted_at,
+                })
+              }
             }
           }
         } catch (parseError) {
@@ -174,8 +269,22 @@ export default function AnalyticsPage() {
         }
       }
 
+      const csvStatsData = Array.from(aggregatedStats.values())
       setCsvStats(csvStatsData)
-      console.log(`[v0] Processed ${csvStatsData.length} CSV statistics from ${submissions?.length || 0} submissions`)
+      console.log(
+        `[v0] Processed ${csvStatsData.length} aggregated player stats from ${submissions?.length || 0} submissions`,
+      )
+
+      const handleCsvProcessed = () => {
+        console.log("[v0] CSV processed event received, refreshing stats...")
+        setTimeout(() => processCompletedMatches(), 1000)
+      }
+
+      window.addEventListener("csvProcessed", handleCsvProcessed)
+
+      return () => {
+        window.removeEventListener("csvProcessed", handleCsvProcessed)
+      }
     } catch (error) {
       console.error("Error processing CSV submissions:", error)
     } finally {
@@ -203,12 +312,174 @@ export default function AnalyticsPage() {
     }
   }
 
+  const loadDetailedMatchAnalytics = useCallback(async () => {
+    setLoadingDetailedMatches(true)
+    try {
+      console.log("[v0] Loading detailed match analytics...")
+
+      // Get completed matches with results
+      const { data: matchResults, error: matchError } = await supabase
+        .from("match_results")
+        .select(`
+          *,
+          matches!inner(
+            id,
+            name,
+            match_type,
+            status,
+            created_at
+          )
+        `)
+        .order("validated_at", { ascending: false })
+        .limit(20)
+
+      if (matchError) {
+        console.error("[v0] Error loading match results:", matchError)
+        return
+      }
+
+      const detailedMatchData: DetailedMatch[] = []
+
+      for (const result of matchResults || []) {
+        const matchId = result.match_id
+
+        // Get match participants with team assignments
+        const { data: participants } = await supabase
+          .from("match_participants")
+          .select(`
+            user_id,
+            users!inner(
+              id,
+              username,
+              display_name,
+              account_id
+            )
+          `)
+          .eq("match_id", matchId)
+
+        // Assign teams based on participant order (first 4 = team 1, next 4 = team 2)
+        const team1Players = (participants || []).slice(0, 4).map((p) => ({
+          id: p.users.id,
+          username: p.users.username,
+          display_name: p.users.display_name,
+          account_id: p.users.account_id,
+        }))
+
+        const team2Players = (participants || []).slice(4, 8).map((p) => ({
+          id: p.users.id,
+          username: p.users.username,
+          display_name: p.users.display_name,
+          account_id: p.users.account_id,
+        }))
+
+        // Get betting information
+        const { data: bets } = await supabase.from("bets").select("*").eq("market_id", matchId) // Assuming market_id links to match_id
+
+        const bettingInfo = {
+          total_bets: bets?.length || 0,
+          total_volume: bets?.reduce((sum, bet) => sum + (bet.stake_amount || 0), 0) || 0,
+          winning_bets: bets?.filter((bet) => bet.status === "won").length || 0,
+          losing_bets: bets?.filter((bet) => bet.status === "lost").length || 0,
+        }
+
+        // Get individual CSV stats for this match
+        const { data: csvSubmissions } = await supabase
+          .from("score_submissions")
+          .select("csv_code, submitter_id, users!inner(username, display_name, account_id)")
+          .eq("match_id", matchId)
+          .not("csv_code", "is", null)
+
+        const individualCsvStats: DetailedMatch["individual_csv_stats"] = []
+
+        // Process CSV data for each submission
+        for (const submission of csvSubmissions || []) {
+          if (submission.csv_code) {
+            const lines = submission.csv_code.split("\n")
+            for (const line of lines) {
+              if (line.trim()) {
+                const parts = line.split(",")
+                if (parts.length >= 13) {
+                  const accountId = parts[0]?.trim()
+                  const team = Number.parseInt(parts[1]?.trim()) || 0
+                  const goals = Number.parseInt(parts[2]?.trim()) || 0
+                  const assists = Number.parseInt(parts[3]?.trim()) || 0
+                  const saves = Number.parseInt(parts[4]?.trim()) || 0
+                  const shots = Number.parseInt(parts[5]?.trim()) || 0
+                  const steals = Number.parseInt(parts[6]?.trim()) || 0
+                  const passes = Number.parseInt(parts[7]?.trim()) || 0
+                  const goalieMinutes = Number.parseInt(parts[11]?.trim()) || 0
+                  const skaterMinutes = Number.parseInt(parts[12]?.trim()) || 0
+
+                  // Find player name from account ID mapping
+                  const playerName = submission.users.display_name || submission.users.username || `Player ${accountId}`
+
+                  individualCsvStats.push({
+                    player_id: submission.submitter_id,
+                    player_name: playerName,
+                    account_id: accountId,
+                    team,
+                    goals,
+                    assists,
+                    saves,
+                    shots,
+                    steals,
+                    passes,
+                    goalie_minutes: goalieMinutes,
+                    skater_minutes: skaterMinutes,
+                  })
+                }
+              }
+            }
+          }
+        }
+
+        const { team1_score, team2_score, winning_team } = result
+        const team1_players = (participants || []).slice(0, 4).map((p) => ({
+          id: p.users.id,
+          username: p.users.username,
+          display_name: p.users.display_name,
+          account_id: p.users.account_id,
+        }))
+
+        const team2_players = (participants || []).slice(4, 8).map((p) => ({
+          id: p.users.id,
+          username: p.users.username,
+          display_name: p.users.display_name,
+          account_id: p.users.account_id,
+        }))
+
+        detailedMatchData.push({
+          id: matchId,
+          name: result.matches.name,
+          match_type: result.matches.match_type,
+          status: result.matches.status,
+          created_at: result.matches.created_at,
+          team1_score: result.team1_score || 0,
+          team2_score: result.team2_score || 0,
+          winner: result.winning_team === 1 ? "Team 1" : result.winning_team === 2 ? "Team 2" : "TBD",
+          team1_players,
+          team2_players,
+          betting_info: bettingInfo,
+          individual_csv_stats: individualCsvStats,
+        })
+      }
+
+      setDetailedMatches(detailedMatchData)
+      console.log(`[v0] Loaded ${detailedMatchData.length} detailed matches`)
+    } catch (error) {
+      console.error("[v0] Error loading detailed match analytics:", error)
+    } finally {
+      setLoadingDetailedMatches(false)
+    }
+  }, [supabase])
+
   useEffect(() => {
     fetchMatches()
     loadAnalyticsData()
     loadEloStats()
     processCompletedMatches()
-  }, [processCompletedMatches])
+    loadDetailedMatchAnalytics() // Load detailed match analytics on mount
+  }, [loadDetailedMatchAnalytics, processCompletedMatches])
 
   const fetchMatches = async () => {
     try {
@@ -393,7 +664,14 @@ export default function AnalyticsPage() {
         </div>
 
         <Tabs defaultValue="match-analytics" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-4 bg-slate-800/90 backdrop-blur-sm border border-slate-700 shadow-lg rounded-xl p-1">
+          {/* Added new tab for detailed match analytics with teams, scores, betting, and individual CSV stats */}
+          <TabsList className="grid w-full grid-cols-5 bg-slate-800/90 backdrop-blur-sm border border-slate-700 shadow-lg rounded-xl p-1">
+            <TabsTrigger
+              value="detailed-matches"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
+            >
+              Detailed Matches
+            </TabsTrigger>
             <TabsTrigger
               value="match-analytics"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all duration-200 text-slate-300"
@@ -419,6 +697,257 @@ export default function AnalyticsPage() {
               Teams
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="detailed-matches" className="space-y-8">
+            <Card className="bg-slate-800/90 backdrop-blur-sm border-slate-700 shadow-xl rounded-2xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <Trophy className="h-6 w-6" />
+                  Complete Match Analytics - Teams, Scores, Betting & Individual CSV Stats
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8">
+                {loadingDetailedMatches ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-slate-400">Loading detailed match analytics...</div>
+                  </div>
+                ) : detailedMatches.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-semibold mb-2">No detailed matches found</h3>
+                    <p>Complete match analytics will appear here once games are finished</p>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    {detailedMatches.map((match) => (
+                      <div
+                        key={match.id}
+                        className="bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border border-slate-600 rounded-2xl p-8 space-y-8"
+                      >
+                        {/* Match Header */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-2xl font-bold text-slate-200 mb-2">{match.name}</h3>
+                            <div className="flex items-center gap-4 text-sm text-slate-400">
+                              <Badge variant="outline" className="border-blue-500 text-blue-400 bg-blue-900/30">
+                                {match.match_type}
+                              </Badge>
+                              <span>{new Date(match.created_at).toLocaleDateString()}</span>
+                              <Badge variant="outline" className="border-green-500 text-green-400 bg-green-900/30">
+                                {match.status}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-slate-200 mb-2">
+                              {match.team1_score} - {match.team2_score}
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={`${
+                                match.winner === "Team 1"
+                                  ? "border-blue-500 text-blue-400 bg-blue-900/30"
+                                  : match.winner === "Team 2"
+                                    ? "border-red-500 text-red-400 bg-red-900/30"
+                                    : "border-slate-500 text-slate-400 bg-slate-900/30"
+                              }`}
+                            >
+                              Winner: {match.winner}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Team Rosters */}
+                        <div className="grid md:grid-cols-2 gap-8">
+                          <div className="bg-blue-900/20 border border-blue-700 rounded-xl p-6">
+                            <h4 className="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2">
+                              <Users className="h-5 w-5" />
+                              Team 1 ({match.team1_score})
+                            </h4>
+                            <div className="space-y-3">
+                              {match.team1_players.map((player) => (
+                                <div
+                                  key={player.id}
+                                  className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3"
+                                >
+                                  <div>
+                                    <div className="font-semibold text-slate-200">
+                                      {player.display_name || player.username}
+                                    </div>
+                                    <div className="text-xs text-slate-400 font-mono">
+                                      ID: {player.account_id || "Not Mapped"}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="bg-red-900/20 border border-red-700 rounded-xl p-6">
+                            <h4 className="text-xl font-bold text-red-400 mb-4 flex items-center gap-2">
+                              <Users className="h-5 w-5" />
+                              Team 2 ({match.team2_score})
+                            </h4>
+                            <div className="space-y-3">
+                              {match.team2_players.map((player) => (
+                                <div
+                                  key={player.id}
+                                  className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3"
+                                >
+                                  <div>
+                                    <div className="font-semibold text-slate-200">
+                                      {player.display_name || player.username}
+                                    </div>
+                                    <div className="text-xs text-slate-400 font-mono">
+                                      ID: {player.account_id || "Not Mapped"}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Betting Information */}
+                        <div className="bg-green-900/20 border border-green-700 rounded-xl p-6">
+                          <h4 className="text-xl font-bold text-green-400 mb-4 flex items-center gap-2">
+                            <DollarSign className="h-5 w-5" />
+                            Betting Information
+                          </h4>
+                          <div className="grid grid-cols-4 gap-4">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-green-400">{match.betting_info.total_bets}</div>
+                              <div className="text-sm text-slate-400">Total Bets</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-green-400">
+                                ${match.betting_info.total_volume.toFixed(2)}
+                              </div>
+                              <div className="text-sm text-slate-400">Total Volume</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-green-400">{match.betting_info.winning_bets}</div>
+                              <div className="text-sm text-slate-400">Winning Bets</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-red-400">{match.betting_info.losing_bets}</div>
+                              <div className="text-sm text-slate-400">Losing Bets</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Individual CSV Stats Spreadsheet */}
+                        <div className="bg-slate-900/50 border border-slate-600 rounded-xl p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-xl font-bold text-slate-200 flex items-center gap-2">
+                              <Target className="h-5 w-5" />
+                              Individual Player CSV Statistics
+                            </h4>
+                            <Button
+                              onClick={() => {
+                                const csvContent = [
+                                  "Account ID,Player Name,Team,Goals,Assists,Saves,Shots,Steals,Passes,Goalie Minutes,Skater Minutes",
+                                  ...match.individual_csv_stats.map(
+                                    (stat) =>
+                                      `${stat.account_id},"${stat.player_name}",${stat.team},${stat.goals},${stat.assists},${stat.saves},${stat.shots},${stat.steals},${stat.passes},${stat.goalie_minutes},${stat.skater_minutes}`,
+                                  ),
+                                ].join("\n")
+
+                                const blob = new Blob([csvContent], { type: "text/csv" })
+                                const url = window.URL.createObjectURL(blob)
+                                const a = document.createElement("a")
+                                a.href = url
+                                a.download = `${match.name}-individual-stats.csv`
+                                a.click()
+                                window.URL.revokeObjectURL(url)
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Export CSV
+                            </Button>
+                          </div>
+
+                          {match.individual_csv_stats.length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-slate-700">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left text-slate-200">Account ID</th>
+                                    <th className="px-3 py-2 text-left text-slate-200">Player</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">Team</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">Goals</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">Assists</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">Saves</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">Shots</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">Steals</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">Passes</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">G.Min</th>
+                                    <th className="px-3 py-2 text-center text-slate-200">S.Min</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {match.individual_csv_stats.map((stat, index) => (
+                                    <tr
+                                      key={`${stat.account_id}-${index}`}
+                                      className="border-t border-slate-600 hover:bg-slate-700/30"
+                                    >
+                                      <td className="px-3 py-2 text-slate-400 font-mono text-xs">{stat.account_id}</td>
+                                      <td className="px-3 py-2 text-slate-200 font-semibold">{stat.player_name}</td>
+                                      <td className="px-3 py-2 text-center">
+                                        <span
+                                          className={`px-2 py-1 rounded text-xs font-medium ${
+                                            stat.team === 1
+                                              ? "bg-blue-600 text-white"
+                                              : stat.team === 2
+                                                ? "bg-red-600 text-white"
+                                                : "bg-slate-600 text-slate-300"
+                                          }`}
+                                        >
+                                          {stat.team}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2 text-center text-slate-300 font-semibold">
+                                        {stat.goals}
+                                      </td>
+                                      <td className="px-3 py-2 text-center text-slate-300">{stat.assists}</td>
+                                      <td className="px-3 py-2 text-center text-slate-300">{stat.saves}</td>
+                                      <td className="px-3 py-2 text-center text-slate-300">{stat.shots}</td>
+                                      <td className="px-3 py-2 text-center text-slate-300">{stat.steals}</td>
+                                      <td className="px-3 py-2 text-center text-slate-300">{stat.passes}</td>
+                                      <td className="px-3 py-2 text-center text-slate-300">{stat.goalie_minutes}</td>
+                                      <td className="px-3 py-2 text-center text-slate-300">{stat.skater_minutes}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-slate-400">
+                              <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                              <p>No individual CSV statistics available for this match</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="text-center">
+                      <Button
+                        onClick={loadDetailedMatchAnalytics}
+                        disabled={loadingDetailedMatches}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {loadingDetailedMatches ? "Loading..." : "Refresh Detailed Analytics"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="match-analytics" className="space-y-8">
             <div className="space-y-8">
@@ -798,10 +1327,10 @@ export default function AnalyticsPage() {
                       <Button
                         onClick={() => {
                           const csvContent = [
-                            "Account ID,Player Name,Team,Steals,Goals,Assists,Shots,Pickups,Passes,Passes Received,Save %,Shots on Goalie,Shots Saved,Goalie Minutes,Skater Minutes,Match,Submitted At",
+                            "Account ID,Player Name,Team,Games Played,Steals,Goals,Assists,Shots,Pickups,Passes,Passes Received,Save %,Shots on Goalie,Shots Saved,Goalie Minutes,Skater Minutes,Match,Submitted At",
                             ...csvStats.map(
                               (stat) =>
-                                `${stat.accountId},"${stat.username}",${stat.team},${stat.steals},${stat.goals},${stat.assists},${stat.shots},${stat.pickups},${stat.passes},${stat.passesReceived},${stat.savePercentage},${stat.shotsOnGoalie},${stat.shotsSaved},${stat.goalieMinutes},${stat.skaterMinutes},"${stat.matchName}","${new Date(stat.submittedAt).toLocaleString()}"`,
+                                `${stat.accountId},"${stat.username}",${stat.team},${stat.gamesPlayed},${stat.steals},${stat.goals},${stat.assists},${stat.shots},${stat.pickups},${stat.passes},${stat.passesReceived},${stat.savePercentage},${stat.shotsOnGoalie},${stat.shotsSaved},${stat.goalieMinutes},${stat.skaterMinutes},"${stat.matchName}","${new Date(stat.submittedAt).toLocaleString()}"`,
                             ),
                           ].join("\n")
 
@@ -828,6 +1357,7 @@ export default function AnalyticsPage() {
                             <th className="px-4 py-3 text-left text-slate-200 font-semibold">Account ID</th>
                             <th className="px-4 py-3 text-left text-slate-200 font-semibold">Player Name</th>
                             <th className="px-4 py-3 text-center text-slate-200 font-semibold">Team</th>
+                            <th className="px-4 py-3 text-center text-slate-200 font-semibold">Games Played</th>
                             <th className="px-4 py-3 text-center text-slate-200 font-semibold">Steals</th>
                             <th className="px-4 py-3 text-center text-slate-200 font-semibold">Goals</th>
                             <th className="px-4 py-3 text-center text-slate-200 font-semibold">Assists</th>
@@ -866,6 +1396,7 @@ export default function AnalyticsPage() {
                                   {stat.team}
                                 </span>
                               </td>
+                              <td className="px-4 py-3 text-slate-300 text-center font-semibold">{stat.gamesPlayed}</td>
                               <td className="px-4 py-3 text-slate-300 text-center">{stat.steals}</td>
                               <td className="px-4 py-3 text-slate-300 text-center font-semibold">{stat.goals}</td>
                               <td className="px-4 py-3 text-slate-300 text-center">{stat.assists}</td>

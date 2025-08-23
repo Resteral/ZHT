@@ -26,9 +26,10 @@ import { RecentActivity } from "@/components/dashboard/recent-activity"
 import { UpcomingEvents } from "@/components/dashboard/upcoming-events"
 import { createClient } from "@/lib/supabase/client"
 import { isSupabaseConfigured } from "@/lib/supabase/client"
-import { formatDateEST, formatTimeEST } from "@/lib/utils/timezone"
+import { formatDateEST } from "@/lib/utils/timezone"
+import { UnifiedGameCreator } from "@/components/game-creation/unified-game-creator"
 
-interface LiveDraft {
+interface LiveGame {
   id: string
   name: string
   match_type: string
@@ -37,6 +38,7 @@ interface LiveDraft {
   max_participants: number
   created_at: string
   description: string
+  game_state: "lobby" | "drafting" | "scoring"
   players: Array<{
     id: string
     username: string
@@ -92,7 +94,7 @@ interface CompletedMatch {
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
-  const [liveDrafts, setLiveDrafts] = useState<LiveDraft[]>([])
+  const [liveGames, setLiveGames] = useState<LiveGame[]>([])
   const [topPlayers, setTopPlayers] = useState<TopPlayer[]>([])
   const [activeELOPlayers, setActiveELOPlayers] = useState<ActiveELOPlayer[]>([])
   const [liveScores, setLiveScores] = useState<LiveScore[]>([])
@@ -189,25 +191,37 @@ export default function Dashboard() {
         console.log("[v0] Loaded match results:", matchResultsData?.length || 0)
       }
 
-      const formattedDrafts: LiveDraft[] = (matchesData || [])
+      const formattedGames: LiveGame[] = (matchesData || [])
         .map((match: any) => {
           const participants = match.match_participants || []
           const players = participants.map((p: any) => p.users).filter(Boolean)
 
-          let isCompleted = false
+          let gameState: "lobby" | "drafting" | "scoring" = "lobby"
+          const isCompleted = false
+
           if (match.description) {
             try {
               const description = JSON.parse(match.description)
               if (description.draft_state?.status === "completed") {
-                isCompleted = true
+                gameState = "scoring"
+              } else if (description.draft_state?.status === "in_progress") {
+                gameState = "drafting"
               }
             } catch (e) {
               // Ignore JSON parse errors
             }
           }
 
-          if (isCompleted || match.status === "completed") {
+          // Skip completed matches
+          if (match.status === "completed") {
             return null
+          }
+
+          // Determine game state based on status and participants
+          if (match.status === "drafting" && participants.length === match.max_participants) {
+            gameState = "drafting"
+          } else if (match.status === "scoring") {
+            gameState = "scoring"
           }
 
           return {
@@ -219,26 +233,32 @@ export default function Dashboard() {
             max_participants: match.max_participants || 8,
             created_at: match.created_at,
             description: match.description,
-            players: players,
+            game_state: gameState,
+            players: players.slice(0, 8).map((player: any) => ({
+              id: player.id,
+              username: player.username || player.account_name || "Unknown",
+              elo_rating: player.elo_rating || 1200,
+            })),
           }
         })
-        .filter(Boolean)
+        .filter(Boolean) as LiveGame[]
 
-      console.log("[v0] Formatted drafts:", formattedDrafts)
+      console.log("[v0] Formatted games:", formattedGames)
+      setLiveGames(formattedGames)
 
       const activePlayersSet = new Set()
       const activePlayersData: ActiveELOPlayer[] = []
 
-      formattedDrafts.forEach((draft) => {
-        draft.players.forEach((player) => {
+      formattedGames.forEach((game) => {
+        game.players.forEach((player) => {
           if (!activePlayersSet.has(player.id)) {
             activePlayersSet.add(player.id)
             activePlayersData.push({
               id: player.id,
               username: player.username,
               elo_rating: player.elo_rating,
-              status: draft.status === "drafting" ? "drafting" : "in_match",
-              current_match_id: draft.id,
+              status: game.status === "drafting" ? "drafting" : "in_match",
+              current_match_id: game.id,
             })
           }
         })
@@ -291,7 +311,6 @@ export default function Dashboard() {
 
       console.log("[v0] Formatted live scores:", formattedLiveScores)
 
-      setLiveDrafts(formattedDrafts)
       setTopPlayers(formattedTopPlayers)
       setActiveELOPlayers(activePlayersData.slice(0, 10))
       setLiveScores(formattedLiveScores)
@@ -325,6 +344,10 @@ export default function Dashboard() {
             <TrendingUp className="h-3 w-3 mr-1" />
             ELO Rankings
           </Badge>
+
+          <div className="pt-4">
+            <UnifiedGameCreator />
+          </div>
         </div>
       </div>
 
@@ -337,13 +360,13 @@ export default function Dashboard() {
                   <Trophy className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl">Live Draft Rooms</CardTitle>
-                  <CardDescription>Join active ELO drafts happening now</CardDescription>
+                  <CardTitle className="text-xl">Live Games</CardTitle>
+                  <CardDescription>Active lobbies, drafts, and scoring games</CardDescription>
                 </div>
               </div>
               <Link href="/leagues">
                 <Button variant="outline" className="gaming-button-secondary bg-transparent">
-                  View All Drafts
+                  View All Games
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </Link>
@@ -356,71 +379,136 @@ export default function Dashboard() {
                   <Skeleton key={i} className="h-24 w-full" />
                 ))}
               </div>
-            ) : liveDrafts.length > 0 ? (
+            ) : liveGames.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-3">
-                {liveDrafts.map((draft) => (
-                  <Card key={draft.id} className="gaming-card">
-                    <CardContent className="p-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium text-sm">{draft.name}</h4>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              {draft.match_type?.replace("_draft", "").toUpperCase() || "DRAFT"}
-                            </Badge>
-                            <Badge
-                              variant="secondary"
-                              className="bg-gaming-success/20 text-gaming-success border-gaming-success/30"
-                            >
-                              <Timer className="h-3 w-3 mr-1" />
-                              Live
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span>
-                            {draft.participants}/{draft.max_participants} players
-                          </span>
-                          <span>{formatTimeEST(draft.created_at)}</span>
-                        </div>
-                        {draft.players.length > 0 && (
-                          <div className="space-y-2">
-                            <div className="text-xs text-muted-foreground">Top Players:</div>
+                {liveGames.map((game) => {
+                  const getGameStateInfo = () => {
+                    switch (game.game_state) {
+                      case "lobby":
+                        return {
+                          badge: { text: "Open Lobby", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+                          icon: <Users className="h-3 w-3 mr-1" />,
+                          action: { text: "Join Lobby", href: `/leagues/lobby/${game.id}` },
+                        }
+                      case "drafting":
+                        return {
+                          badge: {
+                            text: "Drafting",
+                            className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+                          },
+                          icon: <Timer className="h-3 w-3 mr-1" />,
+                          action: { text: "Watch Draft", href: `/draft/room/${game.id}` },
+                        }
+                      case "scoring":
+                        return {
+                          badge: { text: "Scoring", className: "bg-green-500/20 text-green-400 border-green-500/30" },
+                          icon: <Trophy className="h-3 w-3 mr-1" />,
+                          action: { text: "Submit Score", href: `/draft/score/${game.id}` },
+                        }
+                      default:
+                        return {
+                          badge: {
+                            text: "Live",
+                            className: "bg-gaming-success/20 text-gaming-success border-gaming-success/30",
+                          },
+                          icon: <Timer className="h-3 w-3 mr-1" />,
+                          action: { text: "View Game", href: `/leagues/lobby/${game.id}` },
+                        }
+                    }
+                  }
+
+                  const stateInfo = getGameStateInfo()
+
+                  return (
+                    <div
+                      key={game.id}
+                      className="relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-lg overflow-hidden border-2 border-slate-600"
+                      style={{
+                        backgroundImage: `
+                          linear-gradient(90deg, transparent 0%, transparent 48%, #64748b 48%, #64748b 52%, transparent 52%, transparent 100%),
+                          linear-gradient(0deg, transparent 0%, transparent 48%, #64748b 48%, #64748b 52%, transparent 52%, transparent 100%),
+                          repeating-linear-gradient(45deg, transparent, transparent 8px, #475569 8px, #475569 10px),
+                          repeating-linear-gradient(-45deg, transparent, transparent 8px, #475569 8px, #475569 10px)
+                        `,
+                        backgroundSize: "20px 20px, 20px 20px, 28px 28px, 28px 28px",
+                      }}
+                    >
+                      {/* Hockey net frame */}
+                      <div className="absolute inset-0 border-4 border-red-600 rounded-lg"></div>
+                      <div className="absolute top-0 left-0 right-0 h-1 bg-red-600"></div>
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-red-600"></div>
+                      <div className="absolute top-0 bottom-0 left-0 w-1 bg-red-600"></div>
+                      <div className="absolute top-0 bottom-0 right-0 w-1 bg-red-600"></div>
+
+                      {/* Content overlay */}
+                      <div className="relative bg-black/60 backdrop-blur-sm p-4 h-full">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-sm text-white drop-shadow-lg">{game.name}</h4>
                             <div className="flex items-center gap-2">
-                              {draft.players.slice(0, 2).map((player, index) => (
-                                <div key={player.id} className="flex items-center gap-1">
-                                  <Avatar className="h-6 w-6">
-                                    <AvatarFallback className="text-xs">
-                                      {player.username.charAt(0).toUpperCase()}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <div className="text-xs">
-                                    <div className="font-medium">{player.username}</div>
-                                    <div className="text-muted-foreground">{player.elo_rating}</div>
-                                  </div>
-                                </div>
-                              ))}
+                              <Badge variant="outline" className="text-xs bg-black/50 text-white border-white/30">
+                                {game.match_type?.replace("_draft", "").toUpperCase() || "DRAFT"}
+                              </Badge>
+                              <Badge variant="secondary" className={`${stateInfo.badge.className} bg-opacity-80`}>
+                                {stateInfo.icon}
+                                {stateInfo.badge.text}
+                              </Badge>
                             </div>
                           </div>
-                        )}
-                        <Link href={`/leagues/lobby/${draft.id}`}>
-                          <Button size="sm" className="w-full gaming-button-primary">
-                            <Eye className="h-3 w-3 mr-1" />
-                            Join Lobby
-                          </Button>
-                        </Link>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span className="font-semibold">
+                              {game.participants}/{game.max_participants} players
+                            </span>
+                          </div>
+                          {game.players.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="text-xs text-gray-300 font-medium">
+                                {game.game_state === "lobby" ? "Waiting:" : "Players:"}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {game.players.slice(0, 2).map((player, index) => (
+                                  <div key={player.id} className="flex items-center gap-1">
+                                    <Avatar className="h-6 w-6 border border-white/30">
+                                      <AvatarFallback className="text-xs bg-slate-700 text-white">
+                                        {player.username.charAt(0).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="text-xs">
+                                      <div className="font-bold text-white">{player.username}</div>
+                                      <div className="text-gray-300">{player.elo_rating}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                                {game.players.length > 2 && (
+                                  <div className="text-xs text-gray-300 font-medium">
+                                    +{game.players.length - 2} more
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          <Link href={stateInfo.action.href}>
+                            <Button
+                              size="sm"
+                              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold border-2 border-white/30 shadow-lg"
+                            >
+                              {stateInfo.icon}
+                              {stateInfo.action.text}
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <div className="text-center py-8">
                 <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No live drafts at the moment</p>
+                <p className="text-muted-foreground">No live games at the moment</p>
                 <Link href="/leagues">
                   <Button className="mt-4 gaming-button-primary">
-                    Create New Draft
+                    Create New Game
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </Link>

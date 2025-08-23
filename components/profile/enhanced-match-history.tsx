@@ -61,14 +61,14 @@ export function EnhancedMatchHistory({ userId }: EnhancedMatchHistoryProps) {
           team1_score,
           team2_score,
           winning_team,
-          created_at,
+          validated_at,
           matches!match_results_match_id_fkey(
             name,
             match_type,
             description
           )
         `)
-        .order("created_at", { ascending: false })
+        .order("validated_at", { ascending: false })
         .limit(10)
 
       if (error) {
@@ -93,7 +93,7 @@ export function EnhancedMatchHistory({ userId }: EnhancedMatchHistoryProps) {
           elo_after: 1200, // Would need ELO history to calculate
           elo_change: 0, // Would need ELO history to calculate
           match_duration: 30, // Placeholder
-          match_date: result.created_at,
+          match_date: result.validated_at,
           season: "2024-Q1",
         })) || []
 

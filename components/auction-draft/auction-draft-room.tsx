@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
-import { Gavel, Clock, Users, MessageCircle, DollarSign, Trophy, Star } from "lucide-react"
+import { Gavel, Clock, Users, MessageCircle, DollarSign, Trophy, Star, TrendingUp, Target } from "lucide-react"
 import { ProfileNameLink } from "@/components/profile/profile-name-link"
 import { useRealtimeDraft } from "@/lib/hooks/use-realtime"
+import { createBrowserClient } from "@supabase/ssr"
 
 interface AuctionDraftRoomProps {
   league: any
@@ -33,6 +34,82 @@ export function AuctionDraftRoom({ league, userRole, userTeam }: AuctionDraftRoo
     null,
   )
   const [teamRosters, setTeamRosters] = useState<{ [teamId: string]: any[] }>({})
+  const [playerStats, setPlayerStats] = useState<{ [playerId: string]: any }>({})
+  const [signupPool, setSignupPool] = useState<any[]>([])
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
+
+  useEffect(() => {
+    loadPlayerStats()
+    loadSignupPool()
+  }, [])
+
+  const loadPlayerStats = async () => {
+    try {
+      const { data: csvStats, error } = await supabase
+        .from("player_analytics")
+        .select("user_id, kills, assists, score, damage_dealt, match_id")
+        .order("score", { ascending: false })
+
+      if (error) throw error
+
+      const statsMap: { [key: string]: any } = {}
+      csvStats?.forEach((stat) => {
+        if (!statsMap[stat.user_id]) {
+          statsMap[stat.user_id] = {
+            goals: 0,
+            assists: 0,
+            shots: 0,
+            saves: 0,
+            score: 0,
+            games_played: 0,
+          }
+        }
+        statsMap[stat.user_id].goals += stat.kills || 0
+        statsMap[stat.user_id].assists += stat.assists || 0
+        statsMap[stat.user_id].shots += stat.damage_dealt || 0
+        statsMap[stat.user_id].saves += 0 // No direct equivalent in player_analytics
+        statsMap[stat.user_id].score += stat.score || 0
+        statsMap[stat.user_id].games_played += 1
+      })
+
+      setPlayerStats(statsMap)
+    } catch (error) {
+      console.error("Error loading player stats:", error)
+    }
+  }
+
+  const loadSignupPool = async () => {
+    try {
+      const { data: users, error } = await supabase
+        .from("users")
+        .select("id, username, elo_rating, balance")
+        .order("elo_rating", { ascending: false })
+
+      if (error) throw error
+
+      const enhancedUsers =
+        users
+          ?.map((user) => {
+            const stats = playerStats[user.id] || {}
+            const totalStats = (stats.goals || 0) + (stats.assists || 0) + (stats.saves || 0)
+            return {
+              ...user,
+              csvStats: stats,
+              totalCsvScore: totalStats,
+              gamesPlayed: stats.games_played || 0,
+            }
+          })
+          .sort((a, b) => b.totalCsvScore - a.totalCsvScore) || []
+
+      setSignupPool(enhancedUsers)
+    } catch (error) {
+      console.error("Error loading signup pool:", error)
+    }
+  }
 
   useEffect(() => {
     if (draftState) {
@@ -54,11 +131,12 @@ export function AuctionDraftRoom({ league, userRole, userTeam }: AuctionDraftRoo
           username: pick.player_name,
           elo_rating: pick.player_elo,
           purchasePrice: pick.bid_amount,
+          csvStats: playerStats[pick.player_id] || {},
         })
       })
       setTeamRosters(newRosters)
     }
-  }, [picks])
+  }, [picks, playerStats])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -74,9 +152,7 @@ export function AuctionDraftRoom({ league, userRole, userTeam }: AuctionDraftRoo
     return () => clearInterval(timer)
   }, [currentPick])
 
-  const availablePlayers = league.participants.filter(
-    (p: any) => p.role === "player" && !auctionedPlayers.includes(p.id),
-  )
+  const availablePlayers = signupPool.filter((p: any) => !auctionedPlayers.includes(p.id))
 
   const handlePlaceBid = async (amount: number) => {
     if (userRole === "bidder" && !userTeam) {
@@ -149,90 +225,115 @@ export function AuctionDraftRoom({ league, userRole, userTeam }: AuctionDraftRoo
         </Card>
       )}
 
-      <Card>
+      <Card className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-amber-500" />
-            Team Rosters - Live Updates
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Trophy className="h-6 w-6 text-amber-500" />
+            Team Owners & Rosters
           </CardTitle>
-          <CardDescription>Watch as players join teams in real-time</CardDescription>
+          <CardDescription>Live auction with real-time team building</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {league.bidders.map((bidder: any, index: number) => {
               const teamRoster = teamRosters[bidder.teamId] || []
               const totalSpent = teamRoster.reduce((sum, player) => sum + (player.purchasePrice || 0), 0)
+              const teamCsvScore = teamRoster.reduce((sum, player) => {
+                const stats = player.csvStats || {}
+                return sum + (stats.goals || 0) + (stats.assists || 0) + (stats.saves || 0)
+              }, 0)
 
               return (
                 <Card
                   key={bidder.id}
-                  className={`relative overflow-hidden ${
-                    recentPurchase?.teamId === bidder.teamId ? "ring-2 ring-green-500 animate-pulse" : ""
-                  }`}
+                  className={`relative overflow-hidden border-2 ${
+                    recentPurchase?.teamId === bidder.teamId
+                      ? "border-green-500 bg-green-50 animate-pulse"
+                      : "border-primary/20 hover:border-primary/40"
+                  } transition-all duration-300`}
                 >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8 border-2 border-primary">
-                        <AvatarFallback className="text-xs font-bold">
+                  <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-primary/10">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-12 w-12 border-3 border-primary ring-2 ring-primary/20">
+                        <AvatarFallback className="text-sm font-bold bg-primary text-primary-foreground">
                           {(bidder.teamName || `T${index + 1}`).slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{bidder.teamName || `Team ${index + 1}`}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <h3 className="font-bold text-lg truncate">{bidder.teamName || `Team ${index + 1}`}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Owner:{" "}
                           <ProfileNameLink
                             userId={bidder.id}
                             username={bidder.username}
-                            pageSource="auction-draft-team-rosters"
+                            pageSource="auction-draft-team-owners"
                           />
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <Badge variant="outline" className="text-xs">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="text-xs font-medium">
                         {teamRoster.length}/{league.players_per_team} players
                       </Badge>
-                      <div className="flex items-center gap-1 text-green-600">
-                        <DollarSign className="h-3 w-3" />
-                        <span className="font-medium">${totalSpent}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 text-green-600">
+                          <DollarSign className="h-3 w-3" />
+                          <span className="font-bold">${totalSpent}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-blue-600">
+                          <Target className="h-3 w-3" />
+                          <span className="font-bold">{teamCsvScore}</span>
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2 min-h-[120px]">
+                  <CardContent className="pt-3">
+                    <div className="space-y-3 min-h-[160px]">
                       {teamRoster.length > 0 ? (
-                        teamRoster.map((player: any, i: number) => (
-                          <div
-                            key={player.id}
-                            className={`flex items-center gap-2 p-2 bg-muted/50 rounded-md transition-all duration-500 ${
-                              recentPurchase?.playerId === player.id ? "bg-green-100 scale-105" : ""
-                            }`}
-                          >
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback className="text-xs">
-                                {player.username.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium truncate">{player.username}</p>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Star className="h-3 w-3" />
-                                <span>{player.elo_rating}</span>
-                                {player.purchasePrice && (
-                                  <>
-                                    <DollarSign className="h-3 w-3 text-green-500" />
-                                    <span className="text-green-600 font-medium">${player.purchasePrice}</span>
-                                  </>
-                                )}
+                        teamRoster.map((player: any, i: number) => {
+                          const stats = player.csvStats || {}
+                          const playerScore = (stats.goals || 0) + (stats.assists || 0) + (stats.saves || 0)
+
+                          return (
+                            <div
+                              key={player.id}
+                              className={`flex items-center gap-3 p-3 bg-muted/50 rounded-lg transition-all duration-500 ${
+                                recentPurchase?.playerId === player.id ? "bg-green-100 scale-105 shadow-md" : ""
+                              }`}
+                            >
+                              <Avatar className="h-8 w-8 border-2 border-primary/20">
+                                <AvatarFallback className="text-xs font-medium">
+                                  {player.username.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate">{player.username}</p>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Star className="h-3 w-3" />
+                                    <span>{player.elo_rating}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-blue-600">
+                                    <Target className="h-3 w-3" />
+                                    <span className="font-medium">{playerScore}</span>
+                                  </div>
+                                  {player.purchasePrice && (
+                                    <div className="flex items-center gap-1 text-green-600">
+                                      <DollarSign className="h-3 w-3" />
+                                      <span className="font-bold">${player.purchasePrice}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          )
+                        })
                       ) : (
                         <div className="flex items-center justify-center h-full text-center">
                           <div className="text-muted-foreground">
-                            <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                            <p className="text-xs">Waiting for players...</p>
+                            <Users className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                            <p className="text-sm font-medium">Waiting for players...</p>
+                            <p className="text-xs">Start bidding to build your roster</p>
                           </div>
                         </div>
                       )}
@@ -249,35 +350,58 @@ export function AuctionDraftRoom({ league, userRole, userTeam }: AuctionDraftRoo
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Available Players ({availablePlayers.length})
+              <TrendingUp className="h-5 w-5 text-blue-500" />
+              Player Signup Pool - Ranked by CSV Stats ({availablePlayers.length})
             </CardTitle>
+            <CardDescription>Players ranked by total CSV performance (Goals + Assists + Saves)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {availablePlayers
-                .sort((a: any, b: any) => b.elo_rating - a.elo_rating)
-                .map((player: any) => (
+              {availablePlayers.map((player: any, index: number) => {
+                const stats = player.csvStats || {}
+                const totalScore = player.totalCsvScore || 0
+
+                return (
                   <div
                     key={player.id}
-                    className={`flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-all duration-300 ${
-                      currentPlayer?.id === player.id ? "border-primary bg-primary/5" : ""
+                    className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-all duration-300 ${
+                      currentPlayer?.id === player.id ? "border-primary bg-primary/5 shadow-md" : ""
                     } ${recentPurchase?.playerId === player.id ? "opacity-50 scale-95" : ""}`}
                     onClick={() => setCurrentPlayer(player)}
                   >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs font-bold min-w-[2rem]">
+                          #{index + 1}
+                        </Badge>
+                        <Avatar className="h-10 w-10 border-2 border-primary/20">
+                          <AvatarFallback className="text-sm font-medium">
+                            {player.username.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-base">
                           <ProfileNameLink
                             userId={player.id}
                             username={player.username}
-                            pageSource="auction-draft-available-players"
+                            pageSource="auction-draft-signup-pool"
                           />
                         </p>
-                        <p className="text-sm text-muted-foreground">ELO: {player.elo_rating}</p>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3" />
+                            <span>ELO: {player.elo_rating}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-blue-600">
+                            <Target className="h-3 w-3" />
+                            <span className="font-bold">CSV: {totalScore}</span>
+                          </div>
+                          <div className="text-xs">
+                            G:{stats.goals || 0} A:{stats.assists || 0} S:{stats.saves || 0}
+                          </div>
+                          <div className="text-xs">Games: {player.gamesPlayed}</div>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -285,7 +409,8 @@ export function AuctionDraftRoom({ league, userRole, userTeam }: AuctionDraftRoo
                       <span className="text-sm font-medium">Starting: $10</span>
                     </div>
                   </div>
-                ))}
+                )
+              })}
             </div>
           </CardContent>
         </Card>

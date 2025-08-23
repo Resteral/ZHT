@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,10 +14,12 @@ import { Trophy, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { tournamentService } from "@/lib/services/tournament-service"
+import { createClient } from "@/lib/supabase/client"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [user, setUser] = useState<any>(null)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -32,12 +34,23 @@ export default function CreateTournamentPage() {
     end_date: "",
   })
 
+  useEffect(() => {
+    const supabase = createClient()
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setUser(user)
+    }
+    getUser()
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      await tournamentService.createTournament(formData)
+      await tournamentService.createTournament(formData, user?.id)
       router.push("/admin/tournaments")
     } catch (error) {
       console.error("Error creating tournament:", error)

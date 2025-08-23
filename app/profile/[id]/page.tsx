@@ -62,6 +62,20 @@ interface HockeyStats {
   bestGame: number
 }
 
+interface MVPAward {
+  id: string
+  match_id: string
+  awarded_at: string
+  match_name?: string
+}
+
+interface PlayerFlag {
+  id: string
+  flag_type: string
+  flag_count: number
+  last_flagged: string
+}
+
 export default function PlayerProfilePage() {
   const params = useParams()
   const router = useRouter()
@@ -69,6 +83,8 @@ export default function PlayerProfilePage() {
   const [bettingStats, setBettingStats] = useState<BettingStats | null>(null)
   const [hockeyStats, setHockeyStats] = useState<HockeyStats | null>(null)
   const [csvStats, setCsvStats] = useState<CSVPlayerStats[]>([])
+  const [mvpAwards, setMvpAwards] = useState<MVPAward[]>([])
+  const [playerFlags, setPlayerFlags] = useState<PlayerFlag[]>([])
   const [loadingCsvStats, setLoadingCsvStats] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -176,6 +192,45 @@ export default function PlayerProfilePage() {
           bestGame,
         })
       }
+
+      console.log("[v0] Loading MVP awards for user:", userId)
+      const { data: mvpData, error: mvpError } = await supabase
+        .from("player_mvp_awards")
+        .select(`
+          id,
+          match_id,
+          awarded_at,
+          matches!inner(name)
+        `)
+        .eq("player_id", userId)
+        .order("awarded_at", { ascending: false })
+
+      if (!mvpError && mvpData) {
+        const awards: MVPAward[] = mvpData.map((award) => ({
+          id: award.id,
+          match_id: award.match_id,
+          awarded_at: award.awarded_at,
+          match_name: award.matches?.name || "Unknown Match",
+        }))
+        setMvpAwards(awards)
+        console.log("[v0] MVP awards loaded:", awards.length)
+      } else if (mvpError) {
+        console.error("[v0] Error loading MVP awards:", mvpError)
+      }
+
+      console.log("[v0] Loading player flags for user:", userId)
+      const { data: flagData, error: flagError } = await supabase
+        .from("player_flag_summary")
+        .select("id, flag_type, flag_count, last_flagged")
+        .eq("player_id", userId)
+        .gt("flag_count", 0)
+
+      if (!flagError && flagData) {
+        setPlayerFlags(flagData)
+        console.log("[v0] Player flags loaded:", flagData.length)
+      } else if (flagError) {
+        console.error("[v0] Error loading player flags:", flagError)
+      }
     } catch (err) {
       console.error("Error loading player profile:", err)
       setError(err instanceof Error ? err.message : "Failed to load profile")
@@ -191,7 +246,6 @@ export default function PlayerProfilePage() {
     try {
       const supabase = createClient()
 
-      // Get CSV stats for this specific player using their account ID
       const { data: submissions, error } = await supabase
         .from("score_submissions")
         .select(`
@@ -214,12 +268,10 @@ export default function PlayerProfilePage() {
           submission.matches?.name || "Unknown Match",
         )
 
-        // Filter for this specific player's account ID
         const playerMatchStats = matchStats.filter((stat) => stat.accountId === accountId)
         playerStats.push(...playerMatchStats)
       }
 
-      // Add usernames
       const statsWithUsernames = await Promise.all(
         playerStats.map(async (stat) => {
           const username = await CSVStatsService.getUsernameForAccountId(supabase, stat.accountId)
@@ -277,7 +329,6 @@ export default function PlayerProfilePage() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => router.push("/players")} className="bg-card hover:bg-muted">
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -285,7 +336,6 @@ export default function PlayerProfilePage() {
         </Button>
       </div>
 
-      {/* Profile Header */}
       <Card className="bg-gradient-to-r from-card to-muted border-border">
         <CardContent className="pt-6">
           <div className="flex items-center gap-6">
@@ -302,6 +352,12 @@ export default function PlayerProfilePage() {
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold text-foreground">{profile.display_name || profile.username}</h1>
                 {profile.elo_rating >= 1600 && <Crown className="h-6 w-6 text-secondary" />}
+                {mvpAwards.length > 0 && (
+                  <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50">
+                    <Trophy className="h-3 w-3 mr-1" />
+                    {mvpAwards.length} MVP{mvpAwards.length !== 1 ? "s" : ""}
+                  </Badge>
+                )}
               </div>
 
               <div className="flex items-center gap-4 mb-4">
@@ -317,6 +373,12 @@ export default function PlayerProfilePage() {
                 {profile.account_id && (
                   <Badge variant="outline" className="border-green-500 text-green-600">
                     CSV: {profile.account_id}
+                  </Badge>
+                )}
+                {playerFlags.length > 0 && (
+                  <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-300">
+                    ⚠️ {playerFlags.reduce((sum, flag) => sum + flag.flag_count, 0)} Flag
+                    {playerFlags.reduce((sum, flag) => sum + flag.flag_count, 0) !== 1 ? "s" : ""}
                   </Badge>
                 )}
               </div>
@@ -350,7 +412,6 @@ export default function PlayerProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Statistics Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="bg-gradient-to-br from-chart-1/10 to-chart-1/5 border-chart-1/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -398,22 +459,19 @@ export default function PlayerProfilePage() {
 
         <Card className="bg-gradient-to-br from-chart-2/10 to-chart-2/5 border-chart-2/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">CSV Games</CardTitle>
-            <Gamepad2 className="h-4 w-4 text-chart-2" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">MVP Awards</CardTitle>
+            <Trophy className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-chart-2">{csvStats.length}</div>
-            <Progress value={Math.min((csvStats.length / 10) * 100, 100)} className="h-2 mt-2" />
-            <p className="text-xs text-muted-foreground mt-2">
-              {csvStats.reduce((sum, stat) => sum + stat.goals, 0)} total goals
-            </p>
+            <div className="text-2xl font-bold text-yellow-500">{mvpAwards.length}</div>
+            <Progress value={Math.min((mvpAwards.length / 5) * 100, 100)} className="h-2 mt-2" />
+            <p className="text-xs text-muted-foreground mt-2">{csvStats.length} CSV games played</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Detailed Statistics Tabs */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6 bg-muted">
+        <TabsList className="grid w-full grid-cols-7 bg-muted">
           <TabsTrigger value="overview" className="data-[state=active]:bg-card">
             Overview
           </TabsTrigger>
@@ -428,6 +486,9 @@ export default function PlayerProfilePage() {
           </TabsTrigger>
           <TabsTrigger value="csv-stats" className="data-[state=active]:bg-card">
             CSV Stats
+          </TabsTrigger>
+          <TabsTrigger value="mvp-flags" className="data-[state=active]:bg-card">
+            MVP & Flags
           </TabsTrigger>
           <TabsTrigger value="achievements" className="data-[state=active]:bg-card">
             Achievements
@@ -593,7 +654,6 @@ export default function PlayerProfilePage() {
                     </Button>
                   </div>
 
-                  {/* Summary Stats */}
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                     <div className="text-center p-4 bg-muted rounded-lg">
                       <div className="text-2xl font-bold text-chart-1">
@@ -627,7 +687,6 @@ export default function PlayerProfilePage() {
                     </div>
                   </div>
 
-                  {/* Detailed Stats Table */}
                   <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
                       <thead className="bg-muted">
@@ -699,12 +758,109 @@ export default function PlayerProfilePage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="mvp-flags" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-yellow-500" />
+                  MVP Awards ({mvpAwards.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {mvpAwards.length > 0 ? (
+                  <div className="space-y-3">
+                    {mvpAwards.slice(0, 10).map((award) => (
+                      <div
+                        key={award.id}
+                        className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Trophy className="h-4 w-4 text-yellow-600" />
+                          <div>
+                            <div className="font-medium text-sm">{award.match_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(award.awarded_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                          MVP
+                        </Badge>
+                      </div>
+                    ))}
+                    {mvpAwards.length > 10 && (
+                      <div className="text-center text-sm text-muted-foreground">
+                        ... and {mvpAwards.length - 10} more MVP awards
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground">No MVP awards yet</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      MVP awards are given to outstanding players in completed matches
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-red-500">⚠️</span>
+                  Player Flags ({playerFlags.reduce((sum, flag) => sum + flag.flag_count, 0)})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {playerFlags.length > 0 ? (
+                  <div className="space-y-3">
+                    {playerFlags.map((flag) => (
+                      <div
+                        key={flag.id}
+                        className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-red-500">
+                            {flag.flag_type === "toxicity" && "🗣️"}
+                            {flag.flag_type === "griefing" && "😠"}
+                            {flag.flag_type === "cheating" && "🚫"}
+                            {flag.flag_type === "afk" && "💤"}
+                          </span>
+                          <div>
+                            <div className="font-medium text-sm capitalize">{flag.flag_type.replace("_", " ")}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Last flagged: {new Date(flag.last_flagged).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                        <Badge variant="destructive" className="bg-red-100 text-red-800">
+                          {flag.flag_count}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="h-12 w-12 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-green-600 text-xl">✓</span>
+                    </div>
+                    <p className="text-muted-foreground">Clean record</p>
+                    <p className="text-sm text-muted-foreground mt-2">This player has no behavioral flags</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         <TabsContent value="achievements" className="space-y-6">
           <ProfileAchievements userId={userId} />
         </TabsContent>
       </Tabs>
 
-      {/* Hockey Statistics */}
       {hockeyStats && (
         <Card>
           <CardHeader>

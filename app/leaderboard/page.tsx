@@ -43,6 +43,8 @@ export default function LeaderboardPage() {
     try {
       const supabase = createClient()
 
+      console.log("[v0] Loading leaderboard data...")
+
       const { data: players } = await supabase
         .from("users")
         .select(`
@@ -57,26 +59,131 @@ export default function LeaderboardPage() {
         .order("elo_rating", { ascending: false })
         .limit(50)
 
-      const csvStatsMap = new Map()
+      console.log("[v0] Loaded players from users table:", players?.length)
+
+      const playersWithActualStats = []
+
+      if (players) {
+        for (const player of players) {
+          console.log("[v0] Calculating stats for player:", player.username)
+
+          // Get all matches this player participated in
+          const { data: userMatches } = await supabase
+            .from("match_participants")
+            .select(`
+              match_id,
+              joined_at,
+              matches!inner (
+                id,
+                status,
+                created_at
+              )
+            `)
+            .eq("user_id", player.id)
+
+          if (!userMatches) {
+            playersWithActualStats.push({
+              ...player,
+              total_games: 0,
+              wins: 0,
+              losses: 0,
+            })
+            continue
+          }
+
+          const completedMatchIds = userMatches.filter((m) => m.matches?.status === "completed").map((m) => m.match_id)
+
+          console.log("[v0] Found", completedMatchIds.length, "completed matches for", player.username)
+
+          // Get match results for completed matches
+          const { data: matchResults } = await supabase
+            .from("match_results")
+            .select("match_id, winning_team")
+            .in("match_id", completedMatchIds)
+            .not("winning_team", "is", null)
+
+          let actualWins = 0
+          let actualLosses = 0
+
+          if (matchResults) {
+            for (const result of matchResults) {
+              // Get all participants for this match to determine team assignments
+              const { data: allParticipants } = await supabase
+                .from("match_participants")
+                .select("user_id, joined_at")
+                .eq("match_id", result.match_id)
+                .order("joined_at", { ascending: true })
+
+              if (allParticipants) {
+                // Determine which team the player was on (based on join order)
+                const userIndex = allParticipants.findIndex((p) => p.user_id === player.id)
+                if (userIndex !== -1) {
+                  // Team assignment: first 4 players = team 1, next 4 = team 2
+                  const userTeam = Math.floor(userIndex / 4) + 1
+
+                  if (userTeam === result.winning_team) {
+                    actualWins++
+                  } else {
+                    actualLosses++
+                  }
+                }
+              }
+            }
+          }
+
+          const totalGames = actualWins + actualLosses
+          console.log(
+            "[v0] Player",
+            player.username,
+            "stats:",
+            totalGames,
+            "games,",
+            actualWins,
+            "wins,",
+            actualLosses,
+            "losses",
+          )
+
+          playersWithActualStats.push({
+            ...player,
+            total_games: totalGames,
+            wins: actualWins,
+            losses: actualLosses,
+          })
+        }
+      }
 
       const { data: recentChanges } = await supabase
         .from("elo_history")
         .select("user_id, rating_change, created_at")
         .order("created_at", { ascending: false })
 
+      const csvStatsMap = new Map()
+
       const { data: earners } = await supabase
-        .from("financial_transactions")
+        .from("user_wallets")
         .select(`
           user_id,
-          users!inner(id, username),
-          amount,
-          created_at
+          total_winnings,
+          users!inner(id, username)
         `)
-        .eq("transaction_type", "reward")
-        .order("amount", { ascending: false })
+        .order("total_winnings", { ascending: false })
+        .limit(10)
 
-      if (players) {
-        const formattedPlayers = players.map((player, index) => {
+      if (earners) {
+        const formattedEarners = earners.map((earner, index) => ({
+          id: earner.user_id,
+          username: earner.users.username,
+          total_earnings: earner.total_winnings || 0,
+          monthly_earnings: earner.total_winnings * 0.1, // Approximate monthly earnings
+          rank: index + 1,
+        }))
+        setTopEarners(formattedEarners)
+        console.log("[v0] Set top earners:", formattedEarners.length)
+      }
+
+      if (playersWithActualStats) {
+        const formattedPlayers = playersWithActualStats.map((player, index) => {
           const recentChange = recentChanges?.find((change) => change.user_id === player.id)?.rating_change || 0
 
           const csvStats = {
@@ -108,35 +215,7 @@ export default function LeaderboardPage() {
           }
         })
         setEloPlayers(formattedPlayers)
-      }
-
-      if (earners) {
-        const earningsMap = new Map()
-        earners.forEach((transaction) => {
-          const userId = transaction.user_id
-          const existing = earningsMap.get(userId) || {
-            id: userId,
-            username: transaction.users.username,
-            total_earnings: 0,
-            monthly_earnings: 0,
-          }
-          existing.total_earnings += transaction.amount
-
-          const transactionDate = new Date(transaction.created_at)
-          const now = new Date()
-          if (transactionDate.getMonth() === now.getMonth() && transactionDate.getFullYear() === now.getFullYear()) {
-            existing.monthly_earnings += transaction.amount
-          }
-
-          earningsMap.set(userId, existing)
-        })
-
-        const sortedEarners = Array.from(earningsMap.values())
-          .sort((a, b) => b.total_earnings - a.total_earnings)
-          .slice(0, 10)
-          .map((earner, index) => ({ ...earner, rank: index + 1 }))
-
-        setTopEarners(sortedEarners)
+        console.log("[v0] Set formatted players:", formattedPlayers.length)
       }
     } catch (error) {
       console.error("Error loading leaderboard data:", error)

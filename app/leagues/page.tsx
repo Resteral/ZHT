@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Users, Calendar, Trophy, DollarSign, Swords, Crown, Play, TrendingUp } from "lucide-react"
+import { Plus, Users, Calendar, Trophy, DollarSign, Swords, Crown, Play, TrendingUp, Gavel, Zap } from "lucide-react"
 import Link from "next/link"
 import { UserCreatedTeams } from "@/components/leagues/user-created-teams"
 import { UnifiedDraftSelector } from "@/components/draft/unified-draft-selector"
+import { SoloQueuePool } from "@/components/leagues/solo-queue-pool"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context" // Fixed import to use existing useAuth instead of non-existent useUser
 
@@ -265,6 +266,22 @@ export default function LeaguesPage() {
               <p className="text-xs text-muted-foreground">Skip the draft</p>
             </CardContent>
           </Card>
+
+          <Card className="bg-gradient-to-r from-green-500/10 to-teal-500/10 border-green-500/20 hover:shadow-lg transition-shadow cursor-pointer">
+            <CardContent className="p-4 text-center">
+              <Gavel className="h-8 w-8 text-green-500 mx-auto mb-2" />
+              <h3 className="font-semibold mb-1">Month-Long Tournaments</h3>
+              <p className="text-xs text-muted-foreground">Host extended tournaments</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-r from-blue-500/10 to-green-500/10 border-blue-500/20 hover:shadow-lg transition-shadow cursor-pointer">
+            <CardContent className="p-4 text-center">
+              <Zap className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+              <h3 className="font-semibold mb-1">Solo Queue</h3>
+              <p className="text-xs text-muted-foreground">Automatic matchmaking for instant games</p>
+            </CardContent>
+          </Card>
         </div>
 
         <Card className="bg-gradient-to-r from-purple-500/5 to-blue-500/5 border-purple-500/20">
@@ -332,8 +349,10 @@ export default function LeaguesPage() {
         </Card>
 
         <Tabs defaultValue="browse" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="browse">Browse Matches</TabsTrigger>
+            <TabsTrigger value="solo-queue">Solo Queue</TabsTrigger>
+            <TabsTrigger value="tournaments">Month-Long Tournaments</TabsTrigger>
             <TabsTrigger value="wager">Wager Matches</TabsTrigger>
             <TabsTrigger value="premade">Premade Teams</TabsTrigger>
           </TabsList>
@@ -650,6 +669,136 @@ export default function LeaguesPage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="solo-queue" className="space-y-6">
+            <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-6 mb-6">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+                  <Zap className="h-6 w-6 text-blue-500" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold mb-1">Solo Queue - Automatic Matchmaking</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Join the pool and get automatically matched • No lobby creation needed • Fair ELO-based matching •
+                    Instant games when pool fills
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-blue-500">Auto</div>
+                  <div className="text-xs text-muted-foreground">matchmaking</div>
+                </div>
+              </div>
+            </div>
+            <SoloQueuePool />
+          </TabsContent>
+
+          <TabsContent value="tournaments" className="space-y-6">
+            <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-lg p-6 mb-6">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <Trophy className="h-6 w-6 text-purple-500" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold mb-1">Month-Long Tournaments</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Host extended tournaments • Players buy team slots • Auction draft system • Compete over
+                    weeks/months • Large prize pools
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-green-500">$100+</div>
+                  <div className="text-xs text-muted-foreground">typical buy-in</div>
+                </div>
+                <Button asChild>
+                  <Link href="/leagues/tournaments/create">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Tournament
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 mb-6">
+              <Card className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5" />
+                    Host Tournament
+                  </CardTitle>
+                  <CardDescription>Create your own month-long tournament with team purchasing</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="text-center py-4">
+                      <div className="text-2xl font-bold text-purple-500">$1000+</div>
+                      <div className="text-sm text-muted-foreground">Potential prize pools</div>
+                    </div>
+                    <Button className="w-full" asChild>
+                      <Link href="/leagues/tournaments/create">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Tournament
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gavel className="h-5 w-5" />
+                    Join Tournament
+                  </CardTitle>
+                  <CardDescription>Buy team slots and participate in auction drafts</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="text-center py-4">
+                      <div className="text-2xl font-bold text-green-500">$100</div>
+                      <div className="text-sm text-muted-foreground">Average buy-in</div>
+                    </div>
+                    <Button className="w-full" variant="secondary" asChild>
+                      <Link href="/leagues/tournaments">
+                        <Users className="h-4 w-4 mr-2" />
+                        Browse Tournaments
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>How Month-Long Tournaments Work</CardTitle>
+                <CardDescription>Extended competition format with team ownership and auction drafts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="text-center p-4 border rounded-lg">
+                    <DollarSign className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                    <h4 className="font-semibold mb-1">1. Buy Team</h4>
+                    <p className="text-sm text-muted-foreground">Purchase a team slot with buy-in fee</p>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <Gavel className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                    <h4 className="font-semibold mb-1">2. Auction Draft</h4>
+                    <p className="text-sm text-muted-foreground">Bid on players to build your roster</p>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <Calendar className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+                    <h4 className="font-semibold mb-1">3. Compete</h4>
+                    <p className="text-sm text-muted-foreground">Play matches over weeks/months</p>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <Trophy className="h-8 w-8 text-purple-500 mx-auto mb-2" />
+                    <h4 className="font-semibold mb-1">4. Win Prizes</h4>
+                    <p className="text-sm text-muted-foreground">Top performers share prize pool</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="wager" className="space-y-6">

@@ -46,16 +46,14 @@ export const tournamentService = {
     }
   },
 
-  async createTournament(tournamentData: any) {
+  async createTournament(tournamentData: any, userId?: string) {
     console.log("[v0] Creating tournament with data:", tournamentData)
 
-    const userStr = localStorage.getItem("user")
-    if (!userStr) {
+    if (!userId) {
       throw new Error("Not authenticated - please log in")
     }
 
-    const user = JSON.parse(userStr)
-    console.log("[v0] User from localStorage:", user)
+    console.log("[v0] Authenticated user:", userId)
 
     const { data, error } = await supabase
       .from("leagues")
@@ -65,7 +63,7 @@ export const tournamentService = {
         max_teams: tournamentData.max_participants || 16,
         entry_fee: tournamentData.entry_fee || 0,
         prize_pool: tournamentData.prize_pool || 0,
-        commissioner_id: user.id,
+        commissioner_id: userId, // Use passed userId instead of user.id
         league_mode: tournamentData.tournament_type || "tournament",
         status: "registration",
         season: new Date().getFullYear().toString(),
@@ -82,13 +80,10 @@ export const tournamentService = {
     return data
   },
 
-  async joinTournament(tournamentId: string, teamName?: string) {
-    const userStr = localStorage.getItem("user")
-    if (!userStr) {
+  async joinTournament(tournamentId: string, teamName?: string, userId?: string) {
+    if (!userId) {
       throw new Error("Not authenticated - please log in")
     }
-
-    const user = JSON.parse(userStr)
 
     const { data: participants } = await supabase.from("league_memberships").select("id").eq("league_id", tournamentId)
 
@@ -98,7 +93,7 @@ export const tournamentService = {
       .from("league_memberships")
       .insert({
         league_id: tournamentId,
-        user_id: user.id,
+        user_id: userId, // Use passed userId instead of user.id
         team_name: teamName || `Team ${seed}`,
         draft_position: seed,
         total_budget: 1000,
@@ -115,7 +110,7 @@ export const tournamentService = {
         .update({
           balance: supabase.raw("balance + ?", [25]),
         })
-        .eq("id", user.id)
+        .eq("id", userId) // Use passed userId instead of user.id
 
       if (balanceError) {
         console.error("Error updating user balance:", balanceError)
