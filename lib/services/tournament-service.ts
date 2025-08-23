@@ -55,6 +55,52 @@ export const tournamentService = {
 
     console.log("[v0] Authenticated user:", userId)
 
+    const supabase = createClient()
+
+    // Verify user exists in users table
+    const { data: existingUser, error: userCheckError } = await supabase
+      .from("users")
+      .select("id, username")
+      .eq("id", userId)
+      .single()
+
+    if (userCheckError && userCheckError.code === "PGRST116") {
+      // User doesn't exist, get from auth and create in users table
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser()
+
+      if (!authUser) {
+        throw new Error("User not authenticated")
+      }
+
+      console.log("[v0] Creating user in users table:", authUser.id)
+      const { data: newUser, error: createError } = await supabase
+        .from("users")
+        .insert({
+          id: authUser.id,
+          username: authUser.email?.split("@")[0] || `user_${authUser.id.slice(0, 8)}`,
+          email: authUser.email,
+          elo_rating: 1200,
+          total_games: 0,
+          wins: 0,
+          losses: 0,
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        console.error("[v0] Failed to create user:", createError)
+        throw new Error(`Failed to create user: ${createError.message}`)
+      }
+      console.log("[v0] User created successfully:", newUser.username)
+    } else if (userCheckError) {
+      console.error("[v0] Database error checking user:", userCheckError)
+      throw new Error(`Database error: ${userCheckError.message}`)
+    } else {
+      console.log("[v0] User verified in database:", existingUser.username)
+    }
+
     if (tournamentData.tournament_type === "month_long_draft") {
       const { monthLongTournamentService } = await import("./month-long-tournament-service")
       return await monthLongTournamentService.createMonthLongTournament(
