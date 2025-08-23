@@ -338,28 +338,32 @@ export default function CreateTournamentPage() {
                 </div>
 
                 {/* Participants & Timing */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Max Participants</Label>
-                    <Select
-                      value={formData.max_participants.toString()}
-                      onValueChange={(value) => setFormData({ ...formData, max_participants: Number.parseInt(value) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {participantOptions.map((num) => (
-                          <SelectItem key={num} value={num.toString()}>
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4" />
-                              {num} Players
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {!formData.enable_player_pool && (
+                    <div className="space-y-2">
+                      <Label>Max Participants</Label>
+                      <Select
+                        value={formData.max_participants.toString()}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, max_participants: Number.parseInt(value) })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {participantOptions.map((num) => (
+                            <SelectItem key={num} value={num.toString()}>
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                {num} Players
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="start_date">Start Date & Time</Label>
@@ -461,8 +465,33 @@ export default function CreateTournamentPage() {
               </div>
 
               {formData.enable_player_pool && (
-                <div className="space-y-4 pt-4 border-t">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-6 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label>Max Tournament Participants</Label>
+                    <Select
+                      value={formData.max_participants.toString()}
+                      onValueChange={(value) => setFormData({ ...formData, max_participants: Number.parseInt(value) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {participantOptions.map((num) => (
+                          <SelectItem key={num} value={num.toString()}>
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4" />
+                              {num} Players
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Total players who can register for the tournament (includes player pool)
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>Number of Teams</Label>
                       <Select
@@ -545,7 +574,7 @@ export default function CreateTournamentPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label>Draft Type</Label>
                       <Select
@@ -624,21 +653,32 @@ export default function CreateTournamentPage() {
                     )}
                   </div>
 
-                  <div className="p-4 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                    <div className="flex items-center gap-2">
                       <Settings className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Pool Configuration</span>
+                      <span className="text-sm font-medium">Pool Configuration Summary</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total Team Slots:</span>
-                        <span className="font-medium">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                      <div className="flex flex-col">
+                        <span className="text-muted-foreground">Tournament Capacity</span>
+                        <span className="font-medium text-lg">{formData.max_participants}</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-muted-foreground">Team Slots</span>
+                        <span className="font-medium text-lg">
                           {formData.player_pool_settings.max_teams * formData.player_pool_settings.players_per_team}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Pool Capacity:</span>
-                        <span className="font-medium">{formData.player_pool_settings.max_pool_size}</span>
+                      <div className="flex flex-col">
+                        <span className="text-muted-foreground">Pool Size</span>
+                        <span className="font-medium text-lg">{formData.player_pool_settings.max_pool_size}</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-muted-foreground">Available Spots</span>
+                        <span className="font-medium text-lg text-green-600">
+                          {formData.max_participants -
+                            formData.player_pool_settings.max_teams * formData.player_pool_settings.players_per_team}
+                        </span>
                       </div>
                     </div>
                   </div>

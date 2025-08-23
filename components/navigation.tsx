@@ -34,7 +34,8 @@ import Image from "next/image"
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Players", href: "/players", icon: Users },
-  { name: "Leagues", href: "/leagues", icon: Trophy }, // Combined single Leagues entry
+  { name: "Leagues", href: "/leagues", icon: Trophy },
+  { name: "Tournaments", href: "/tournaments", icon: Trophy },
   { name: "Schedule", href: "/schedule", icon: Calendar },
   { name: "Betting", href: "/betting", icon: Target },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
