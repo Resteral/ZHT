@@ -28,7 +28,6 @@ import { createClient } from "@/lib/supabase/client"
 import { isSupabaseConfigured } from "@/lib/supabase/client"
 import { formatDateEST } from "@/lib/utils/timezone"
 import { UnifiedGameCreator } from "@/components/game-creation/unified-game-creator"
-import { TournamentCreationButton } from "@/components/tournaments/tournament-creation-button"
 
 interface LiveGame {
   id: string
@@ -407,9 +406,33 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <TournamentCreationButton tournamentType="snake_draft" className="w-full" />
-            <TournamentCreationButton tournamentType="auction" className="w-full" />
-            <TournamentCreationButton tournamentType="linear" className="w-full" />
+            <Link href="/tournaments/create?type=snake_draft" className="w-full">
+              <div className="bg-gradient-to-br from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white p-6 rounded-xl transition-all duration-300 hover:scale-105 cursor-pointer">
+                <div className="flex items-center gap-3 mb-3">
+                  <Trophy className="h-6 w-6" />
+                  <h3 className="text-lg font-bold">Snake Draft</h3>
+                </div>
+                <p className="text-purple-100 text-sm">Strategic picks in alternating order</p>
+              </div>
+            </Link>
+            <Link href="/tournaments/create?type=auction" className="w-full">
+              <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 hover:from-emerald-700 hover:to-emerald-900 text-white p-6 rounded-xl transition-all duration-300 hover:scale-105 cursor-pointer">
+                <div className="flex items-center gap-3 mb-3">
+                  <Trophy className="h-6 w-6" />
+                  <h3 className="text-lg font-bold">Auction Draft</h3>
+                </div>
+                <p className="text-emerald-100 text-sm">Bid on players with budget management</p>
+              </div>
+            </Link>
+            <Link href="/tournaments/create?type=linear" className="w-full">
+              <div className="bg-gradient-to-br from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white p-6 rounded-xl transition-all duration-300 hover:scale-105 cursor-pointer">
+                <div className="flex items-center gap-3 mb-3">
+                  <Trophy className="h-6 w-6" />
+                  <h3 className="text-lg font-bold">Linear Draft</h3>
+                </div>
+                <p className="text-blue-100 text-sm">First-come-first-served selection</p>
+              </div>
+            </Link>
           </div>
         </div>
       </div>
@@ -694,9 +717,33 @@ export default function Dashboard() {
                 <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">No live games or tournaments at the moment</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <TournamentCreationButton tournamentType="snake_draft" className="w-full" />
-                  <TournamentCreationButton tournamentType="auction" className="w-full" />
-                  <TournamentCreationButton tournamentType="linear" className="w-full" />
+                  <Link href="/tournaments/create?type=snake_draft" className="w-full">
+                    <div className="bg-gradient-to-br from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white p-4 rounded-lg transition-all duration-300 hover:scale-105 cursor-pointer">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Trophy className="h-5 w-5" />
+                        <h4 className="font-bold">Snake Draft</h4>
+                      </div>
+                      <p className="text-purple-100 text-xs">Strategic picks in alternating order</p>
+                    </div>
+                  </Link>
+                  <Link href="/tournaments/create?type=auction" className="w-full">
+                    <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 hover:from-emerald-700 hover:to-emerald-900 text-white p-4 rounded-lg transition-all duration-300 hover:scale-105 cursor-pointer">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Trophy className="h-5 w-5" />
+                        <h4 className="font-bold">Auction Draft</h4>
+                      </div>
+                      <p className="text-emerald-100 text-xs">Bid on players with budget management</p>
+                    </div>
+                  </Link>
+                  <Link href="/tournaments/create?type=linear" className="w-full">
+                    <div className="bg-gradient-to-br from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white p-4 rounded-lg transition-all duration-300 hover:scale-105 cursor-pointer">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Trophy className="h-5 w-5" />
+                        <h4 className="font-bold">Linear Draft</h4>
+                      </div>
+                      <p className="text-blue-100 text-xs">First-come-first-served selection</p>
+                    </div>
+                  </Link>
                 </div>
               </div>
             )}

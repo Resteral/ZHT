@@ -268,6 +268,9 @@ export default function SnakeDraftTournamentPage() {
 
       const dbUser = await userManagementService.ensureUserExists(user)
       console.log("[v0] User verified in database:", dbUser.username)
+      console.log("[v0] Auth user ID:", user.id)
+      console.log("[v0] Database user ID:", dbUser.id)
+      console.log("[v0] Database user object:", JSON.stringify(dbUser))
 
       // First, try to find an existing snake draft championship tournament
       const { data: existingTournament, error: findError } = await supabase
@@ -288,27 +291,31 @@ export default function SnakeDraftTournamentPage() {
         const startDate = new Date()
         startDate.setDate(startDate.getDate() + 1) // Start tomorrow
 
+        const tournamentData = {
+          name: "Snake Draft Championship",
+          description: "Ultimate month-long snake draft tournament with strategic picks and intense competition",
+          tournament_type: "snake_draft",
+          game: "hockey",
+          max_participants: 64,
+          entry_fee: 0,
+          prize_pool: 10000,
+          start_date: startDate.toISOString(),
+          end_date: new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+          created_by: user.id, // Use auth user ID directly
+          status: "registration",
+          team_based: false,
+          player_pool_settings: {
+            draft_type: "snake_draft",
+            duration_days: 28,
+            phases_enabled: true,
+          },
+        }
+
+        console.log("[v0] Creating tournament with data:", JSON.stringify(tournamentData))
+
         const { data: newTournament, error: createError } = await supabase
           .from("tournaments")
-          .insert({
-            name: "Snake Draft Championship",
-            description: "Ultimate month-long snake draft tournament with strategic picks and intense competition",
-            tournament_type: "snake_draft",
-            game: "hockey",
-            max_participants: 64,
-            entry_fee: 0,
-            prize_pool: 10000,
-            start_date: startDate.toISOString(),
-            end_date: new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString(),
-            created_by: user.id,
-            status: "registration",
-            team_based: false,
-            player_pool_settings: {
-              draft_type: "snake_draft",
-              duration_days: 28,
-              phases_enabled: true,
-            },
-          })
+          .insert(tournamentData)
           .select("id")
           .single()
 
@@ -321,14 +328,19 @@ export default function SnakeDraftTournamentPage() {
         console.log("[v0] Created new snake draft tournament:", currentTournamentId)
       }
 
-      const { error: poolError } = await supabase.from("tournament_player_pool").insert({
+      const poolData = {
         tournament_id: currentTournamentId,
-        user_id: user.id,
+        user_id: user.id, // Use auth user ID directly
         status: "available",
         created_at: new Date().toISOString(),
-      })
+      }
+
+      console.log("[v0] Adding user to player pool with data:", JSON.stringify(poolData))
+
+      const { error: poolError } = await supabase.from("tournament_player_pool").insert(poolData)
 
       if (poolError && !poolError.message.includes("duplicate")) {
+        console.error("[v0] Error adding to player pool:", poolError)
         throw poolError
       }
 
