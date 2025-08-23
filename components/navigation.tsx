@@ -49,6 +49,8 @@ export function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user, logout, isLoading } = useAuth()
 
+  const isSuperAdmin = user?.username === "Resteral"
+
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
     return pathname.startsWith(href)
@@ -195,6 +197,7 @@ export function Navigation() {
                     <p className="text-sm font-medium leading-none">{user.username}</p>
                     <p className="text-xs leading-none text-muted-foreground">ID: {user.account_id}</p>
                     <p className="text-xs leading-none text-muted-foreground">ELO: {user.elo_rating}</p>
+                    {isSuperAdmin && <p className="text-xs leading-none text-red-600 font-medium">Super Admin</p>}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -207,6 +210,16 @@ export function Navigation() {
                 <DropdownMenuItem asChild>
                   <Link href="/admin">Admin</Link>
                 </DropdownMenuItem>
+                {isSuperAdmin && (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/tournaments">Tournament Management</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/users">User Management</Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuItem asChild>
                   <Link href="/admin/reset-data">Reset Data</Link>
                 </DropdownMenuItem>

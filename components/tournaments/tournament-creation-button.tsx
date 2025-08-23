@@ -51,75 +51,8 @@ export function TournamentCreationButton({ tournamentType, className }: Tourname
       return
     }
 
-    setIsCreating(true)
-    console.log("[v0] Creating tournament for user:", user.id)
-
-    try {
-      const { data: existingUser, error: userCheckError } = await supabase
-        .from("users")
-        .select("id, username")
-        .eq("id", user.id)
-        .single()
-
-      if (userCheckError && userCheckError.code === "PGRST116") {
-        // User doesn't exist, create them
-        console.log("[v0] Creating user in database:", user.id)
-        const { error: userCreateError } = await supabase.from("users").insert({
-          id: user.id,
-          username: user.email?.split("@")[0] || `user_${user.id.slice(0, 8)}`,
-          email: user.email || `${user.id}@example.com`,
-          elo_rating: 1200,
-          wins: 0,
-          losses: 0,
-          total_games: 0,
-        })
-
-        if (userCreateError) {
-          console.error("[v0] Error creating user:", userCreateError)
-          throw userCreateError
-        }
-      } else if (userCheckError) {
-        console.error("[v0] Error checking user:", userCheckError)
-        throw userCheckError
-      }
-
-      const tournamentData = {
-        name: `${config.title} - ${new Date().toLocaleDateString()}`,
-        sport: "hockey", // Changed from 'game' to 'sport' to match leagues table schema
-        max_teams: 16, // Changed from 'max_participants' to 'max_teams' to match leagues table schema
-        entry_fee: 10.0,
-        prize_pool: 150.0,
-        commissioner_id: user.id, // Changed from 'created_by' to 'commissioner_id' to match leagues table schema
-        league_mode: "tournament", // Added to distinguish tournaments from regular leagues
-        status: "registration",
-        season: new Date().getFullYear().toString(), // Added required field for leagues table
-        tournament_type: tournamentType, // Keep tournament type for filtering
-      }
-
-      console.log("[v0] Creating tournament with data:", tournamentData)
-
-      const { data: tournament, error: tournamentError } = await supabase
-        .from("leagues")
-        .insert(tournamentData)
-        .select()
-        .single()
-
-      if (tournamentError) {
-        console.error("[v0] Error creating tournament:", tournamentError)
-        throw tournamentError
-      }
-
-      console.log("[v0] Tournament created successfully:", tournament)
-      toast.success(`${config.title} created successfully!`)
-
-      // Redirect to tournament page
-      window.location.href = `/tournaments/${tournament.id}`
-    } catch (error: any) {
-      console.error("[v0] Tournament creation failed:", error)
-      toast.error(`Failed to create tournament: ${error.message}`)
-    } finally {
-      setIsCreating(false)
-    }
+    // Redirect to unified tournament creation page with pre-selected type
+    window.location.href = `/tournaments/create?type=${tournamentType}`
   }
 
   return (

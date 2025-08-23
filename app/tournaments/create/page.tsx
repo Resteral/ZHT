@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Trophy, Users, Calendar, DollarSign, ArrowLeft, Zap, Target, Settings } from "lucide-react"
+import { Trophy, Users, Calendar, DollarSign, ArrowLeft, Zap, Target, Settings, Crown, Shield } from "lucide-react"
 import { tournamentService } from "@/lib/services/tournament-service"
 import { createClient } from "@/lib/supabase/client"
 
@@ -21,6 +21,7 @@ export default function CreateTournamentPage() {
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const tournamentType = searchParams.get("type")
   const [formData, setFormData] = useState({
@@ -33,7 +34,9 @@ export default function CreateTournamentPage() {
             ? "Snake Draft Championship"
             : tournamentType === "linear_draft"
               ? "Linear Draft Masters"
-              : "",
+              : tournamentType === "auction"
+                ? "Auction Draft Tournament"
+                : "",
     description:
       tournamentType === "team"
         ? "3-day team tournament with competitive brackets and team building phase"
@@ -43,9 +46,13 @@ export default function CreateTournamentPage() {
             ? "Month-long snake draft tournament with strategic captain selection and reversing pick order"
             : tournamentType === "linear_draft"
               ? "Month-long linear draft tournament with consistent pick order and strategic depth"
-              : "",
+              : tournamentType === "auction"
+                ? "Auction draft tournament with bidding system and virtual currency"
+                : "",
     tournament_type:
-      tournamentType === "snake_draft" || tournamentType === "linear_draft" ? "month_long_draft" : "single_elimination",
+      tournamentType === "snake_draft" || tournamentType === "linear_draft" || tournamentType === "auction"
+        ? "month_long_draft"
+        : "single_elimination",
     max_participants:
       tournamentType === "team"
         ? 16
@@ -55,11 +62,27 @@ export default function CreateTournamentPage() {
             ? 64
             : tournamentType === "linear_draft"
               ? 48
-              : 16,
-    entry_fee: tournamentType === "snake_draft" || tournamentType === "linear_draft" ? 0 : 0,
-    prize_pool: tournamentType === "snake_draft" ? 10000 : tournamentType === "linear_draft" ? 8000 : 0,
+              : tournamentType === "auction"
+                ? 32
+                : 16,
+    entry_fee:
+      tournamentType === "snake_draft" || tournamentType === "linear_draft" || tournamentType === "auction" ? 0 : 0,
+    prize_pool:
+      tournamentType === "snake_draft"
+        ? 10000
+        : tournamentType === "linear_draft"
+          ? 8000
+          : tournamentType === "auction"
+            ? 5000
+            : 0,
     start_date: "",
-    duration_days: tournamentType === "snake_draft" || tournamentType === "linear_draft" ? 30 : 3,
+    registration_opens: "",
+    registration_closes: "",
+    end_date: "",
+    game: "zealot_hockey",
+    featured: false,
+    duration_days:
+      tournamentType === "snake_draft" || tournamentType === "linear_draft" || tournamentType === "auction" ? 30 : 3,
     enable_player_pool: tournamentType === "team" ? true : false,
     player_pool_settings: {
       max_teams: 8,
@@ -69,8 +92,12 @@ export default function CreateTournamentPage() {
         ? "snake"
         : tournamentType === "linear_draft"
           ? "linear"
-          : "auction") as "auction" | "snake" | "linear",
+          : tournamentType === "auction"
+            ? "auction"
+            : "auction") as "auction" | "snake" | "linear",
       auction_budget: 500,
+      pick_time_limit: 120,
+      auto_start: true,
     },
   })
 
@@ -81,6 +108,9 @@ export default function CreateTournamentPage() {
         data: { user },
       } = await supabase.auth.getUser()
       setUser(user)
+      if (user?.email === "resteral@example.com" || user?.id === "944b281e-89d5-46f7-b10b-2439f275e179") {
+        setIsAdmin(true)
+      }
     }
     getUser()
   }, [])
@@ -210,9 +240,26 @@ export default function CreateTournamentPage() {
       description: "Extended tournament with draft phases and weekly matches",
       icon: "📅",
     },
+    ...(isAdmin
+      ? [
+          {
+            value: "swiss_system",
+            label: "Swiss System",
+            description: "Pair players with similar records - balanced competition",
+            icon: "🏔️",
+          },
+        ]
+      : []),
   ]
 
-  const participantOptions = [8, 16, 32, 64]
+  const gameOptions = [
+    { value: "zealot_hockey", label: "Zealot Hockey", icon: "🏒" },
+    { value: "counter_strike", label: "Counter Strike", icon: "🔫" },
+    { value: "rainbow_six_siege", label: "Rainbow Six Siege", icon: "🏢" },
+    { value: "call_of_duty", label: "Call of Duty", icon: "⚔️" },
+  ]
+
+  const participantOptions = [8, 16, 32, 64, 128]
 
   const teamCountOptions = [4, 6, 8, 10, 12, 16]
   const playersPerTeamOptions = [3, 4, 5, 6, 8]
@@ -227,18 +274,28 @@ export default function CreateTournamentPage() {
             Back to Tournaments
           </Link>
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {tournamentType === "team"
-              ? "Create Team Tournament"
-              : tournamentType === "solo"
-                ? "Create Solo League"
-                : tournamentType === "snake_draft"
-                  ? "Create Snake Draft Championship"
-                  : tournamentType === "linear_draft"
-                    ? "Create Linear Draft Masters"
-                    : "Create Tournament"}
-          </h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">
+              {tournamentType === "team"
+                ? "Create Team Tournament"
+                : tournamentType === "solo"
+                  ? "Create Solo League"
+                  : tournamentType === "snake_draft"
+                    ? "Create Snake Draft Championship"
+                    : tournamentType === "linear_draft"
+                      ? "Create Linear Draft Masters"
+                      : tournamentType === "auction"
+                        ? "Create Auction Draft Tournament"
+                        : "Create Tournament"}
+            </h1>
+            {isAdmin && (
+              <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                <Crown className="h-3 w-3 mr-1" />
+                Super Admin
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground">
             {tournamentType === "team"
               ? "Set up a 3-day team tournament with drafting and competitive brackets"
@@ -248,7 +305,9 @@ export default function CreateTournamentPage() {
                   ? "Month-long snake draft tournament with strategic captain selection and reversing pick order"
                   : tournamentType === "linear_draft"
                     ? "Month-long linear draft tournament with consistent pick order and strategic depth"
-                    : "Set up a new competitive tournament with brackets and prizes"}
+                    : tournamentType === "auction"
+                      ? "Auction draft tournament with bidding system and virtual currency"
+                      : "Set up a new competitive tournament with brackets and prizes"}
           </p>
         </div>
       </div>
@@ -264,7 +323,9 @@ export default function CreateTournamentPage() {
                   ? "🐍 Snake Draft Championship"
                   : tournamentType === "linear_draft"
                     ? "📊 Linear Draft Masters"
-                    : ""}
+                    : tournamentType === "auction"
+                      ? "🏛️ Auction Draft Tournament"
+                      : ""}
           </Badge>
         </div>
       )}
@@ -306,6 +367,30 @@ export default function CreateTournamentPage() {
                       rows={4}
                     />
                   </div>
+
+                  {isAdmin && (
+                    <div className="space-y-2">
+                      <Label>Game</Label>
+                      <Select
+                        value={formData.game}
+                        onValueChange={(value) => setFormData({ ...formData, game: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {gameOptions.map((game) => (
+                            <SelectItem key={game.value} value={game.value}>
+                              <div className="flex items-center gap-2">
+                                <span>{game.icon}</span>
+                                <span>{game.label}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 {/* Tournament Type */}
@@ -336,6 +421,63 @@ export default function CreateTournamentPage() {
                     ))}
                   </div>
                 </div>
+
+                {isAdmin && (
+                  <Card className="border-purple-200 bg-purple-50/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-purple-800">
+                        <Shield className="h-5 w-5" />
+                        Admin Schedule Settings
+                      </CardTitle>
+                      <CardDescription>Advanced scheduling options for super admins</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="registration_opens">Registration Opens</Label>
+                          <Input
+                            id="registration_opens"
+                            type="datetime-local"
+                            value={formData.registration_opens}
+                            onChange={(e) => setFormData({ ...formData, registration_opens: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="registration_closes">Registration Closes</Label>
+                          <Input
+                            id="registration_closes"
+                            type="datetime-local"
+                            value={formData.registration_closes}
+                            onChange={(e) => setFormData({ ...formData, registration_closes: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="end_date">Tournament End Date</Label>
+                        <Input
+                          id="end_date"
+                          type="datetime-local"
+                          value={formData.end_date}
+                          onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <Label htmlFor="featured">Featured Tournament</Label>
+                          <p className="text-sm text-muted-foreground">Display prominently on the tournaments page</p>
+                        </div>
+                        <Switch
+                          id="featured"
+                          checked={formData.featured}
+                          onCheckedChange={(checked) => setFormData({ ...formData, featured: checked })}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Participants & Timing */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -652,6 +794,56 @@ export default function CreateTournamentPage() {
                       </div>
                     )}
                   </div>
+
+                  {formData.player_pool_settings.draft_type === "auction" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Pick Time Limit (seconds)</Label>
+                        <Select
+                          value={formData.player_pool_settings.pick_time_limit.toString()}
+                          onValueChange={(value) =>
+                            setFormData({
+                              ...formData,
+                              player_pool_settings: {
+                                ...formData.player_pool_settings,
+                                pick_time_limit: Number.parseInt(value),
+                              },
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="60">1 minute</SelectItem>
+                            <SelectItem value="120">2 minutes</SelectItem>
+                            <SelectItem value="180">3 minutes</SelectItem>
+                            <SelectItem value="300">5 minutes</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <Label htmlFor="auto_start">Auto-start Draft</Label>
+                          <p className="text-sm text-muted-foreground">Start automatically when all teams ready</p>
+                        </div>
+                        <Switch
+                          id="auto_start"
+                          checked={formData.player_pool_settings.auto_start}
+                          onCheckedChange={(checked) =>
+                            setFormData({
+                              ...formData,
+                              player_pool_settings: {
+                                ...formData.player_pool_settings,
+                                auto_start: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="p-4 bg-muted/50 rounded-lg space-y-3">
                     <div className="flex items-center gap-2">

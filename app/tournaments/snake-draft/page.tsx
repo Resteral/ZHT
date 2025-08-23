@@ -8,7 +8,21 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Calendar, Trophy, Users, Crown, Target, Star, Plus, BarChart3, Medal, TrendingUp } from "lucide-react"
+import {
+  Calendar,
+  Trophy,
+  Users,
+  Crown,
+  Target,
+  Star,
+  Plus,
+  BarChart3,
+  Medal,
+  TrendingUp,
+  Gamepad2,
+  Clock,
+  Zap,
+} from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
@@ -54,6 +68,19 @@ interface MonthlyRanking {
   trend: "up" | "down" | "stable"
 }
 
+interface EloLobby {
+  id: string
+  name: string
+  format: string
+  elo_range: string
+  current_players: number
+  max_players: number
+  status: "waiting" | "starting" | "in_progress"
+  created_at: string
+  entry_fee: number
+  prize_pool: number
+}
+
 export default function EloLeaguePage() {
   const { user } = useAuth()
   const router = useRouter()
@@ -61,14 +88,22 @@ export default function EloLeaguePage() {
   const [selectedLeague, setSelectedLeague] = useState<EloLeague | null>(null)
   const [leaguePlayers, setLeaguePlayers] = useState<LeaguePlayer[]>([])
   const [monthlyRankings, setMonthlyRankings] = useState<MonthlyRanking[]>([])
+  const [eloLobbies, setEloLobbies] = useState<EloLobby[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("leagues")
+  const [isCreatingLobby, setIsCreatingLobby] = useState(false)
 
   const supabase = createClient()
 
+  const isSuperAdmin = user?.username === "Resteral"
+
   useEffect(() => {
     loadEloLeagueData()
-    const interval = setInterval(loadLiveData, 15000) // Refresh every 15 seconds
+    loadEloLobbies()
+    const interval = setInterval(() => {
+      loadLiveData()
+      loadEloLobbies()
+    }, 15000)
     return () => clearInterval(interval)
   }, [])
 
@@ -92,17 +127,17 @@ export default function EloLeaguePage() {
           name: `${currentMonth} Elo League`,
           season: `Season ${new Date().getFullYear()}`,
           status: league.status,
-          max_participants: 128, // Larger capacity for league
+          max_participants: 128,
           current_participants: league.current_participants || 0,
           player_pool_size: league.tournament_player_pool?.length || 0,
-          prize_pool: league.prize_pool || 5000, // Higher prize pool for monthly league
-          entry_fee: 0, // Free entry based on ELO ranking
+          prize_pool: league.prize_pool || 5000,
+          entry_fee: 0,
           start_date: league.start_date,
           end_date: league.end_date,
           registration_open: league.status === "registration",
           current_month: currentMonth,
-          elo_cutoff_high: 1800, // Premier division cutoff
-          elo_cutoff_low: 1200, // Minimum ELO to participate
+          elo_cutoff_high: 1800,
+          elo_cutoff_low: 1200,
         }))
         setEloLeagues(processedLeagues)
 
@@ -139,7 +174,7 @@ export default function EloLeaguePage() {
             username: entry.users?.username || "Unknown",
             elo_rating: eloRating,
             monthly_rank: index + 1,
-            season_points: Math.floor(eloRating / 10), // Convert ELO to season points
+            season_points: Math.floor(eloRating / 10),
             is_captain: entry.status === "captain",
             captain_type: entry.captain_type,
             team_id: entry.team_id,
@@ -160,7 +195,7 @@ export default function EloLeaguePage() {
       const { data: usersData } = await supabase
         .from("users")
         .select("id, username, elo_rating")
-        .gte("elo_rating", 1200) // Minimum ELO to appear in rankings
+        .gte("elo_rating", 1200)
         .order("elo_rating", { ascending: false })
         .limit(50)
 
@@ -179,6 +214,42 @@ export default function EloLeaguePage() {
       }
     } catch (error) {
       console.error("Error loading monthly rankings:", error)
+    }
+  }
+
+  const loadEloLobbies = async () => {
+    try {
+      const { data: lobbiesData } = await supabase
+        .from("matches")
+        .select("*")
+        .eq("match_type", "elo_lobby")
+        .in("status", ["waiting", "starting"])
+        .order("created_at", { ascending: false })
+
+      if (lobbiesData) {
+        const processedLobbies = lobbiesData.map((lobby) => ({
+          id: lobby.id,
+          name: lobby.name || `${lobby.game} ELO Lobby`,
+          format: lobby.game || "6v6",
+          elo_range: getEloRangeForLobby(lobby.entry_fee || 0),
+          current_players: lobby.current_participants || 0,
+          max_players: lobby.max_participants || 12,
+          status: lobby.status,
+          created_at: lobby.created_at,
+          entry_fee: lobby.entry_fee || 0,
+          prize_pool: lobby.prize_pool || 0,
+        }))
+        setEloLobbies(processedLobbies)
+      }
+    } catch (error) {
+      console.error("[v0] Error loading ELO lobbies:", error)
+    }
+  }
+
+  const loadLiveData = async () => {
+    if (selectedLeague) {
+      await loadLeaguePlayers(selectedLeague.id)
+      await loadMonthlyRankings()
     }
   }
 
@@ -219,45 +290,108 @@ export default function EloLeaguePage() {
     }
   }
 
-  const loadLiveData = async () => {
-    if (selectedLeague) {
-      await loadLeaguePlayers(selectedLeague.id)
-      await loadMonthlyRankings()
+  const getEloRangeForLobby = (entryFee: number) => {
+    if (entryFee >= 50) return "1800+ ELO"
+    if (entryFee >= 25) return "1600+ ELO"
+    if (entryFee >= 10) return "1400+ ELO"
+    return "1200+ ELO"
+  }
+
+  const createEloLobby = async (format: string, eloRange: string) => {
+    if (!user) {
+      router.push("/auth/login")
+      return
+    }
+
+    setIsCreatingLobby(true)
+    try {
+      const entryFee = eloRange === "1800+ ELO" ? 50 : eloRange === "1600+ ELO" ? 25 : eloRange === "1400+ ELO" ? 10 : 0
+      const maxPlayers =
+        format === "1v1"
+          ? 2
+          : format === "2v2"
+            ? 4
+            : format === "3v3"
+              ? 6
+              : format === "4v4"
+                ? 8
+                : format === "5v5"
+                  ? 10
+                  : 12
+
+      const lobbyData = {
+        name: `${format} ELO Lobby - ${eloRange}`,
+        description: `Competitive ${format} lobby for ${eloRange} players`,
+        game: format,
+        match_type: "elo_lobby",
+        max_participants: maxPlayers,
+        current_participants: 1,
+        creator_id: user.id,
+        status: "waiting",
+        entry_fee: entryFee,
+        prize_pool: entryFee * maxPlayers * 0.9,
+        start_date: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data: newLobby, error } = await supabase.from("matches").insert(lobbyData).select().single()
+
+      if (error) throw error
+
+      await supabase.from("match_participants").insert({
+        match_id: newLobby.id,
+        user_id: user.id,
+        status: "confirmed",
+        created_at: new Date().toISOString(),
+      })
+
+      await loadEloLobbies()
+      console.log("[v0] ELO lobby created successfully")
+    } catch (error) {
+      console.error("[v0] Error creating ELO lobby:", error)
+      alert("Failed to create ELO lobby. Please try again.")
+    } finally {
+      setIsCreatingLobby(false)
     }
   }
 
-  const joinEloLeague = async (leagueId: string) => {
+  const joinEloLobby = async (lobbyId: string) => {
     if (!user) {
       router.push("/auth/login")
       return
     }
 
     try {
-      const { data: userData } = await supabase.from("users").select("elo_rating").eq("id", user.id).single()
-
-      if (!userData || userData.elo_rating < 1200) {
-        alert("You need at least 1200 ELO to join the Elo League. Play more matches to increase your rating!")
-        return
-      }
-
-      const poolData = {
-        tournament_id: leagueId,
+      await supabase.from("match_participants").insert({
+        match_id: lobbyId,
         user_id: user.id,
-        status: "available",
+        status: "confirmed",
         created_at: new Date().toISOString(),
+      })
+
+      const { data: lobby } = await supabase
+        .from("matches")
+        .select("current_participants, max_participants")
+        .eq("id", lobbyId)
+        .single()
+
+      if (lobby) {
+        const newCount = (lobby.current_participants || 0) + 1
+        await supabase
+          .from("matches")
+          .update({
+            current_participants: newCount,
+            status: newCount >= lobby.max_participants ? "starting" : "waiting",
+          })
+          .eq("id", lobbyId)
       }
 
-      const { error: poolError } = await supabase.from("tournament_player_pool").insert(poolData)
-
-      if (poolError && !poolError.message.includes("duplicate")) {
-        throw poolError
-      }
-
-      await loadLeaguePlayers(leagueId)
-      console.log("[v0] User joined Elo League successfully")
+      await loadEloLobbies()
+      console.log("[v0] Joined ELO lobby successfully")
     } catch (error) {
-      console.error("[v0] Error joining Elo League:", error)
-      alert("Failed to join Elo League. Please try again.")
+      console.error("[v0] Error joining ELO lobby:", error)
+      alert("Failed to join ELO lobby. Please try again.")
     }
   }
 
@@ -313,16 +447,155 @@ export default function EloLeaguePage() {
             <Trophy className="h-4 w-4 mr-1" />
             $5,000+ Monthly Prizes
           </Badge>
+          {isSuperAdmin && (
+            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+              <Crown className="h-4 w-4 mr-1" />
+              Super Admin
+            </Badge>
+          )}
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="lobbies">ELO Lobbies</TabsTrigger>
           <TabsTrigger value="leagues">Current Season</TabsTrigger>
           <TabsTrigger value="divisions">Divisions</TabsTrigger>
           <TabsTrigger value="rankings">Monthly Rankings</TabsTrigger>
           <TabsTrigger value="join">Join League</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="lobbies" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Gamepad2 className="h-6 w-6 text-blue-600" />
+              ELO Lobbies
+            </h2>
+            {(isSuperAdmin || user) && (
+              <div className="flex gap-2">
+                <Button onClick={() => createEloLobby("6v6", "1200+ ELO")} disabled={isCreatingLobby} variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  6v6 Lobby
+                </Button>
+                <Button onClick={() => createEloLobby("5v5", "1400+ ELO")} disabled={isCreatingLobby} variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  5v5 Lobby
+                </Button>
+                <Button onClick={() => createEloLobby("4v4", "1600+ ELO")} disabled={isCreatingLobby}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  4v4 Lobby
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {eloLobbies.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center py-8 text-muted-foreground">
+                  <Gamepad2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No active ELO lobbies</p>
+                  <p className="text-sm">Create a lobby to start playing</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {eloLobbies.map((lobby) => (
+                <Card key={lobby.id} className="border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Gamepad2 className="h-5 w-5 text-blue-600" />
+                        {lobby.format}
+                      </CardTitle>
+                      <Badge
+                        variant={lobby.status === "waiting" ? "secondary" : "default"}
+                        className={
+                          lobby.status === "waiting" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
+                        }
+                      >
+                        {lobby.status === "waiting" ? "Open" : lobby.status === "starting" ? "Starting" : "Full"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{lobby.elo_range}</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-4 w-4" />
+                        Players
+                      </span>
+                      <span>
+                        {lobby.current_players}/{lobby.max_players}
+                      </span>
+                    </div>
+                    <Progress value={(lobby.current_players / lobby.max_players) * 100} className="h-2" />
+
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1">
+                        <Trophy className="h-4 w-4" />
+                        Prize Pool
+                      </span>
+                      <span>${lobby.prize_pool}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        Created
+                      </span>
+                      <span>{formatDate(lobby.created_at)}</span>
+                    </div>
+
+                    <Button
+                      onClick={() => joinEloLobby(lobby.id)}
+                      className="w-full bg-blue-600 hover:bg-blue-700"
+                      disabled={lobby.status !== "waiting"}
+                    >
+                      {lobby.status === "waiting" ? (
+                        <>
+                          <Zap className="h-4 w-4 mr-2" />
+                          Join Lobby
+                        </>
+                      ) : lobby.status === "starting" ? (
+                        "Starting Soon..."
+                      ) : (
+                        "Lobby Full"
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <Card className="border-green-200 bg-gradient-to-br from-green-50 to-emerald-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-green-600" />
+                Quick Lobby Creation
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Create lobbies for different formats and ELO ranges</p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {["1v1", "2v2", "3v3", "4v4", "5v5", "6v6"].map((format) => (
+                  <Button
+                    key={format}
+                    onClick={() => createEloLobby(format, "1200+ ELO")}
+                    disabled={isCreatingLobby}
+                    variant="outline"
+                    className="flex flex-col gap-1 h-auto py-3"
+                  >
+                    <Gamepad2 className="h-4 w-4" />
+                    <span className="text-xs">{format}</span>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="leagues" className="space-y-6">
           <div className="flex items-center justify-between">
@@ -330,12 +603,22 @@ export default function EloLeaguePage() {
               <Medal className="h-6 w-6 text-yellow-600" />
               Current Season
             </h2>
-            <Button asChild>
-              <Link href="/tournaments/create?type=elo_league">
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Season
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button asChild>
+                <Link href="/tournaments/create?type=elo_league">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New Season
+                </Link>
+              </Button>
+              {isSuperAdmin && (
+                <Button asChild variant="outline">
+                  <Link href="/admin/tournaments">
+                    <Crown className="h-4 w-4 mr-2" />
+                    Admin Panel
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
 
           {eloLeagues.length === 0 ? (
@@ -411,7 +694,7 @@ export default function EloLeaguePage() {
                     <div className="flex gap-2">
                       {league.registration_open && (
                         <Button
-                          onClick={() => joinEloLeague(league.id)}
+                          onClick={() => joinEloLobby(league.id)}
                           className="flex-1 bg-yellow-600 hover:bg-yellow-700"
                         >
                           Join Season
@@ -723,7 +1006,7 @@ export default function EloLeaguePage() {
               </CardHeader>
               <CardContent>
                 <Button
-                  onClick={() => joinEloLeague(eloLeagues[0].id)}
+                  onClick={() => joinEloLobby(eloLeagues[0].id)}
                   className="w-full bg-yellow-600 hover:bg-yellow-700"
                   size="lg"
                 >
