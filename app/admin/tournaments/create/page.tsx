@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Trophy, ArrowLeft } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Trophy, ArrowLeft, Users, Zap } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { tournamentService } from "@/lib/services/tournament-service"
@@ -25,6 +26,16 @@ export default function CreateTournamentPage() {
     description: "",
     game: "",
     tournament_type: "single_elimination",
+    draft_mode: "snake_draft", // snake_draft, linear_draft, auction_draft
+    pick_time_limit: 60,
+    auto_start: true,
+    allow_trades: false,
+    auction_budget: 1000,
+    bid_time_limit: 30,
+    enable_player_pool: false,
+    num_teams: 8,
+    players_per_team: 5,
+    max_pool_size: 50,
     max_participants: 16,
     entry_fee: 0,
     prize_pool: 0,
@@ -50,7 +61,28 @@ export default function CreateTournamentPage() {
     setLoading(true)
 
     try {
-      await tournamentService.createTournament(formData, user?.id)
+      const tournamentData = {
+        ...formData,
+        player_pool_settings: formData.enable_player_pool
+          ? {
+              num_teams: formData.num_teams,
+              players_per_team: formData.players_per_team,
+              max_pool_size: formData.max_pool_size,
+            }
+          : null,
+        draft_settings: {
+          draft_mode: formData.draft_mode,
+          pick_time_limit: formData.pick_time_limit,
+          auto_start: formData.auto_start,
+          allow_trades: formData.allow_trades,
+          ...(formData.draft_mode === "auction_draft" && {
+            auction_budget: formData.auction_budget,
+            bid_time_limit: formData.bid_time_limit,
+          }),
+        },
+      }
+
+      await tournamentService.createTournament(tournamentData, user?.id)
       router.push("/admin/tournaments")
     } catch (error) {
       console.error("Error creating tournament:", error)
@@ -68,7 +100,7 @@ export default function CreateTournamentPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Create Tournament</h1>
-          <p className="text-muted-foreground">Set up a new tournament with brackets and prizes</p>
+          <p className="text-muted-foreground">Set up a new tournament with brackets, drafts, and prizes</p>
         </div>
         <Link href="/admin/tournaments">
           <Button variant="outline">
@@ -144,6 +176,202 @@ export default function CreateTournamentPage() {
                     rows={4}
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Draft Mode Settings
+                </CardTitle>
+                <CardDescription>Configure draft type and settings for team formation</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card
+                    className={`cursor-pointer transition-all ${formData.draft_mode === "snake_draft" ? "ring-2 ring-primary" : "hover:shadow-md"}`}
+                    onClick={() => handleInputChange("draft_mode", "snake_draft")}
+                  >
+                    <CardContent className="p-4 text-center">
+                      <Zap className="h-8 w-8 mx-auto mb-2 text-blue-500" />
+                      <h3 className="font-semibold">Snake Draft</h3>
+                      <p className="text-xs text-muted-foreground">Alternating pick order</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card
+                    className={`cursor-pointer transition-all ${formData.draft_mode === "linear_draft" ? "ring-2 ring-primary" : "hover:shadow-md"}`}
+                    onClick={() => handleInputChange("draft_mode", "linear_draft")}
+                  >
+                    <CardContent className="p-4 text-center">
+                      <Users className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                      <h3 className="font-semibold">Linear Draft</h3>
+                      <p className="text-xs text-muted-foreground">Fixed pick order</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card
+                    className={`cursor-pointer transition-all ${formData.draft_mode === "auction_draft" ? "ring-2 ring-primary" : "hover:shadow-md"}`}
+                    onClick={() => handleInputChange("draft_mode", "auction_draft")}
+                  >
+                    <CardContent className="p-4 text-center">
+                      <Trophy className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
+                      <h3 className="font-semibold">Auction Draft</h3>
+                      <p className="text-xs text-muted-foreground">Bidding system</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pick_time_limit">Pick Time Limit (seconds)</Label>
+                    <Select
+                      value={formData.pick_time_limit.toString()}
+                      onValueChange={(value) => handleInputChange("pick_time_limit", Number.parseInt(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 seconds</SelectItem>
+                        <SelectItem value="60">1 minute</SelectItem>
+                        <SelectItem value="90">1.5 minutes</SelectItem>
+                        <SelectItem value="120">2 minutes</SelectItem>
+                        <SelectItem value="300">5 minutes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {formData.draft_mode === "auction_draft" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="auction_budget">Auction Budget</Label>
+                        <Input
+                          id="auction_budget"
+                          type="number"
+                          min="100"
+                          value={formData.auction_budget}
+                          onChange={(e) => handleInputChange("auction_budget", Number.parseInt(e.target.value) || 1000)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="bid_time_limit">Bid Time Limit (seconds)</Label>
+                        <Select
+                          value={formData.bid_time_limit.toString()}
+                          onValueChange={(value) => handleInputChange("bid_time_limit", Number.parseInt(value))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="15">15 seconds</SelectItem>
+                            <SelectItem value="30">30 seconds</SelectItem>
+                            <SelectItem value="60">1 minute</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="auto_start">Auto-start Draft</Label>
+                    <p className="text-sm text-muted-foreground">Automatically start draft when full</p>
+                  </div>
+                  <Switch
+                    id="auto_start"
+                    checked={formData.auto_start}
+                    onCheckedChange={(checked) => handleInputChange("auto_start", checked)}
+                  />
+                </div>
+
+                {formData.draft_mode !== "auction_draft" && (
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="allow_trades">Allow Trades</Label>
+                      <p className="text-sm text-muted-foreground">Enable player trading during draft</p>
+                    </div>
+                    <Switch
+                      id="allow_trades"
+                      checked={formData.allow_trades}
+                      onCheckedChange={(checked) => handleInputChange("allow_trades", checked)}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Player Pool Draft Settings</CardTitle>
+                <CardDescription>Configure player pool for draft-based tournaments</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="enable_player_pool">Enable Player Pool</Label>
+                    <p className="text-sm text-muted-foreground">Use player pool for team drafting</p>
+                  </div>
+                  <Switch
+                    id="enable_player_pool"
+                    checked={formData.enable_player_pool}
+                    onCheckedChange={(checked) => handleInputChange("enable_player_pool", checked)}
+                  />
+                </div>
+
+                {formData.enable_player_pool && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="num_teams">Number of Teams</Label>
+                      <Select
+                        value={formData.num_teams.toString()}
+                        onValueChange={(value) => handleInputChange("num_teams", Number.parseInt(value))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="4">4 Teams</SelectItem>
+                          <SelectItem value="6">6 Teams</SelectItem>
+                          <SelectItem value="8">8 Teams</SelectItem>
+                          <SelectItem value="12">12 Teams</SelectItem>
+                          <SelectItem value="16">16 Teams</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="players_per_team">Players per Team</Label>
+                      <Select
+                        value={formData.players_per_team.toString()}
+                        onValueChange={(value) => handleInputChange("players_per_team", Number.parseInt(value))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3 Players</SelectItem>
+                          <SelectItem value="4">4 Players</SelectItem>
+                          <SelectItem value="5">5 Players</SelectItem>
+                          <SelectItem value="6">6 Players</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="max_pool_size">Max Pool Size</Label>
+                      <Input
+                        id="max_pool_size"
+                        type="number"
+                        min={formData.num_teams * formData.players_per_team}
+                        value={formData.max_pool_size}
+                        onChange={(e) => handleInputChange("max_pool_size", Number.parseInt(e.target.value) || 50)}
+                      />
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -283,6 +511,9 @@ export default function CreateTournamentPage() {
                     {formData.tournament_type.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())} •{" "}
                     {formData.max_participants} Players
                   </p>
+                  <Badge variant="outline" className="mt-2">
+                    {formData.draft_mode.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                  </Badge>
                 </div>
 
                 <div className="space-y-3">
@@ -304,6 +535,24 @@ export default function CreateTournamentPage() {
                       {formData.tournament_type.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
                     </span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Draft Mode:</span>
+                    <span className="font-medium">
+                      {formData.draft_mode.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Pick Time:</span>
+                    <span className="font-medium">{formData.pick_time_limit}s</span>
+                  </div>
+                  {formData.enable_player_pool && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Teams:</span>
+                      <span className="font-medium">
+                        {formData.num_teams} × {formData.players_per_team}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

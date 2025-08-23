@@ -5,10 +5,10 @@ const supabase = createClient()
 export const tournamentService = {
   async getTournaments() {
     const { data, error } = await supabase
-      .from("leagues")
+      .from("tournaments")
       .select(`
         *,
-        participant_count:league_memberships(count)
+        participant_count:tournament_participants(count)
       `)
       .order("created_at", { ascending: false })
 
@@ -17,19 +17,15 @@ export const tournamentService = {
     return data.map((tournament) => ({
       ...tournament,
       participant_count: tournament.participant_count[0]?.count || 0,
-      // Map league fields to tournament interface
-      tournament_type: tournament.league_mode || "standard",
-      max_participants: tournament.max_teams || 16,
-      start_date: tournament.created_at,
     }))
   },
 
   async getTournament(id: string) {
     const { data, error } = await supabase
-      .from("leagues")
+      .from("tournaments")
       .select(`
         *,
-        participant_count:league_memberships(count)
+        participant_count:tournament_participants(count)
       `)
       .eq("id", id)
       .single()
@@ -39,10 +35,6 @@ export const tournamentService = {
     return {
       ...data,
       participant_count: data.participant_count[0]?.count || 0,
-      // Map league fields to tournament interface
-      tournament_type: data.league_mode || "standard",
-      max_participants: data.max_teams || 16,
-      start_date: data.created_at,
     }
   },
 
@@ -123,18 +115,22 @@ export const tournamentService = {
     }
 
     const { data, error } = await supabase
-      .from("leagues")
+      .from("tournaments")
       .insert({
         name: tournamentData.name,
-        sport: tournamentData.game || "hockey",
-        max_teams: tournamentData.max_participants || 16,
+        description: tournamentData.description,
+        game: tournamentData.game || "hockey",
+        tournament_type: tournamentData.tournament_type || "snake_draft",
+        max_participants: tournamentData.max_participants || 16,
+        max_teams: Math.ceil((tournamentData.max_participants || 16) / (tournamentData.players_per_team || 4)),
         entry_fee: tournamentData.entry_fee || 0,
         prize_pool: tournamentData.prize_pool || 0,
-        commissioner_id: userId, // Use passed userId instead of user.id
-        league_mode: "tournament", // Always set to tournament to distinguish from regular leagues
+        created_by: userId,
         status: "registration",
-        season: new Date().getFullYear().toString(),
-        tournament_type: tournamentData.tournament_type || "snake_draft", // Add specific tournament type
+        start_date: tournamentData.start_date || new Date().toISOString(),
+        end_date: tournamentData.end_date,
+        team_based: tournamentData.team_based || false,
+        player_pool_settings: tournamentData.player_pool_settings || {},
       })
       .select()
       .single()
@@ -145,6 +141,19 @@ export const tournamentService = {
     }
 
     console.log("[v0] Tournament created successfully:", data)
+
+    const { data: verifyData, error: verifyError } = await supabase
+      .from("tournaments")
+      .select("*")
+      .eq("id", data.id)
+      .single()
+
+    if (verifyError || !verifyData) {
+      console.error("[v0] Tournament verification failed:", verifyError)
+      throw new Error("Tournament was not saved properly to database")
+    }
+
+    console.log("[v0] Tournament verified in database:", verifyData.name)
     return data
   },
 
@@ -153,19 +162,21 @@ export const tournamentService = {
       throw new Error("Not authenticated - please log in")
     }
 
-    const { data: participants } = await supabase.from("league_memberships").select("id").eq("league_id", tournamentId)
+    const { data: participants } = await supabase
+      .from("tournament_participants")
+      .select("id")
+      .eq("tournament_id", tournamentId)
 
     const seed = (participants?.length || 0) + 1
 
     const { data, error } = await supabase
-      .from("league_memberships")
+      .from("tournament_participants")
       .insert({
-        league_id: tournamentId,
-        user_id: userId, // Use passed userId instead of user.id
+        tournament_id: tournamentId,
+        user_id: userId,
         team_name: teamName || `Team ${seed}`,
-        draft_position: seed,
-        total_budget: 1000,
-        remaining_budget: 1000,
+        seed: seed,
+        status: "registered",
       })
       .select()
       .single()
@@ -178,7 +189,7 @@ export const tournamentService = {
         .update({
           balance: supabase.raw("balance + ?", [25]),
         })
-        .eq("id", userId) // Use passed userId instead of user.id
+        .eq("id", userId)
 
       if (balanceError) {
         console.error("Error updating user balance:", balanceError)
@@ -192,30 +203,54 @@ export const tournamentService = {
 
   async getParticipants(tournamentId: string) {
     const { data, error } = await supabase
-      .from("league_memberships")
+      .from("tournament_participants")
       .select(`
         *,
         user:users(username, elo_rating, display_name)
       `)
-      .eq("league_id", tournamentId)
-      .order("draft_position")
+      .eq("tournament_id", tournamentId)
+      .order("seed")
 
     if (error) throw error
     return data
   },
 
   async getBracket(tournamentId: string) {
-    // Return empty bracket for now since tournament_brackets table doesn't exist
-    return []
+    const { data, error } = await supabase
+      .from("tournament_brackets")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      .order("round_number", { ascending: true })
+      .order("match_number", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching bracket:", error)
+      return []
+    }
+
+    return data || []
   },
 
   async generateBracket(tournamentId: string) {
-    // Update league status to in_progress
-    await supabase.from("leagues").update({ status: "in_progress" }).eq("id", tournamentId)
+    await supabase.from("tournaments").update({ status: "in_progress" }).eq("id", tournamentId)
   },
 
   async updateMatchScore(matchId: string, scores: { score1: number; score2: number }) {
-    // Simplified match score update - could use matches table if needed
+    const { error } = await supabase
+      .from("tournament_brackets")
+      .update({
+        score1: scores.score1,
+        score2: scores.score2,
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", matchId)
+
+    if (error) {
+      console.error("[v0] Error updating match score:", error)
+      throw error
+    }
+
     console.log("[v0] Match score updated:", { matchId, scores })
   },
 }
