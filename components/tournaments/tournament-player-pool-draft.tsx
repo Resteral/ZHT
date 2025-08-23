@@ -183,6 +183,34 @@ export function TournamentPlayerPoolDraft({
     if (!isOrganizer) return
 
     try {
+      const user = await userManagementService.getCurrentUser()
+      console.log("[v0] Host user verified:", user.username)
+
+      const { data: existingEntry } = await supabase
+        .from("tournament_player_pool")
+        .select("id")
+        .eq("tournament_id", tournamentId)
+        .eq("user_id", user.id)
+        .single()
+
+      if (!existingEntry) {
+        console.log("[v0] Adding host to player pool")
+        const { error: poolError } = await supabase.from("tournament_player_pool").insert({
+          tournament_id: tournamentId,
+          user_id: user.id,
+          status: "available",
+          created_at: new Date().toISOString(),
+        })
+
+        if (poolError) {
+          console.error("[v0] Error adding host to player pool:", poolError)
+        } else {
+          console.log("[v0] Host successfully added to player pool")
+        }
+      } else {
+        console.log("[v0] Host already in player pool")
+      }
+
       const { error: tournamentError } = await supabase
         .from("tournaments")
         .update({
@@ -207,7 +235,9 @@ export function TournamentPlayerPoolDraft({
       }
       setSettings(updatedSettings)
 
-      console.log("[v0] Tournament hosted and player pool made public")
+      await loadPlayerPool()
+
+      console.log("[v0] Tournament hosted, player pool made public, and host added to pool")
     } catch (error) {
       console.error("Error hosting tournament:", error)
     }
