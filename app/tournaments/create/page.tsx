@@ -157,6 +157,44 @@ export default function CreateTournamentPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
+                <Label>Draft Type</Label>
+                <Select
+                  value={formData.settings.draft_mode}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      settings: { ...formData.settings, draft_mode: value as any },
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="snake_draft">
+                      <div className="flex items-center gap-2">
+                        🐍 Snake Draft
+                        <span className="text-xs text-muted-foreground ml-2">Alternating pick order</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="linear_draft">
+                      <div className="flex items-center gap-2">
+                        📊 Linear Draft
+                        <span className="text-xs text-muted-foreground ml-2">Same pick order each round</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="auction_draft">
+                      <div className="flex items-center gap-2">
+                        🏛️ Auction Draft
+                        <span className="text-xs text-muted-foreground ml-2">Bidding system</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">How captains will select players for their teams</p>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Player Pool Size</Label>
                 <Select
                   value={formData.max_participants.toString()}
@@ -272,15 +310,14 @@ export default function CreateTournamentPage() {
                   </h4>
                   <div className="text-sm space-y-1">
                     <p>
+                      <strong>{formData.settings.draft_mode.replace("_", " ").toUpperCase()}</strong> tournament format
+                    </p>
+                    <p>
                       <strong>{formData.max_participants}</strong> players can join the pool
                     </p>
                     <p>
                       <strong>{formData.settings.num_teams}</strong> teams with{" "}
                       <strong>{formData.settings.players_per_team}</strong> players each
-                    </p>
-                    <p>
-                      <strong>{formData.settings.num_teams * formData.settings.players_per_team}</strong> players will
-                      be drafted
                     </p>
                     <p>
                       <strong>
