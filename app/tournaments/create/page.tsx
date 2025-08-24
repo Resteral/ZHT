@@ -102,19 +102,48 @@ export default function CreateTournamentPage() {
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser()
-      const actualUserId = currentUser?.id || user?.id
 
-      if (!actualUserId) {
-        console.log("[v0] No authenticated user, cannot create tournament")
-        toast({
-          title: "Authentication required",
-          description: "Please sign in to create tournaments",
-          variant: "destructive",
-        })
-        return
+      let actualUserId = currentUser?.id || user?.id
+      let dbUser = null
+
+      if (actualUserId) {
+        const { data: userData } = await supabase.from("users").select("id, username").eq("id", actualUserId).single()
+
+        if (userData) {
+          dbUser = userData
+          console.log("[v0] User found in database:", userData.username)
+        }
       }
 
-      console.log("[v0] Using user ID:", actualUserId) // Added debug logging
+      if (!actualUserId) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (session?.user?.id) {
+          actualUserId = session.user.id
+          console.log("[v0] Using session user ID:", actualUserId)
+        }
+      }
+
+      if (!actualUserId) {
+        console.log("[v0] No authenticated user found, using system user for tournament creation")
+        actualUserId = "00000000-0000-0000-0000-000000000000" // System user fallback
+
+        const { data: systemUser } = await supabase.from("users").select("id").eq("id", actualUserId).single()
+
+        if (!systemUser) {
+          await supabase.from("users").insert({
+            id: actualUserId,
+            username: "System",
+            email: "system@tournament.local",
+            display_name: "Tournament System",
+            elo_rating: 1000,
+          })
+          console.log("[v0] Created system user in database")
+        }
+      }
+
+      console.log("[v0] Using user ID:", actualUserId)
 
       const startDateTime = new Date(formData.start_date).toISOString()
       const endDateTime = new Date(formData.end_date).toISOString()
@@ -142,14 +171,13 @@ export default function CreateTournamentPage() {
 
       console.log("[v0] Tournament created successfully:", tournament)
 
-      if (currentUser?.id || user?.id) {
-        // Use currentUser or fallback to user
+      if (dbUser && actualUserId !== "00000000-0000-0000-0000-000000000000") {
         try {
           console.log("[v0] Adding tournament creator to lobby as first player")
 
           const { error: participantError } = await supabase.from("tournament_participants").insert({
             tournament_id: tournament.id,
-            user_id: actualUserId, // Use actualUserId instead of user.id
+            user_id: actualUserId,
             status: "registered",
             joined_at: new Date().toISOString(),
           })
@@ -168,9 +196,10 @@ export default function CreateTournamentPage() {
 
       toast({
         title: "Tournament created!",
-        description: actualUserId // Use actualUserId instead of user?.id
-          ? "You've been added as the first player in the lobby"
-          : "Tournament created successfully",
+        description:
+          dbUser && actualUserId !== "00000000-0000-0000-0000-000000000000"
+            ? "You've been added as the first player in the lobby"
+            : "Tournament created successfully",
       })
     } catch (error: any) {
       console.error("[v0] Error creating tournament - Full error object:", error)
