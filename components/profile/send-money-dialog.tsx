@@ -45,7 +45,7 @@ export function SendMoneyDialog() {
       const { data, error } = await supabase
         .from("users")
         .select("id, username, display_name")
-        .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`)
+        .or(`username.ilike.%${searchQuery}%`)
         .neq("id", user?.id) // Exclude current user
         .limit(5)
 
@@ -179,9 +179,6 @@ export function SendMoneyDialog() {
                       </Avatar>
                       <div>
                         <p className="text-sm font-medium">{searchUser.username}</p>
-                        {searchUser.display_name && (
-                          <p className="text-xs text-muted-foreground">{searchUser.display_name}</p>
-                        )}
                       </div>
                     </div>
                   ))}
@@ -197,9 +194,6 @@ export function SendMoneyDialog() {
                 </Avatar>
                 <div className="flex-1">
                   <p className="font-medium">{selectedUser.username}</p>
-                  {selectedUser.display_name && (
-                    <p className="text-sm text-muted-foreground">{selectedUser.display_name}</p>
-                  )}
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setSelectedUser(null)}>
                   Change

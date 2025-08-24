@@ -97,7 +97,7 @@ export function ELODraftBetting() {
               const performance = performanceMap.get(p.user_id) || {}
               return {
                 user_id: p.user_id,
-                username: p.users?.display_name || p.users?.username || "Unknown",
+                username: p.users?.username || "Unknown",
                 elo_rating: p.users?.elo_rating || 1200,
                 team_assignment: null, // Set to null since team_assignment column doesn't exist
                 wins: p.users?.wins || 0,

@@ -50,11 +50,7 @@ export default function PlayerManagement() {
     }
   }
 
-  const filteredPlayers = players.filter(
-    (player) =>
-      player.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (player.display_name && player.display_name.toLowerCase().includes(searchTerm.toLowerCase())),
-  )
+  const filteredPlayers = players.filter((player) => player.username.toLowerCase().includes(searchTerm.toLowerCase()))
 
   const getWinRate = (wins: number, losses: number) => {
     const total = wins + losses
@@ -143,7 +139,7 @@ export default function PlayerManagement() {
                         {player.username.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div className="font-medium">{player.display_name || player.username}</div>
+                        <div className="font-medium">{player.username}</div>
                         <div className="text-sm text-muted-foreground">@{player.username}</div>
                       </div>
                     </div>

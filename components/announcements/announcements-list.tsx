@@ -58,7 +58,7 @@ export function AnnouncementsList() {
           title: announcement.title,
           content: announcement.content,
           author: {
-            name: announcement.users?.display_name || announcement.users?.username || "Unknown",
+            name: announcement.users?.username || "Unknown",
             avatar: undefined,
           },
           published_at: announcement.created_at,

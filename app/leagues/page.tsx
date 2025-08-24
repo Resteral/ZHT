@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, DollarSign, Users, ArrowRight, Plus, Clock, Medal, Gamepad2 } from "lucide-react"
+import { Trophy, DollarSign, Users, ArrowRight, Plus, Medal, Gamepad2 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
@@ -19,25 +19,6 @@ import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Calendar, Crown, Target, Star, BarChart3, TrendingUp } from "lucide-react"
 import { useRouter } from "next/navigation"
-
-interface Tournament {
-  id: string
-  name: string
-  game: string
-  max_teams: number
-  current_teams: number
-  entry_fee: number
-  prize_pool: number
-  start_date: string
-  status: string
-  format: string
-  betting_enabled: boolean
-  total_bets: number
-  player_pool_size?: number
-  max_player_pool?: number
-  registration_open?: boolean
-  tournament_type?: string
-}
 
 interface WagerMatch {
   id: string
@@ -108,18 +89,37 @@ interface MonthlyRanking {
   trend: "up" | "down" | "stable"
 }
 
+interface Lobby {
+  id: string
+  name: string
+  format: string
+  participants: number
+  max_participants: number
+  team_price: number
+  prize_pool: number
+  status: string
+  current_pick?: number
+  round?: number
+  draft_start?: string
+  match_type?: string
+  user_is_participant: boolean
+  participant_names: string
+  created_at: string
+  game_number?: number
+}
+
 export default function LeaguesPage() {
-  const [tournaments, setTournaments] = useState<Tournament[]>([])
+  const [lobbies, setLobbies] = useState<Lobby[]>([])
+  const [eloLeagues, setEloLeagues] = useState<EloLeague[]>([])
+  const [loading, setLoading] = useState(true)
   const [activeWagerMatches, setActiveWagerMatches] = useState<WagerMatch[]>([])
   const [activeCaptainDrafts, setActiveCaptainDrafts] = useState<CaptainDraft[]>([])
   const [activeElos, setActiveElos] = useState<
     Array<{ id: string; username: string; elo_rating: number; status: string }>
   >([])
-  const [eloLeagues, setEloLeagues] = useState<EloLeague[]>([])
   const [selectedLeague, setSelectedLeague] = useState<EloLeague | null>(null)
   const [leaguePlayers, setLeaguePlayers] = useState<LeaguePlayer[]>([])
   const [monthlyRankings, setMonthlyRankings] = useState<MonthlyRanking[]>([])
-  const [loading, setLoading] = useState(true)
   const supabase = createClient()
   const { user } = useAuth()
   const router = useRouter()
@@ -307,40 +307,8 @@ export default function LeaguesPage() {
     }
   }
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const { data: tournamentData } = await supabase
-        .from("tournaments")
-        .select(`
-          *,
-          tournament_player_pool!inner(count)
-        `)
-        .in("status", ["registration", "team_building", "active", "draft"])
-        .order("created_at", { ascending: false })
-        .limit(10)
-
-      if (tournamentData) {
-        const processedTournaments = tournamentData.map((tournament) => ({
-          id: tournament.id,
-          name: tournament.name || "Tournament",
-          game: tournament.game || "zealot_hockey",
-          max_teams: tournament.max_participants || 16,
-          current_teams: tournament.current_participants || 0,
-          entry_fee: tournament.entry_fee || 0,
-          prize_pool: tournament.prize_pool || 1000,
-          start_date: tournament.start_date || new Date().toISOString(),
-          status: tournament.status,
-          format: tournament.tournament_format || "bracket",
-          betting_enabled: tournament.betting_enabled || false,
-          total_bets: tournament.total_bets || 0,
-          player_pool_size: tournament.tournament_player_pool?.length || 0,
-          max_player_pool: tournament.max_player_pool || 64,
-          registration_open: tournament.status === "registration" || tournament.status === "draft",
-          tournament_type: tournament.tournament_type || "team",
-        }))
-        setTournaments(processedTournaments)
-      }
-
       const { data: wagerMatches } = await supabase
         .from("wager_matches")
         .select("*")
@@ -447,11 +415,11 @@ export default function LeaguesPage() {
 
       await loadEloLeagueData()
     } catch (error) {
-      console.error("Error fetching data:", error)
+      console.error("[v0] Error loading data:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -511,9 +479,8 @@ export default function LeaguesPage() {
       </div>
 
       <Tabs defaultValue="lobbies" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="lobbies">Lobbies</TabsTrigger>
-          <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
           <TabsTrigger value="elo-league">Elo League</TabsTrigger>
         </TabsList>
 
@@ -657,191 +624,111 @@ export default function LeaguesPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="tournaments" className="space-y-6">
+        <TabsContent value="elo-league" className="space-y-6">
           <div className="space-y-6 mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold">Tournaments</h2>
-                <p className="text-muted-foreground">
-                  Join ongoing tournaments with different draft formats and prize pools
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button asChild size="lg">
-                  <Link href="/tournaments/create">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <Medal className="h-6 w-6 text-yellow-600" />
+                  Current Season
+                </h2>
+                <Button asChild>
+                  <Link href="/tournaments">
                     <Plus className="h-4 w-4 mr-2" />
-                    Tournament Creation Menu
+                    View Tournaments
                   </Link>
                 </Button>
               </div>
             </div>
 
-            {loading ? (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={i} className="h-64 w-full" />
-                ))}
-              </div>
-            ) : tournaments.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <h3 className="text-lg font-semibold mb-2">No tournaments available</h3>
-                <p className="text-sm mb-4">Check back later for new tournaments!</p>
-                <Button asChild>
-                  <Link href="/tournaments/create?type=team">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Tournament
-                  </Link>
-                </Button>
-              </div>
+            {eloLeagues.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Medal className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>No active Elo League season</p>
+                    <p className="text-sm">New seasons start monthly</p>
+                  </div>
+                </CardContent>
+              </Card>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {tournaments.map((tournament) => (
-                  <Card key={tournament.id} className="hover:shadow-lg transition-shadow">
+              <div className="grid gap-6">
+                {eloLeagues.map((league) => (
+                  <Card
+                    key={league.id}
+                    className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 hover:shadow-lg transition-shadow"
+                  >
                     <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            <span className="text-2xl">{tournament.game}</span>
-                            {tournament.name}
-                          </CardTitle>
-                          <CardDescription>{tournament.game}</CardDescription>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-yellow-500/20 rounded-full">
+                            <Medal className="h-6 w-6 text-yellow-600" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-lg">{league.name}</CardTitle>
+                            <p className="text-sm text-muted-foreground">{league.season}</p>
+                          </div>
                         </div>
                         <div className="flex flex-col gap-1">
                           <Badge
-                            variant={
-                              tournament.status === "registration"
-                                ? "secondary"
-                                : tournament.status === "team_building"
-                                  ? "default"
-                                  : "outline"
-                            }
+                            variant={league.registration_open ? "secondary" : "outline"}
+                            className={league.registration_open ? "bg-green-100 text-green-700" : ""}
                           >
-                            {tournament.status === "registration"
-                              ? "Open"
-                              : tournament.status === "team_building"
-                                ? "Team Building"
-                                : "Live"}
+                            {league.registration_open ? "Registration Open" : "Season Active"}
                           </Badge>
                           <Badge variant="outline" className="text-xs">
-                            <Users className="h-3 w-3 mr-1" />
-                            {tournament.tournament_type === "team" ? "Team" : "Player"}
+                            ${league.prize_pool} Prize Pool
                           </Badge>
                         </div>
                       </div>
                     </CardHeader>
 
                     <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="grid grid-cols-3 gap-4 text-sm">
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
                           <span>
-                            {tournament.tournament_type === "snake_draft" ||
-                            tournament.tournament_type === "linear_draft"
-                              ? `${tournament.player_pool_size}/${tournament.max_player_pool} players`
-                              : `${tournament.current_teams}/${tournament.max_teams} teams`}
+                            {league.player_pool_size}/{league.max_participants} players
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Trophy className="h-4 w-4 text-muted-foreground" />
-                          <span>{tournament.format}</span>
+                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                          <span>Min {league.elo_cutoff_low} ELO</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-muted-foreground" />
-                          <span>${tournament.prize_pool} prize</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          <span>{tournament.registration_open ? "Registration Open" : "Registration Closed"}</span>
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span>{league.current_month}</span>
                         </div>
                       </div>
-
-                      {tournament.betting_enabled && (
-                        <div className="p-2 bg-green-500/10 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-green-600 font-medium">
-                              <DollarSign className="h-3 w-3 inline mr-1" />
-                              Betting Available
-                            </p>
-                            <span className="text-xs text-muted-foreground">${tournament.total_bets} wagered</span>
-                          </div>
-                        </div>
-                      )}
 
                       <div className="space-y-2">
                         <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Season progress</span>
                           <span>
-                            {tournament.tournament_type === "snake_draft" ||
-                            tournament.tournament_type === "linear_draft"
-                              ? "Players registered"
-                              : "Teams registered"}
-                          </span>
-                          <span>
-                            {tournament.tournament_type === "snake_draft" ||
-                            tournament.tournament_type === "linear_draft"
-                              ? `${tournament.player_pool_size}/${tournament.max_player_pool}`
-                              : `${tournament.current_teams}/${tournament.max_teams}`}
+                            {league.player_pool_size}/{league.max_participants}
                           </span>
                         </div>
-                        <div className="w-full bg-muted rounded-full h-2">
-                          <div
-                            className="bg-primary h-2 rounded-full transition-all"
-                            style={{
-                              width: `${
-                                tournament.tournament_type === "snake_draft" ||
-                                tournament.tournament_type === "linear_draft"
-                                  ? (tournament.player_pool_size! / tournament.max_player_pool!) * 100
-                                  : (tournament.current_teams / tournament.max_teams) * 100
-                              }%`,
-                            }}
-                          />
-                        </div>
+                        <Progress value={(league.player_pool_size / league.max_participants) * 100} className="h-2" />
                       </div>
 
                       <div className="flex gap-2">
-                        <Button asChild className="flex-1">
-                          <Link href={`/tournaments/${tournament.id}`}>
-                            {tournament.status === "registration"
-                              ? "Join Tournament"
-                              : tournament.status === "team_building"
-                                ? "Build Team"
-                                : "View Bracket"}
-                          </Link>
-                        </Button>
-                        {tournament.betting_enabled && (
-                          <Button asChild variant="outline" size="sm">
-                            <Link href={`/betting?tournament=${tournament.id}`}>
-                              <DollarSign className="h-3 w-3" />
-                            </Link>
+                        {league.registration_open && (
+                          <Button
+                            onClick={() => joinEloLeague(league.id)}
+                            className="flex-1 bg-yellow-600 hover:bg-yellow-700"
+                          >
+                            Join Season
                           </Button>
                         )}
+                        <Button variant="outline" onClick={() => router.push(`/tournaments/${league.id}`)}>
+                          View Season
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
             )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="elo-league" className="space-y-6">
-          <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-lg p-6 mb-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <Medal className="h-6 w-6 text-emerald-500" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold mb-1">Elo League</h3>
-                <p className="text-sm text-muted-foreground">
-                  Monthly competitive league based on ELO rankings • Climb divisions • Compete for prizes • Prove your
-                  skill
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-emerald-500">ELO LEAGUE</div>
-                <div className="text-xs text-muted-foreground">Monthly Seasons</div>
-              </div>
-            </div>
           </div>
 
           <Tabs defaultValue="current-season" className="space-y-4">
@@ -860,12 +747,6 @@ export default function LeaguesPage() {
                   <Medal className="h-6 w-6 text-yellow-600" />
                   Current Season
                 </h2>
-                <Button asChild>
-                  <Link href="/tournaments/create?type=elo_league">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create New Season
-                  </Link>
-                </Button>
               </div>
 
               {eloLeagues.length === 0 ? (
@@ -1190,6 +1071,27 @@ export default function LeaguesPage() {
           </Tabs>
         </TabsContent>
       </Tabs>
+
+      <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-lg p-6 mt-8">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
+            <Trophy className="h-6 w-6 text-purple-500" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold mb-1">Looking for Tournaments?</h3>
+            <p className="text-sm text-muted-foreground">
+              Create and join tournaments with Snake Draft, Linear Draft, and Auction formats on our dedicated
+              tournaments page.
+            </p>
+          </div>
+          <Button asChild size="lg">
+            <Link href="/tournaments">
+              <Trophy className="h-4 w-4 mr-2" />
+              Go to Tournaments
+            </Link>
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

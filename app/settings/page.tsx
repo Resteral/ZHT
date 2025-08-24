@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,9 +10,25 @@ import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Settings, Bell, Shield, User, Palette, Users, Plus, Send, Trash2, Upload, ImageIcon } from "lucide-react"
+import {
+  Settings,
+  Bell,
+  Shield,
+  User,
+  Palette,
+  Users,
+  Plus,
+  Send,
+  Trash2,
+  Upload,
+  ImageIcon,
+  Mail,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { Textarea } from "@/components/ui/textarea"
+import { createClient } from "@/lib/supabase/client"
 
 export default function SettingsPage() {
   const { user } = useAuth()
@@ -35,6 +50,32 @@ export default function SettingsPage() {
   })
   const [inviteEmail, setInviteEmail] = useState("")
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
+
+  const [emailVerificationStatus, setEmailVerificationStatus] = useState<"verified" | "unverified" | "checking">(
+    "checking",
+  )
+  const [isResendingVerification, setIsResendingVerification] = useState(false)
+  const [newEmail, setNewEmail] = useState("")
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false)
+
+  useEffect(() => {
+    const checkEmailVerification = async () => {
+      const supabase = createClient()
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser()
+
+      if (authUser?.email_confirmed_at) {
+        setEmailVerificationStatus("verified")
+      } else {
+        setEmailVerificationStatus("unverified")
+      }
+    }
+
+    if (user) {
+      checkEmailVerification()
+    }
+  }, [user])
 
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -62,6 +103,54 @@ export default function SettingsPage() {
   const handleInvitePlayer = async (teamId: string) => {
     console.log("[v0] Inviting player to team:", teamId, inviteEmail)
     setInviteEmail("")
+  }
+
+  const handleResendVerification = async () => {
+    setIsResendingVerification(true)
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: user?.email || "",
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) throw error
+
+      alert("Verification email sent! Please check your inbox.")
+    } catch (error) {
+      console.error("Error resending verification:", error)
+      alert("Failed to send verification email. Please try again.")
+    } finally {
+      setIsResendingVerification(false)
+    }
+  }
+
+  const handleUpdateEmail = async () => {
+    if (!newEmail || newEmail === user?.email) return
+
+    setIsUpdatingEmail(true)
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        email: newEmail,
+      })
+
+      if (error) throw error
+
+      alert("Email update initiated! Please check both your old and new email for confirmation.")
+      setNewEmail("")
+      setEmailVerificationStatus("unverified")
+    } catch (error) {
+      console.error("Error updating email:", error)
+      alert("Failed to update email. Please try again.")
+    } finally {
+      setIsUpdatingEmail(false)
+    }
   }
 
   return (
@@ -116,6 +205,91 @@ export default function SettingsPage() {
                 </Select>
               </div>
               <Button>Save Changes</Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                Email Authentication
+              </CardTitle>
+              <CardDescription>Manage your email verification for tournament creation</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Label>Current Email</Label>
+                    {emailVerificationStatus === "verified" ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : emailVerificationStatus === "unverified" ? (
+                      <AlertCircle className="h-4 w-4 text-orange-600" />
+                    ) : null}
+                  </div>
+                  <p className="text-sm font-medium">{user?.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {emailVerificationStatus === "verified"
+                      ? "✅ Verified - You can create tournaments"
+                      : emailVerificationStatus === "unverified"
+                        ? "⚠️ Unverified - Email verification required for tournament creation"
+                        : "Checking verification status..."}
+                  </p>
+                </div>
+                {emailVerificationStatus === "unverified" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResendVerification}
+                    disabled={isResendingVerification}
+                  >
+                    {isResendingVerification ? "Sending..." : "Resend Verification"}
+                  </Button>
+                )}
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="newEmail">Update Email Address</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="newEmail"
+                      type="email"
+                      placeholder="Enter new email address"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleUpdateEmail}
+                      disabled={!newEmail || newEmail === user?.email || isUpdatingEmail}
+                      size="sm"
+                    >
+                      {isUpdatingEmail ? "Updating..." : "Update"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Changing your email will require verification of both old and new addresses
+                  </p>
+                </div>
+              </div>
+
+              {emailVerificationStatus === "unverified" && (
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-orange-800">Email Verification Required</p>
+                      <p className="text-xs text-orange-700">
+                        You need to verify your email address to create tournaments and access all features. Check your
+                        inbox for a verification email or click "Resend Verification" above.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

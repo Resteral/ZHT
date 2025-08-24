@@ -59,29 +59,33 @@ export const tournamentService = {
 
     const supabase = createClient()
 
+    let actualUserId = userId
+
+    // First, get the current auth user to ensure we have the right info
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !authUser || authUser.id !== userId) {
+      throw new Error("Authentication mismatch - please log out and back in")
+    }
+
+    // Check if user exists in database
     let { data: existingUser, error: userCheckError } = await supabase
       .from("users")
-      .select("id, username, account_id")
+      .select("id, username")
       .eq("id", userId)
       .single()
 
     if (userCheckError && userCheckError.code === "PGRST116") {
-      // User not found by UUID, try to create them
+      // User doesn't exist, create them
       console.log("[v0] User not found, creating new user with UUID:", userId)
 
-      // Get current auth user for additional info
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser()
-
-      if (!authUser || authUser.id !== userId) {
-        throw new Error("Authentication mismatch - please log out and back in")
-      }
-
       const userToCreate = {
-        id: userId, // Use the validated auth UUID
+        id: userId,
         username: authUser.email?.split("@")[0] || `user_${userId.slice(0, 8)}`,
-        email: authUser.email || `${userId}@temp.com`,
+        email: authUser.email || null,
         elo_rating: 1200,
         total_games: 0,
         wins: 0,
@@ -92,56 +96,40 @@ export const tournamentService = {
         updated_at: new Date().toISOString(),
       }
 
-      const { data: newUser, error: createError } = await supabase.from("users").insert(userToCreate).select().single()
+      const { data: newUser, error: createError } = await supabase
+        .from("users")
+        .insert(userToCreate)
+        .select("id, username")
+        .single()
 
       if (createError) {
         console.error("[v0] Failed to create user:", createError)
-        if (createError.code === "23505") {
-          // User already exists, try to fetch again
-          const { data: retryUser, error: retryError } = await supabase
-            .from("users")
-            .select("id, username, account_id")
-            .eq("id", userId)
-            .single()
-
-          if (retryError || !retryUser) {
-            throw new Error("User creation failed - please try again")
-          }
-          existingUser = retryUser
-        } else {
-          throw new Error(`Failed to create user: ${createError.message}`)
-        }
-      } else {
-        console.log("[v0] User created successfully:", newUser.username)
-        existingUser = newUser
+        throw new Error(`Failed to create user: ${createError.message}`)
       }
+
+      existingUser = newUser
+      console.log("[v0] User created successfully:", existingUser.username)
     } else if (userCheckError) {
       console.error("[v0] Database error checking user:", userCheckError)
       throw new Error(`Database error: ${userCheckError.message}`)
     }
 
     if (!existingUser) {
-      throw new Error("User verification failed - could not find or create user")
+      throw new Error("User verification failed")
     }
 
+    actualUserId = existingUser.id
     console.log("[v0] User verified in database:", existingUser.username)
 
-    if (!isValidUUID(existingUser.id)) {
-      console.error("[v0] Invalid database user UUID:", existingUser.id)
-      throw new Error("Database user ID format error - please contact support")
-    }
-
-    const actualUserId = existingUser.id // Use the actual database UUID
-
-    const { data: finalUserCheck, error: finalCheckError } = await supabase
+    const { data: finalCheck, error: finalError } = await supabase
       .from("users")
       .select("id")
       .eq("id", actualUserId)
       .single()
 
-    if (finalCheckError || !finalUserCheck) {
-      console.error("[v0] Final user verification failed:", finalCheckError)
-      throw new Error("User verification failed - database UUID not found")
+    if (finalError || !finalCheck) {
+      console.error("[v0] Final user check failed:", finalError)
+      throw new Error("User verification failed - please try again")
     }
 
     console.log("[v0] Final user verification passed, creating tournament...")

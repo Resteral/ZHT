@@ -69,12 +69,12 @@ export function UpcomingBets() {
           id: game.id,
           scheduled_time: game.game_date,
           home_team: {
-            name: game.home_user?.display_name || game.home_user?.username || "Unknown Player",
+            name: game.home_user?.username || "Unknown Player",
             avatar: undefined,
             record: `${game.home_user?.wins || 0}-${game.home_user?.losses || 0}`,
           },
           away_team: {
-            name: game.away_user?.display_name || game.away_user?.username || "Unknown Player",
+            name: game.away_user?.username || "Unknown Player",
             avatar: undefined,
             record: `${game.away_user?.wins || 0}-${game.away_user?.losses || 0}`,
           },

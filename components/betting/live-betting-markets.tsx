@@ -68,7 +68,6 @@ export function LiveBettingMarkets() {
             user_id,
             users (
               username,
-              display_name,
               elo_rating
             )
           )
