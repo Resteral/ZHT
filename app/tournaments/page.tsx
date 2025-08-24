@@ -29,9 +29,11 @@ interface Tournament {
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
     fetchTournaments()
+    fetchUser()
   }, [])
 
   const fetchTournaments = async () => {
@@ -68,6 +70,64 @@ export default function TournamentsPage() {
     } finally {
       setLoading(false)
       console.log("[v0] Tournament fetching completed, loading set to false")
+    }
+  }
+
+  const fetchUser = async () => {
+    try {
+      const { createClient } = await import("@/lib/supabase/client")
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setUser(user)
+    } catch (error) {
+      console.error("[v0] Error fetching user:", error)
+    }
+  }
+
+  const joinTournament = async (tournamentId: string) => {
+    if (!user) {
+      alert("Please sign in to join tournaments")
+      return
+    }
+
+    try {
+      const { createClient } = await import("@/lib/supabase/client")
+      const supabase = createClient()
+
+      // Check if user already joined
+      const { data: existingParticipant } = await supabase
+        .from("tournament_participants")
+        .select("id")
+        .eq("tournament_id", tournamentId)
+        .eq("user_id", user.id)
+        .single()
+
+      if (existingParticipant) {
+        alert("You're already registered for this tournament!")
+        return
+      }
+
+      // Add user to tournament
+      const { error } = await supabase.from("tournament_participants").insert({
+        tournament_id: tournamentId,
+        user_id: user.id,
+        joined_at: new Date().toISOString(),
+        elo_rating: 1200, // Default ELO rating
+      })
+
+      if (error) {
+        console.error("Error joining tournament:", error)
+        alert("Failed to join tournament. Please try again.")
+        return
+      }
+
+      alert("Successfully joined tournament!")
+      fetchTournaments() // Refresh tournaments to show updated participant count
+    } catch (error) {
+      console.error("Error joining tournament:", error)
+      alert("Failed to join tournament. Please try again.")
     }
   }
 
@@ -244,15 +304,30 @@ export default function TournamentsPage() {
                       </div>
 
                       <div className="flex gap-2">
-                        <Button asChild className="flex-1">
-                          <Link href={`/tournaments/${tournament.id}`}>
-                            {tournament.status === "registration"
-                              ? "Join Tournament"
-                              : tournament.status === "in_progress"
-                                ? "View Progress"
-                                : "View Results"}
-                          </Link>
-                        </Button>
+                        {tournament.status === "registration_open" ? (
+                          <div className="flex gap-2 w-full">
+                            <Button
+                              onClick={() => joinTournament(tournament.id)}
+                              className="flex-1 bg-green-600 hover:bg-green-700"
+                              disabled={tournament.current_participants >= tournament.max_participants}
+                            >
+                              {tournament.current_participants >= tournament.max_participants ? "Full" : "Join Now"}
+                            </Button>
+                            <Button asChild variant="outline" size="sm">
+                              <Link href={`/tournaments/${tournament.id}`}>View Details</Link>
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button asChild className="flex-1">
+                            <Link href={`/tournaments/${tournament.id}`}>
+                              {tournament.status === "registration"
+                                ? "Join Tournament"
+                                : tournament.status === "in_progress"
+                                  ? "View Progress"
+                                  : "View Results"}
+                            </Link>
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

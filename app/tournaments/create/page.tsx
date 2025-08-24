@@ -102,7 +102,7 @@ export default function CreateTournamentPage() {
         data: { user: currentUser },
       } = await supabase.auth.getUser()
 
-      let actualUserId = currentUser?.id
+      const actualUserId = currentUser?.id
       let dbUser = null
 
       console.log("[v0] Current user from auth:", currentUser?.id ? "authenticated" : "not authenticated")
@@ -133,27 +133,13 @@ export default function CreateTournamentPage() {
             console.log("[v0] Created new user in database:", newUser.username)
           }
         }
-      } else {
-        // Only use system user if absolutely no authentication is available
-        console.log("[v0] No authenticated user found, using system user for tournament creation")
-        actualUserId = "00000000-0000-0000-0000-000000000000"
-
-        // Ensure system user exists
-        const { data: systemUser } = await supabase.from("users").select("id").eq("id", actualUserId).single()
-
-        if (!systemUser) {
-          await supabase.from("users").insert({
-            id: actualUserId,
-            username: "System",
-            email: "system@tournament.local",
-            display_name: "Tournament System",
-            elo_rating: 1000,
-          })
-          console.log("[v0] Created system user in database")
-        }
       }
 
-      console.log("[v0] Using user ID for tournament creation:", actualUserId)
+      if (!actualUserId) {
+        throw new Error("Authentication required to create tournaments. Please log in and try again.")
+      }
+
+      console.log("[v0] Using authenticated user ID for tournament creation:", actualUserId)
 
       const startDateTime = new Date(formData.start_date).toISOString()
       const endDateTime = new Date(formData.end_date).toISOString()
@@ -172,6 +158,7 @@ export default function CreateTournamentPage() {
         end_date: endDateTime,
         game: formData.game,
         player_pool_settings: formData.settings,
+        created_by: actualUserId,
       }
 
       console.log("[v0] Creating tournament with data:", tournamentData)
@@ -181,7 +168,7 @@ export default function CreateTournamentPage() {
 
       console.log("[v0] Tournament created successfully:", tournament)
 
-      if (dbUser && actualUserId !== "00000000-0000-0000-0000-000000000000") {
+      if (dbUser) {
         try {
           console.log("[v0] Adding tournament creator to lobby as first player")
 
@@ -206,22 +193,15 @@ export default function CreateTournamentPage() {
 
       toast({
         title: "Tournament created!",
-        description:
-          dbUser && actualUserId !== "00000000-0000-0000-0000-000000000000"
-            ? "You've been added as the first player in the lobby"
-            : "Tournament created successfully",
+        description: "You've been added as the first player in the lobby",
       })
     } catch (error: any) {
       console.error("[v0] Error creating tournament - Full error object:", error)
       console.error("[v0] Error message:", error?.message)
-      console.error("[v0] Error status:", error?.status)
-      console.error("[v0] Error code:", error?.code)
-      console.error("[v0] Error details:", error?.details)
-      console.error("[v0] Error hint:", error?.hint)
 
       toast({
         title: "Failed to create tournament",
-        description: error?.message || error?.details || "Please try again",
+        description: error?.message || "Please try again",
         variant: "destructive",
       })
     } finally {

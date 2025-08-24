@@ -14,7 +14,6 @@ import {
   DollarSign,
   Clock,
   Crown,
-  Zap,
   UserPlus,
   Star,
   RefreshCw,
@@ -23,7 +22,6 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
-import { tournamentService } from "@/lib/services/tournament-service"
 import { toast } from "sonner"
 
 interface TournamentJoinInterfaceProps {
@@ -59,7 +57,16 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
 
       // Load tournament details if not provided
       if (!tournament) {
-        const tournamentData = await tournamentService.getTournament(tournamentId)
+        const { data: tournamentData, error } = await supabase
+          .from("tournaments")
+          .select("*")
+          .eq("id", tournamentId)
+          .single()
+
+        if (error) {
+          console.error("[v0] Error loading tournament:", error)
+          return
+        }
         setTournament(tournamentData)
       }
 
@@ -113,26 +120,43 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
   }
 
   const joinTournament = async () => {
+    if (!isAuthenticated || !user) {
+      toast.error("Please sign in to join tournaments")
+      return
+    }
+
     setJoining(true)
     try {
       console.log("[v0] Attempting to join tournament:", tournamentId)
 
-      // Check if tournament uses player pool system
-      const isDraftTournament =
-        tournament?.tournament_type?.includes("draft") || tournament?.player_pool_settings?.enable_player_pool
+      // Check if user already joined
+      const { data: existingParticipant } = await supabase
+        .from("tournament_participants")
+        .select("id")
+        .eq("tournament_id", tournamentId)
+        .eq("user_id", user.id)
+        .single()
 
-      if (isDraftTournament) {
-        // Join player pool for draft tournaments
-        const result = await tournamentService.joinTournamentPool(tournamentId, user?.id)
-        if (result.success) {
-          toast.success(`Joined tournament player pool! ${result.reward > 0 ? `+$${result.reward} reward` : ""}`)
-        }
-      } else {
-        // Direct tournament participation
-        await tournamentService.joinTournament(tournamentId, undefined, user?.id)
-        toast.success("Successfully joined tournament!")
+      if (existingParticipant) {
+        toast.error("You're already registered for this tournament!")
+        return
       }
 
+      // Add user to tournament participants
+      const { error } = await supabase.from("tournament_participants").insert({
+        tournament_id: tournamentId,
+        user_id: user.id,
+        joined_at: new Date().toISOString(),
+        elo_rating: 1200, // Default ELO rating
+      })
+
+      if (error) {
+        console.error("[v0] Error joining tournament:", error)
+        toast.error("Failed to join tournament. Please try again.")
+        return
+      }
+
+      toast.success("Successfully joined tournament!")
       await loadTournamentData() // Refresh data
     } catch (error) {
       console.error("[v0] Error joining tournament:", error)
@@ -213,11 +237,13 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
   const userInParticipants = participants.find((p) => p.user_id === user?.id)
   const isUserJoined = userInPool || userInParticipants
   const isFull = currentParticipants >= maxParticipants
-  const canJoin = !isUserJoined && !isFull && tournament.status === "registration"
+  const canJoin =
+    !isUserJoined && !isFull && (tournament.status === "registration" || tournament.status === "registration_open")
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "registration":
+      case "registration_open":
         return "bg-blue-500"
       case "in_progress":
         return "bg-green-500"
@@ -225,6 +251,20 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
         return "bg-gray-500"
       default:
         return "bg-gray-500"
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "registration":
+      case "registration_open":
+        return "Registration Open"
+      case "in_progress":
+        return "In Progress"
+      case "completed":
+        return "Completed"
+      default:
+        return status.replace("_", " ").toUpperCase()
     }
   }
 
@@ -237,9 +277,7 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <CardTitle className="text-2xl">{tournament.name}</CardTitle>
-                <Badge className={getStatusColor(tournament.status)}>
-                  {tournament.status.replace("_", " ").toUpperCase()}
-                </Badge>
+                <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
               </div>
               <CardDescription className="text-base">{tournament.description}</CardDescription>
             </div>
@@ -305,24 +343,16 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               <Progress value={progressPercentage} className="h-3" />
             </div>
 
-            {/* Participation Reward */}
-            {canJoin && (
-              <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <Zap className="h-5 w-5 text-green-600" />
-                  <h4 className="font-semibold text-green-800 dark:text-green-200">Instant Reward</h4>
-                </div>
-                <p className="text-sm text-green-700 dark:text-green-300">
-                  Earn <strong>$25</strong> instantly when you join this tournament!
-                </p>
-              </div>
-            )}
-
             {/* Join Button */}
             {canJoin && (
-              <Button onClick={joinTournament} disabled={joining} className="w-full" size="lg">
+              <Button
+                onClick={joinTournament}
+                disabled={joining}
+                className="w-full bg-green-600 hover:bg-green-700"
+                size="lg"
+              >
                 <UserPlus className="h-4 w-4 mr-2" />
-                {joining ? "Joining..." : `Join ${isDraftTournament ? "Player Pool" : "Tournament"} (+$25)`}
+                {joining ? "Joining..." : `Join Tournament`}
               </Button>
             )}
 
@@ -344,12 +374,19 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               </Alert>
             )}
 
-            {tournament.status !== "registration" && (
+            {!canJoin && !isUserJoined && !isFull && (
               <Alert>
                 <Clock className="h-4 w-4" />
                 <AlertDescription>
-                  Registration is closed. Tournament is {tournament.status.replace("_", " ")}.
+                  Registration is closed. Tournament is {getStatusText(tournament.status).toLowerCase()}.
                 </AlertDescription>
+              </Alert>
+            )}
+
+            {!isAuthenticated && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>Please sign in to join tournaments.</AlertDescription>
               </Alert>
             )}
           </div>
