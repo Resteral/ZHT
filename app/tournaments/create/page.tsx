@@ -87,7 +87,7 @@ export default function CreateTournamentPage() {
         entry_fee: 0,
         start_date: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // Start in 5 minutes
         game: formData.game,
-        settings: formData.settings,
+        player_pool_settings: formData.settings,
       }
 
       console.log("[v0] Creating tournament with data:", tournamentData)
