@@ -13,7 +13,7 @@ export default function AdminTournamentsPage() {
           <p className="text-muted-foreground">Create and manage tournaments across all games</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/admin/tournaments/create">
+          <Link href="/tournaments/create">
             <Button>
               <Plus className="h-4 w-4 mr-2" />
               Create Tournament
@@ -71,6 +71,20 @@ export default function AdminTournamentsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-3">
+            <Trophy className="h-8 w-8 text-blue-600" />
+            <div>
+              <h3 className="font-semibold text-blue-900">Unified Tournament Creation</h3>
+              <p className="text-sm text-blue-700">
+                All tournament creation now uses the main interface with admin privileges automatically detected.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Search and Filters */}
       <Card>

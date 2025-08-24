@@ -175,11 +175,7 @@ export default function CreateTournamentPage() {
 
         console.log("[v0] Tournament verified in database:", verifyTournament)
 
-        if (formData.settings.draft_mode === "snake_draft") {
-          router.push(`/tournaments/${tournament.id}/draft`)
-        } else {
-          router.push(`/tournaments/${tournament.id}`)
-        }
+        router.push(`/tournaments/${tournament.id}/lobby`)
       } else {
         console.log("[v0] Creating regular tournament")
         console.log("[v0] Tournament service data:", formData)
@@ -200,17 +196,19 @@ export default function CreateTournamentPage() {
         const result = await tournamentService.createTournament(formData, actualUserId)
         console.log("[v0] Tournament created successfully:", result)
 
-        toast.success("🎉 Tournament created successfully!", {
+        toast({
+          title: "🎉 Tournament created successfully!",
           description: `${formData.name} is now open for registration`,
-          duration: 5000,
         })
 
-        router.push(`/tournaments/${result.id}`)
+        router.push(`/tournaments/${result.id}/lobby`)
       }
     } catch (error: any) {
       console.error("[v0] Error creating tournament:", error)
-      toast.error("Failed to create tournament", {
-        description: error.message || "Please try again",
+      toast({
+        title: "Failed to create tournament",
+        description: error?.message || "Please try again",
+        variant: "destructive",
       })
     } finally {
       setLoading(false)
@@ -657,7 +655,7 @@ export default function CreateTournamentPage() {
                   ) : (
                     <>
                       <Zap className="h-4 w-4 mr-2" />
-                      {tournamentType === "snake_draft" ? "Create Snake Tournament & Go to Draft" : "Create Tournament"}
+                      {tournamentType === "snake_draft" ? "Create Snake Tournament & Go to Lobby" : "Create Tournament"}
                     </>
                   )}
                 </Button>

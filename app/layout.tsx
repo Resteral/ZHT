@@ -35,6 +35,7 @@ html {
         `}</style>
       </head>
       <body>
+        {/* <MonacoEnvironment /> */}
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           <AuthProvider>
             <DraftAlertProvider>

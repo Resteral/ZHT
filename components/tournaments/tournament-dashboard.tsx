@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Plus, Trophy, Users, Calendar, DollarSign } from "lucide-react"
-import { CreateTournamentDialog } from "./create-tournament-dialog"
 import { TournamentCard } from "./tournament-card"
 import { tournamentService } from "@/lib/services/tournament-service"
+import { useRouter } from "next/navigation"
 
 interface Tournament {
   id: string
@@ -25,7 +25,7 @@ interface Tournament {
 export function TournamentDashboard() {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     loadTournaments()
@@ -106,7 +106,7 @@ export function TournamentDashboard() {
             <TabsTrigger value="completed">Completed ({completedTournaments.length})</TabsTrigger>
           </TabsList>
 
-          <Button onClick={() => setShowCreateDialog(true)}>
+          <Button onClick={() => router.push("/tournaments/create")}>
             <Plus className="h-4 w-4 mr-2" />
             Create Tournament
           </Button>
@@ -163,12 +163,6 @@ export function TournamentDashboard() {
           )}
         </TabsContent>
       </Tabs>
-
-      <CreateTournamentDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        onTournamentCreated={loadTournaments}
-      />
     </div>
   )
 }
