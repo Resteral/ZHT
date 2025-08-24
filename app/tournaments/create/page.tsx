@@ -46,6 +46,11 @@ export default function CreateTournamentPage() {
     },
   })
 
+  const playersNeeded = formData.settings.num_teams * formData.settings.players_per_team
+  const excessPlayers = formData.max_participants - playersNeeded
+  const hasConflict = playersNeeded > formData.max_participants
+  const isValid = !hasConflict
+
   useEffect(() => {
     const supabase = createClient()
     const getUser = async () => {
@@ -301,7 +306,7 @@ export default function CreateTournamentPage() {
             </div>
 
             {/* Tournament Summary */}
-            <Card className="bg-muted/50">
+            <Card className={`${hasConflict ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}>
               <CardContent className="pt-6">
                 <div className="space-y-2">
                   <h4 className="font-medium flex items-center gap-2">
@@ -319,19 +324,32 @@ export default function CreateTournamentPage() {
                       <strong>{formData.settings.num_teams}</strong> teams with{" "}
                       <strong>{formData.settings.players_per_team}</strong> players each
                     </p>
-                    <p>
-                      <strong>
-                        {formData.max_participants - formData.settings.num_teams * formData.settings.players_per_team}
-                      </strong>{" "}
-                      excess players will be removed
-                    </p>
+
+                    {hasConflict ? (
+                      <div className="text-destructive font-medium">
+                        ⚠️ <strong>CONFLICT:</strong> Need {playersNeeded} players but only {formData.max_participants}{" "}
+                        in pool
+                      </div>
+                    ) : excessPlayers > 0 ? (
+                      <p className="text-muted-foreground">
+                        <strong>{excessPlayers}</strong> excess players will be removed after draft
+                      </p>
+                    ) : (
+                      <p className="text-green-600 font-medium">
+                        ✓ Perfect match: All {formData.max_participants} players will be drafted
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Button type="submit" disabled={loading} className="w-full" size="lg">
-              {loading ? "Creating Tournament..." : "Create Tournament & Go to Lobby"}
+            <Button type="submit" disabled={loading || !isValid} className="w-full" size="lg">
+              {loading
+                ? "Creating Tournament..."
+                : hasConflict
+                  ? "Fix Configuration First"
+                  : "Create Tournament & Go to Lobby"}
             </Button>
           </form>
         </CardContent>

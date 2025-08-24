@@ -334,13 +334,11 @@ export const monthLongTournamentService = {
   },
 
   async getMonthLongTournaments(status?: string): Promise<MonthLongTournament[]> {
-    let query = supabase
-      .from("tournaments")
-      .select(`
+    let query = supabase.from("tournaments").select(`
         *,
         participant_count:tournament_participants(count)
       `)
-      .gte("end_date", new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()) // At least 2 weeks duration
+    // .gte("end_date", new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()) // At least 2 weeks duration
 
     if (status) {
       query = query.eq("status", status)

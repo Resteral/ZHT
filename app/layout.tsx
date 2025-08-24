@@ -11,6 +11,7 @@ import DraftScreenOverlay from "@/components/draft-alert/draft-screen-overlay"
 import { LobbyAlertSystem } from "@/components/global/lobby-alert-system"
 import { ActiveDraftTracker } from "@/components/navigation/active-draft-tracker"
 import ActiveMatchNotification from "@/components/navigation/active-match-notification"
+import MonacoEnvironment from "@/components/monaco-environment"
 
 export const metadata: Metadata = {
   title: "TUG E-Sports Lobbies",
@@ -38,6 +39,7 @@ html {
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           <AuthProvider>
             <DraftAlertProvider>
+              <MonacoEnvironment />
               <div className="min-h-screen bg-background">
                 <Navigation />
                 <main className="pt-16">{children}</main>
