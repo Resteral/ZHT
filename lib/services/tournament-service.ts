@@ -68,72 +68,9 @@ export const tournamentService = {
   async createTournament(tournamentData: any, userId?: string) {
     console.log("[v0] Creating tournament with data:", tournamentData)
 
-    console.log("[v0] Creating tournament anonymously")
+    console.log("[v0] Creating anonymous tournament with no user affiliation")
 
     const supabase = createClient()
-
-    let actualUserId = "00000000-0000-0000-0000-000000000000" // System/anonymous user
-
-    // Try to find or create a system user for anonymous tournaments
-    let { data: existingUser, error: userCheckError } = await supabase
-      .from("users")
-      .select("id, username, email")
-      .eq("username", "System")
-      .single()
-
-    if (userCheckError && userCheckError.code === "PGRST116") {
-      // Create system user for anonymous tournaments
-      console.log("[v0] Creating system user for anonymous tournaments")
-
-      const userToCreate = {
-        id: actualUserId,
-        username: "System",
-        email: null,
-        elo_rating: 1200,
-        total_games: 0,
-        wins: 0,
-        losses: 0,
-        balance: 100,
-        mmr: 1200,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
-      const { data: newUser, error: createError } = await supabase
-        .from("users")
-        .insert(userToCreate)
-        .select("id, username")
-        .single()
-
-      if (createError) {
-        console.error("[v0] Failed to create system user:", createError)
-        // If system user creation fails, try with Resteral as fallback
-        const { data: resteralUser } = await supabase
-          .from("users")
-          .select("id, username")
-          .eq("username", "Resteral")
-          .single()
-
-        if (resteralUser) {
-          existingUser = resteralUser
-          actualUserId = resteralUser.id
-        } else {
-          throw new Error(`Failed to create system user: ${createError.message}`)
-        }
-      } else {
-        existingUser = newUser
-        actualUserId = newUser.id
-        console.log("[v0] System user created successfully:", existingUser.username)
-      }
-    } else if (userCheckError) {
-      console.error("[v0] Database error checking system user:", userCheckError)
-      throw new Error(`Database error: ${userCheckError.message}`)
-    } else {
-      // Found system user, use their actual database ID
-      actualUserId = existingUser.id
-    }
-
-    console.log("[v0] Using user for tournament creation:", existingUser?.username, "ID:", actualUserId)
 
     const tournamentToCreate = {
       name: tournamentData.name,
@@ -144,7 +81,6 @@ export const tournamentService = {
       max_teams: Math.ceil((tournamentData.max_participants || 16) / (tournamentData.players_per_team || 4)),
       entry_fee: tournamentData.entry_fee || 0,
       prize_pool: tournamentData.prize_pool || 0,
-      created_by: actualUserId, // Use validated database UUID for foreign key constraint
       status: "registration", // Immediate registration
       start_date: tournamentData.start_date || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       end_date: tournamentData.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -185,7 +121,7 @@ export const tournamentService = {
           entry_fee: tournamentData.entry_fee,
           start_date: tournamentData.start_date,
         },
-        actualUserId, // Use the validated database UUID
+        null,
       )
     }
 
@@ -194,18 +130,14 @@ export const tournamentService = {
     if (error) {
       console.error("[v0] Error creating tournament:", error)
       if (error.code === "23503") {
-        if (error.message.includes("tournaments_created_by_fkey")) {
-          throw new Error("User authentication error - please log out and back in")
-        } else {
-          throw new Error(`Database constraint error: ${error.message}`)
-        }
+        throw new Error(`Database constraint error: ${error.message}`)
       } else if (error.code === "22P02") {
         throw new Error("Invalid data format - please check your input and try again")
       }
       throw error
     }
 
-    console.log("[v0] Tournament created successfully:", data)
+    console.log("[v0] Anonymous tournament created successfully:", data)
 
     const { data: verifyData, error: verifyError } = await supabase
       .from("tournaments")
@@ -218,7 +150,7 @@ export const tournamentService = {
       throw new Error("Tournament was not saved properly to database")
     }
 
-    console.log("[v0] Tournament verified and ready for immediate signup:", verifyData.name)
+    console.log("[v0] Anonymous tournament verified and ready for immediate signup:", verifyData.name)
     return data
   },
 
