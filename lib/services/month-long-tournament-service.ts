@@ -334,6 +334,8 @@ export const monthLongTournamentService = {
   },
 
   async getMonthLongTournaments(status?: string): Promise<MonthLongTournament[]> {
+    console.log("[v0] Starting getMonthLongTournaments with status:", status)
+
     let query = supabase.from("tournaments").select(`
         *,
         participant_count:tournament_participants(count)
@@ -341,34 +343,78 @@ export const monthLongTournamentService = {
     // .gte("end_date", new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()) // At least 2 weeks duration
 
     if (status) {
+      console.log("[v0] Filtering tournaments by status:", status)
       query = query.eq("status", status)
     }
 
+    console.log("[v0] Executing tournament query...")
     const { data: tournaments, error } = await query.order("created_at", { ascending: false })
 
     if (error) {
       console.error("[v0] Error fetching tournaments:", error)
+      console.error("[v0] Error details:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      })
       throw error
     }
 
     console.log("[v0] Raw tournament data from database:", tournaments)
+    console.log("[v0] Tournament count from database:", tournaments?.length || 0)
 
+    if (!tournaments || tournaments.length === 0) {
+      console.log("[v0] No tournaments found in database, returning empty array")
+      return []
+    }
+
+    console.log("[v0] Processing tournaments with phases...")
     const enhancedTournaments = await Promise.all(
-      tournaments.map(async (tournament) => {
-        const phases = await this.getTournamentPhases(tournament.id)
-        return {
-          ...tournament,
-          current_participants: tournament.participant_count[0]?.count || 0,
-          phases,
-          duration_days: Math.ceil(
-            (new Date(tournament.end_date).getTime() - new Date(tournament.start_date).getTime()) /
-              (24 * 60 * 60 * 1000),
-          ),
+      tournaments.map(async (tournament, index) => {
+        console.log(`[v0] Processing tournament ${index + 1}/${tournaments.length}:`, tournament.name)
+
+        try {
+          const phases = await this.getTournamentPhases(tournament.id)
+          console.log(`[v0] Found ${phases.length} phases for tournament:`, tournament.name)
+
+          const enhanced = {
+            ...tournament,
+            current_participants: tournament.participant_count[0]?.count || 0,
+            phases,
+            duration_days: Math.ceil(
+              (new Date(tournament.end_date).getTime() - new Date(tournament.start_date).getTime()) /
+                (24 * 60 * 60 * 1000),
+            ),
+          }
+
+          console.log(`[v0] Enhanced tournament:`, {
+            id: enhanced.id,
+            name: enhanced.name,
+            status: enhanced.status,
+            participants: enhanced.current_participants,
+            duration: enhanced.duration_days,
+          })
+
+          return enhanced
+        } catch (phaseError) {
+          console.error(`[v0] Error processing phases for tournament ${tournament.name}:`, phaseError)
+          // Return tournament without phases if phase processing fails
+          return {
+            ...tournament,
+            current_participants: tournament.participant_count[0]?.count || 0,
+            phases: [],
+            duration_days: Math.ceil(
+              (new Date(tournament.end_date).getTime() - new Date(tournament.start_date).getTime()) /
+                (24 * 60 * 60 * 1000),
+            ),
+          }
         }
       }),
     )
 
     console.log("[v0] Enhanced tournaments with phases:", enhancedTournaments)
+    console.log("[v0] Final tournament count:", enhancedTournaments.length)
     return enhancedTournaments
   },
 

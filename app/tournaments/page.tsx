@@ -41,14 +41,33 @@ export default function TournamentsPage() {
       const tournamentData = await monthLongTournamentService.getMonthLongTournaments()
 
       console.log("[v0] Raw month-long tournament data:", tournamentData)
+      console.log("[v0] Tournament data type:", typeof tournamentData)
+      console.log(
+        "[v0] Tournament data length:",
+        Array.isArray(tournamentData) ? tournamentData.length : "Not an array",
+      )
 
-      if (tournamentData) {
+      if (tournamentData && Array.isArray(tournamentData)) {
+        console.log("[v0] Setting tournaments state with", tournamentData.length, "tournaments")
         setTournaments(tournamentData)
+        console.log("[v0] Tournaments state updated successfully")
+      } else {
+        console.log("[v0] Tournament data is invalid or empty, setting empty array")
+        setTournaments([])
       }
+
+      console.log("[v0] Final tournaments count:", tournamentData?.length || 0)
     } catch (error) {
       console.error("[v0] Error fetching month-long tournaments:", error)
+      console.error("[v0] Error details:", {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+      })
+      setTournaments([])
     } finally {
       setLoading(false)
+      console.log("[v0] Tournament fetching completed, loading set to false")
     }
   }
 
