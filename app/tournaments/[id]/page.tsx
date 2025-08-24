@@ -66,13 +66,11 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       const supabase = createClient()
 
       const { data, error } = await supabase
-        .from("leagues")
+        .from("tournaments")
         .select(`
-          *,
-          participant_count:league_memberships(count)
+          *
         `)
         .eq("id", params.id)
-        .eq("league_mode", "tournament")
         .single()
 
       if (error) {
@@ -82,16 +80,24 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       }
 
       if (data) {
+        const { data: participantData } = await supabase
+          .from("tournament_participants")
+          .select("id")
+          .eq("tournament_id", params.id)
+
         setTournament({
           ...data,
-          participant_count: data.participant_count?.[0]?.count || 0,
+          sport: data.game || "fantasy_football", // Map game to sport field
+          league_mode: data.tournament_type || "tournament", // Map tournament_type to league_mode
+          max_teams: data.max_participants || data.max_teams || 0,
+          participant_count: participantData?.length || 0,
         })
 
         if (data.status === "registration") {
           setActiveTab("signup")
         } else if (data.status === "team_building") {
           setActiveTab("pools")
-        } else if (data.status === "draft") {
+        } else if (data.status === "draft" || data.status === "drafting") {
           setActiveTab("draft")
         } else if (data.status === "active" || data.status === "in_progress") {
           setActiveTab("bracket")
@@ -150,6 +156,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       case "team_building":
         return "bg-yellow-500"
       case "draft":
+      case "drafting":
         return "bg-purple-500"
       case "active":
       case "in_progress":
@@ -168,6 +175,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       case "team_building":
         return "Team Building"
       case "draft":
+      case "drafting":
         return "Draft Phase"
       case "active":
       case "in_progress":

@@ -23,6 +23,15 @@ export default function CreateTournamentPage() {
   const tournamentType = searchParams.get("type")
 
   const [formData, setFormData] = useState({
+    name: `${
+      tournamentType === "snake_draft"
+        ? "Snake Draft"
+        : tournamentType === "linear_draft"
+          ? "Linear Draft"
+          : tournamentType === "auction"
+            ? "Auction Draft"
+            : "Snake Draft"
+    } Tournament`,
     tournament_type: "month_long_draft",
     max_participants: 32, // Pool size - this is now the participant limit
     start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16), // 1 hour from now
@@ -94,7 +103,7 @@ export default function CreateTournamentPage() {
       )
 
       const tournamentData = {
-        name: `${formData.settings.draft_mode.replace("_", " ").toUpperCase()} Tournament`,
+        name: formData.name,
         description: `${formData.settings.num_teams} teams, ${formData.settings.players_per_team} players each`,
         tournament_type: formData.settings.draft_mode, // Use actual draft mode
         duration_days: durationDays,
@@ -182,6 +191,19 @@ export default function CreateTournamentPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="tournament_name">Tournament Name</Label>
+                <Input
+                  id="tournament_name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Enter tournament name"
+                  className="text-lg font-medium"
+                />
+                <p className="text-sm text-muted-foreground">Give your tournament a unique and memorable name</p>
+              </div>
+
               <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
                 <h4 className="font-medium flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
@@ -373,6 +395,9 @@ export default function CreateTournamentPage() {
                     Tournament Summary
                   </h4>
                   <div className="text-sm space-y-1">
+                    <p>
+                      <strong>Name:</strong> {formData.name}
+                    </p>
                     <p>
                       <strong>Starts:</strong> {new Date(formData.start_date).toLocaleString()}
                     </p>
