@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Trophy, Users, Calendar, DollarSign } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { createBrowserClient } from "@supabase/ssr"
-import { toast } from "sonner"
 
 interface TournamentCreationButtonProps {
   tournamentType: "snake_draft" | "auction" | "linear"
@@ -46,11 +45,6 @@ export function TournamentCreationButton({ tournamentType, className }: Tourname
   const IconComponent = config.icon
 
   const handleCreateTournament = async () => {
-    if (!user) {
-      toast.error("Please sign in to create tournaments")
-      return
-    }
-
     // Redirect to unified tournament creation page with pre-selected type
     window.location.href = `/tournaments/create?type=${tournamentType}`
   }
@@ -87,7 +81,7 @@ export function TournamentCreationButton({ tournamentType, className }: Tourname
             </div>
           </div>
 
-          <Button onClick={handleCreateTournament} disabled={isCreating || !user} className="w-full" size="lg">
+          <Button onClick={handleCreateTournament} disabled={isCreating} className="w-full" size="lg">
             {isCreating ? "Creating..." : `Create ${config.title}`}
           </Button>
         </div>

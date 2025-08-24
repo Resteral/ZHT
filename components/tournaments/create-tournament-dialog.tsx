@@ -40,15 +40,9 @@ export function CreateTournamentDialog({ open, onOpenChange, onTournamentCreated
     setLoading(true)
     setError(null)
 
-    if (!user) {
-      setError("You must be logged in to create a tournament")
-      setLoading(false)
-      return
-    }
-
     try {
       console.log("[v0] Submitting tournament creation...")
-      await tournamentService.createTournament(formData)
+      await tournamentService.createTournament(formData) // No user ID required
       console.log("[v0] Tournament created successfully")
       onTournamentCreated()
       onOpenChange(false)
@@ -80,12 +74,6 @@ export function CreateTournamentDialog({ open, onOpenChange, onTournamentCreated
         </DialogHeader>
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>}
-
-        {!user && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
-            Please log in to create tournaments
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -227,7 +215,7 @@ export function CreateTournamentDialog({ open, onOpenChange, onTournamentCreated
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !user}>
+            <Button type="submit" disabled={loading}>
               {loading ? "Creating..." : "Create Tournament"}
             </Button>
           </div>

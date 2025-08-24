@@ -10,17 +10,16 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
 import { Trophy, ArrowLeft, Users, Zap } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { tournamentService } from "@/lib/services/tournament-service"
-import { useAuth } from "@/lib/auth-context"
+// import { useAuth } from "@/lib/auth-context"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const { user, isAuthenticated } = useAuth()
+  // const { user, isAuthenticated } = useAuth()
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -50,11 +49,7 @@ export default function CreateTournamentPage() {
     setLoading(true)
 
     try {
-      if (!isAuthenticated || !user?.id) {
-        throw new Error("Not authenticated - please log in")
-      }
-
-      console.log("[v0] Creating tournament with user ID:", user.id)
+      console.log("[v0] Creating tournament anonymously")
       console.log("[v0] Tournament data:", formData)
 
       const tournamentData = {
@@ -78,7 +73,7 @@ export default function CreateTournamentPage() {
         },
       }
 
-      const tournament = await tournamentService.createTournament(tournamentData, user.id)
+      const tournament = await tournamentService.createTournament(tournamentData) // No user ID required
       console.log("[v0] Tournament created successfully:", tournament)
       router.push("/admin/tournaments")
     } catch (error) {
@@ -91,16 +86,6 @@ export default function CreateTournamentPage() {
 
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="text-center">
-          <p>Please log in to create tournaments.</p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -288,11 +273,16 @@ export default function CreateTournamentPage() {
                     <Label htmlFor="auto_start">Auto-start Draft</Label>
                     <p className="text-sm text-muted-foreground">Automatically start draft when full</p>
                   </div>
-                  <Switch
+                  <Button
                     id="auto_start"
-                    checked={formData.auto_start}
-                    onCheckedChange={(checked) => handleInputChange("auto_start", checked)}
-                  />
+                    variant="outline"
+                    onClick={() => handleInputChange("auto_start", !formData.auto_start)}
+                    className={`w-10 h-10 ${
+                      formData.auto_start ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {formData.auto_start ? "ON" : "OFF"}
+                  </Button>
                 </div>
 
                 {formData.draft_mode !== "auction_draft" && (
@@ -301,11 +291,16 @@ export default function CreateTournamentPage() {
                       <Label htmlFor="allow_trades">Allow Trades</Label>
                       <p className="text-sm text-muted-foreground">Enable player trading during draft</p>
                     </div>
-                    <Switch
+                    <Button
                       id="allow_trades"
-                      checked={formData.allow_trades}
-                      onCheckedChange={(checked) => handleInputChange("allow_trades", checked)}
-                    />
+                      variant="outline"
+                      onClick={() => handleInputChange("allow_trades", !formData.allow_trades)}
+                      className={`w-10 h-10 ${
+                        formData.allow_trades ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {formData.allow_trades ? "ON" : "OFF"}
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -325,11 +320,18 @@ export default function CreateTournamentPage() {
                     <Label htmlFor="enable_player_pool">Enable Player Pool</Label>
                     <p className="text-sm text-muted-foreground">Use player pool for team drafting</p>
                   </div>
-                  <Switch
+                  <Button
                     id="enable_player_pool"
-                    checked={formData.enable_player_pool}
-                    onCheckedChange={(checked) => handleInputChange("enable_player_pool", checked)}
-                  />
+                    variant="outline"
+                    onClick={() => handleInputChange("enable_player_pool", !formData.enable_player_pool)}
+                    className={`w-10 h-10 ${
+                      formData.enable_player_pool
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {formData.enable_player_pool ? "ON" : "OFF"}
+                  </Button>
                 </div>
 
                 {formData.enable_player_pool && (

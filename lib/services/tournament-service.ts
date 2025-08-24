@@ -46,87 +46,72 @@ export const tournamentService = {
   async createTournament(tournamentData: any, userId?: string) {
     console.log("[v0] Creating tournament with data:", tournamentData)
 
-    if (!userId) {
-      throw new Error("Not authenticated - please log in")
-    }
-
-    if (!isValidUUID(userId)) {
-      console.error("[v0] Invalid UUID format for user ID:", userId)
-      throw new Error("Invalid user ID format - please log out and back in")
-    }
-
-    console.log("[v0] Authenticated user:", userId)
+    console.log("[v0] Creating tournament anonymously")
 
     const supabase = createClient()
 
-    let actualUserId = userId
+    let actualUserId = "00000000-0000-0000-0000-000000000000" // System/anonymous user
 
+    // Try to find or create a system user for anonymous tournaments
     let { data: existingUser, error: userCheckError } = await supabase
       .from("users")
       .select("id, username, email")
-      .eq("username", "Resteral")
+      .eq("username", "System")
       .single()
 
     if (userCheckError && userCheckError.code === "PGRST116") {
-      // If Resteral doesn't exist, try by the provided userId
-      const { data: userById, error: userByIdError } = await supabase
+      // Create system user for anonymous tournaments
+      console.log("[v0] Creating system user for anonymous tournaments")
+
+      const userToCreate = {
+        id: actualUserId,
+        username: "System",
+        email: null,
+        elo_rating: 1200,
+        total_games: 0,
+        wins: 0,
+        losses: 0,
+        balance: 100,
+        mmr: 1200,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data: newUser, error: createError } = await supabase
         .from("users")
-        .select("id, username, email")
-        .eq("id", userId)
+        .insert(userToCreate)
+        .select("id, username")
         .single()
 
-      if (userByIdError && userByIdError.code === "PGRST116") {
-        // User doesn't exist at all, create them as Resteral
-        console.log("[v0] User not found, creating Resteral with UUID:", userId)
-
-        const userToCreate = {
-          id: userId,
-          username: "Resteral",
-          email: null,
-          elo_rating: 1200,
-          total_games: 0,
-          wins: 0,
-          losses: 0,
-          balance: 100,
-          mmr: 1200,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-
-        const { data: newUser, error: createError } = await supabase
+      if (createError) {
+        console.error("[v0] Failed to create system user:", createError)
+        // If system user creation fails, try with Resteral as fallback
+        const { data: resteralUser } = await supabase
           .from("users")
-          .insert(userToCreate)
           .select("id, username")
+          .eq("username", "Resteral")
           .single()
 
-        if (createError) {
-          console.error("[v0] Failed to create user:", createError)
-          throw new Error(`Failed to create user: ${createError.message}`)
+        if (resteralUser) {
+          existingUser = resteralUser
+          actualUserId = resteralUser.id
+        } else {
+          throw new Error(`Failed to create system user: ${createError.message}`)
         }
-
+      } else {
         existingUser = newUser
         actualUserId = newUser.id
-        console.log("[v0] User created successfully:", existingUser.username)
-      } else if (userByIdError) {
-        console.error("[v0] Database error checking user by ID:", userByIdError)
-        throw new Error(`Database error: ${userByIdError.message}`)
-      } else {
-        existingUser = userById
-        actualUserId = userById.id
+        console.log("[v0] System user created successfully:", existingUser.username)
       }
     } else if (userCheckError) {
-      console.error("[v0] Database error checking user by username:", userCheckError)
+      console.error("[v0] Database error checking system user:", userCheckError)
       throw new Error(`Database error: ${userCheckError.message}`)
     } else {
-      // Found Resteral, use their actual database ID
+      // Found system user, use their actual database ID
       actualUserId = existingUser.id
     }
 
-    if (!existingUser) {
-      throw new Error("User verification failed - please try logging out and back in")
-    }
-
-    console.log("[v0] User verified in database:", existingUser.username, "ID:", actualUserId)
+    console.log("[v0] Using user for tournament creation:", existingUser?.username, "ID:", actualUserId)
 
     const tournamentToCreate = {
       name: tournamentData.name,
@@ -216,21 +201,25 @@ export const tournamentService = {
   },
 
   async joinTournamentPool(tournamentId: string, userId?: string) {
-    if (!userId) {
-      throw new Error("Not authenticated - please log in")
-    }
-
-    if (!isValidUUID(userId)) {
-      throw new Error("Invalid user ID format - please log out and back in")
-    }
-
     console.log("[v0] Joining tournament pool:", tournamentId)
 
+    // If no user provided, create anonymous participation
     let actualUserId = userId
+    if (!userId) {
+      // Allow anonymous participation with system user
+      const { data: systemUser } = await supabase.from("users").select("id").eq("username", "System").single()
+
+      if (systemUser) {
+        actualUserId = systemUser.id
+      } else {
+        throw new Error("System user not found - please contact administrator")
+      }
+    }
+
     const { data: userData } = await supabase
       .from("users")
       .select("id, elo_rating, balance, account_id")
-      .eq("id", userId)
+      .eq("id", actualUserId)
       .single()
 
     if (userData) {
@@ -309,16 +298,22 @@ export const tournamentService = {
   },
 
   async joinTournament(tournamentId: string, teamName?: string, userId?: string) {
-    if (!userId) {
-      throw new Error("Not authenticated - please log in")
-    }
+    console.log("[v0] Joining tournament:", tournamentId)
 
-    if (!isValidUUID(userId)) {
-      throw new Error("Invalid user ID format - please log out and back in")
-    }
-
+    // If no user provided, create anonymous participation
     let actualUserId = userId
-    const { data: userData } = await supabase.from("users").select("id, account_id").eq("id", userId).single()
+    if (!userId) {
+      // Allow anonymous participation with system user
+      const { data: systemUser } = await supabase.from("users").select("id").eq("username", "System").single()
+
+      if (systemUser) {
+        actualUserId = systemUser.id
+      } else {
+        throw new Error("System user not found - please contact administrator")
+      }
+    }
+
+    const { data: userData } = await supabase.from("users").select("id, account_id").eq("id", actualUserId).single()
 
     if (userData) {
       actualUserId = userData.id // Use database UUID for operations

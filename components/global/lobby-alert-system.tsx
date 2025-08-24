@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,13 +22,24 @@ interface LobbyAlert {
 export function LobbyAlertSystem() {
   const [alerts, setAlerts] = useState<LobbyAlert[]>([])
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0)
+  const [isDisabled, setIsDisabled] = useState(false)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
   const router = useRouter()
 
   useEffect(() => {
     const checkAndCleanupLobbies = async () => {
+      if (isDisabled) {
+        console.log("[v0] Lobby checking disabled due to consecutive errors")
+        return
+      }
+
       try {
         console.log("[v0] Checking for active lobbies...")
+
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
         const { data: matches, error } = await supabase
           .from("matches")
@@ -42,14 +53,20 @@ export function LobbyAlertSystem() {
             created_at
           `)
           .eq("status", "waiting")
+          .abortSignal(controller.signal)
+
+        clearTimeout(timeoutId)
 
         if (error) {
           console.error("[v0] Database error:", error)
           throw error
         }
 
+        setConsecutiveErrors(0)
+
         if (!matches || matches.length === 0) {
-          console.log("[v0] No waiting lobbies found - this is normal when no games are being created")
+          console.log("[v0] No waiting lobbies found")
+          setAlerts([])
           return
         }
 
@@ -90,7 +107,7 @@ export function LobbyAlertSystem() {
                 max_participants: match.max_participants,
                 current_participants: participantCount,
                 prize_pool: match.prize_pool,
-                timeUntilStart: 10, // 10 seconds countdown
+                timeUntilStart: 10,
               })
             }
           } catch (participantError) {
@@ -102,24 +119,25 @@ export function LobbyAlertSystem() {
         if (staleLobbyIds.length > 0) {
           console.log(`[v0] Cleaning up ${staleLobbyIds.length} stale lobbies`)
 
-          // Remove participants first
-          const { error: participantCleanupError } = await supabase
-            .from("match_participants")
-            .delete()
-            .in("match_id", staleLobbyIds)
+          try {
+            const { error: participantCleanupError } = await supabase
+              .from("match_participants")
+              .delete()
+              .in("match_id", staleLobbyIds)
 
-          if (participantCleanupError) {
-            console.error("[v0] Error cleaning up participants:", participantCleanupError)
-          }
+            if (participantCleanupError) {
+              console.error("[v0] Error cleaning up participants:", participantCleanupError)
+            }
 
-          // Remove matches
-          const { error: matchCleanupError } = await supabase.from("matches").delete().in("id", staleLobbyIds)
+            const { error: matchCleanupError } = await supabase.from("matches").delete().in("id", staleLobbyIds)
 
-          if (matchCleanupError) {
-            console.error("[v0] Error cleaning up matches:", matchCleanupError)
-          } else {
-            console.log(`[v0] Successfully cleaned up ${staleLobbyIds.length} stale lobbies`)
-            toast.info(`Cleaned up ${staleLobbyIds.length} inactive lobbies (5+ minutes old)`)
+            if (matchCleanupError) {
+              console.error("[v0] Error cleaning up matches:", matchCleanupError)
+            } else {
+              console.log(`[v0] Successfully cleaned up ${staleLobbyIds.length} stale lobbies`)
+            }
+          } catch (cleanupError) {
+            console.error("[v0] Error during cleanup:", cleanupError)
           }
         }
 
@@ -129,19 +147,45 @@ export function LobbyAlertSystem() {
           if (lobby.current_participants >= lobby.max_participants) {
             setTimeout(() => {
               autoStartLobby(lobby.id, lobby.name)
-            }, 10000) // Start after 10 seconds
+            }, 10000)
           }
         }
       } catch (error) {
         console.error("[v0] Error checking lobbies:", error)
+
+        setConsecutiveErrors((prev) => {
+          const newCount = prev + 1
+          if (newCount >= 3) {
+            console.log("[v0] Too many consecutive errors, disabling lobby checking for 5 minutes")
+            setIsDisabled(true)
+            // Re-enable after 5 minutes
+            setTimeout(
+              () => {
+                setIsDisabled(false)
+                setConsecutiveErrors(0)
+                console.log("[v0] Re-enabling lobby checking")
+              },
+              5 * 60 * 1000,
+            )
+          }
+          return newCount
+        })
       }
     }
 
-    checkAndCleanupLobbies()
-    const interval = setInterval(checkAndCleanupLobbies, 30000)
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+    }
 
-    return () => clearInterval(interval)
-  }, [dismissed])
+    checkAndCleanupLobbies()
+    intervalRef.current = setInterval(checkAndCleanupLobbies, 30000)
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [dismissed, isDisabled])
 
   const autoStartLobby = async (lobbyId: string, lobbyName: string) => {
     try {
@@ -165,7 +209,6 @@ export function LobbyAlertSystem() {
         },
       })
 
-      // Remove from alerts
       setAlerts((prev) => prev.filter((alert) => alert.id !== lobbyId))
     } catch (error) {
       console.error("[v0] Error auto-starting lobby:", error)
