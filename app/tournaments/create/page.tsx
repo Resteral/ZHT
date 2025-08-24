@@ -81,10 +81,10 @@ export default function CreateTournamentPage() {
       const tournamentData = {
         name: `${formData.settings.draft_mode.replace("_", " ").toUpperCase()} Tournament`,
         description: `${formData.settings.num_teams} teams, ${formData.settings.players_per_team} players each`,
-        tournament_type: formData.tournament_type,
+        tournament_type: formData.settings.draft_mode, // Use actual draft mode instead of "month_long_draft"
+        duration_days: 30, // Default to 30 days for month-long tournaments
         max_participants: formData.max_participants,
         entry_fee: 0,
-        prize_pool: 0,
         start_date: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // Start in 5 minutes
         game: formData.game,
         settings: formData.settings,
