@@ -9,6 +9,8 @@ function isValidUUID(uuid: string): boolean {
 
 export const tournamentService = {
   async getTournaments() {
+    console.log("[v0] Starting tournament fetch...")
+
     const [tournamentsData, leaguesData] = await Promise.all([
       supabase
         .from("tournaments")
@@ -27,6 +29,18 @@ export const tournamentService = {
         .order("created_at", { ascending: false }),
     ])
 
+    console.log("[v0] Tournaments query result:", {
+      data: tournamentsData.data,
+      error: tournamentsData.error,
+      count: tournamentsData.data?.length || 0,
+    })
+
+    console.log("[v0] Leagues query result:", {
+      data: leaguesData.data,
+      error: leaguesData.error,
+      count: leaguesData.data?.length || 0,
+    })
+
     const tournaments = tournamentsData.data || []
     const leagues = leaguesData.data || []
 
@@ -43,6 +57,11 @@ export const tournamentService = {
         source: "leagues",
       })),
     ]
+
+    console.log("[v0] Final tournaments result:", {
+      totalCount: allTournaments.length,
+      tournaments: allTournaments.map((t) => ({ id: t.id, name: t.name, source: t.source })),
+    })
 
     return allTournaments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   },
