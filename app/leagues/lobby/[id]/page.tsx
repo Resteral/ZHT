@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Clock, Trophy, MessageCircle, Crown, Sparkles, Users, UserPlus } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
@@ -41,6 +41,70 @@ export default function MatchLobbyPage() {
   const [hasRedirected, setHasRedirected] = useState(false)
   const [recentJoins, setRecentJoins] = useState<string[]>([])
   const [showJoinNotification, setShowJoinNotification] = useState(false)
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const loadLobbyData = useCallback(async () => {
+    if (isProcessing) return
+
+    try {
+      console.log("[v0] Loading lobby data for:", params.id)
+
+      const { data, error } = await supabase
+        .from("matches")
+        .select(`
+          id,
+          name,
+          match_type,
+          max_participants,
+          prize_pool,
+          status,
+          created_at,
+          match_participants (
+            user_id,
+            users (
+              username,
+              elo_rating
+            )
+          )
+        `)
+        .eq("id", params.id)
+
+      if (error) {
+        console.error("[v0] Error loading lobby:", error)
+        throw error
+      }
+
+      if (!data || data.length === 0) {
+        console.log("[v0] Lobby not found - likely cleaned up due to inactivity")
+        toast.error("This lobby is no longer available. It may have been cleaned up due to inactivity.")
+        router.push("/leagues")
+        return
+      }
+
+      const lobbyData = data[0] // Get first result since we removed .single()
+
+      console.log("[v0] Lobby data loaded successfully:", {
+        status: lobbyData.status,
+        participants: lobbyData.match_participants.length,
+        maxParticipants: lobbyData.max_participants,
+        participantNames: lobbyData.match_participants.map((p) => p.users?.username).join(", "),
+      })
+
+      setLobby(lobbyData)
+    } catch (error) {
+      console.error("Error loading lobby:", error)
+      if (error.message?.includes("Cannot coerce")) {
+        toast.error("This lobby is no longer available")
+        router.push("/leagues")
+      } else {
+        toast.error("Failed to load lobby data")
+      }
+    } finally {
+      if (loading) {
+        setLoading(false)
+      }
+    }
+  }, [params.id, isProcessing, loading, router])
 
   useEffect(() => {
     loadLobbyData()
@@ -144,7 +208,7 @@ export default function MatchLobbyPage() {
         console.log("[v0] Participant subscription status:", status)
       })
 
-    const refreshInterval = setInterval(() => {
+    refreshIntervalRef.current = setInterval(() => {
       if (!isProcessing && !hasRedirected) {
         console.log("[v0] Periodic lobby data refresh")
         loadLobbyData()
@@ -155,9 +219,11 @@ export default function MatchLobbyPage() {
       console.log("[v0] Cleaning up lobby subscriptions")
       matchSubscription.unsubscribe()
       participantSubscription.unsubscribe()
-      clearInterval(refreshInterval)
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current)
+      }
     }
-  }, [params.id, user?.id])
+  }, [params.id, user?.id, loadLobbyData, isProcessing, hasRedirected])
 
   useEffect(() => {
     if (lobby && lobby.match_participants.length >= lobby.max_participants && !isProcessing && !hasRedirected) {
@@ -195,69 +261,6 @@ export default function MatchLobbyPage() {
       })
     }
   }, [lobby, user, isAuthenticated, isProcessing])
-
-  const loadLobbyData = async () => {
-    if (isProcessing) return
-
-    try {
-      console.log("[v0] Loading lobby data for:", params.id)
-
-      const { data, error } = await supabase
-        .from("matches")
-        .select(`
-          id,
-          name,
-          match_type,
-          max_participants,
-          prize_pool,
-          status,
-          created_at,
-          match_participants (
-            user_id,
-            users (
-              username,
-              elo_rating
-            )
-          )
-        `)
-        .eq("id", params.id)
-
-      if (error) {
-        console.error("[v0] Error loading lobby:", error)
-        throw error
-      }
-
-      if (!data || data.length === 0) {
-        console.log("[v0] Lobby not found - likely cleaned up due to inactivity")
-        toast.error("This lobby is no longer available. It may have been cleaned up due to inactivity.")
-        router.push("/leagues")
-        return
-      }
-
-      const lobbyData = data[0] // Get first result since we removed .single()
-
-      console.log("[v0] Lobby data loaded successfully:", {
-        status: lobbyData.status,
-        participants: lobbyData.match_participants.length,
-        maxParticipants: lobbyData.max_participants,
-        participantNames: lobbyData.match_participants.map((p) => p.users?.username).join(", "),
-      })
-
-      setLobby(lobbyData)
-    } catch (error) {
-      console.error("Error loading lobby:", error)
-      if (error.message?.includes("Cannot coerce")) {
-        toast.error("This lobby is no longer available")
-        router.push("/leagues")
-      } else {
-        toast.error("Failed to load lobby data")
-      }
-    } finally {
-      if (loading) {
-        setLoading(false)
-      }
-    }
-  }
 
   const handleJoinLobby = async () => {
     console.log("[v0] Join lobby button clicked")

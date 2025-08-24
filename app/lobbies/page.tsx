@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,31 +33,7 @@ export default function LobbiesPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
-  useEffect(() => {
-    fetchLiveContent()
-
-    // Set up real-time subscriptions
-    const lobbiesSubscription = supabase
-      .channel("lobbies-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "lobbies" }, () => {
-        fetchLiveContent()
-      })
-      .subscribe()
-
-    const tournamentsSubscription = supabase
-      .channel("tournaments-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, () => {
-        fetchLiveContent()
-      })
-      .subscribe()
-
-    return () => {
-      lobbiesSubscription.unsubscribe()
-      tournamentsSubscription.unsubscribe()
-    }
-  }, [])
-
-  const fetchLiveContent = async () => {
+  const fetchLiveContent = useCallback(async () => {
     try {
       // Fetch lobbies
       const { data: lobbiesData } = await supabase
@@ -107,7 +83,30 @@ export default function LobbiesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchLiveContent()
+
+    const lobbiesSubscription = supabase
+      .channel("lobbies-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "lobbies" }, () => {
+        fetchLiveContent()
+      })
+      .subscribe()
+
+    const tournamentsSubscription = supabase
+      .channel("tournaments-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, () => {
+        fetchLiveContent()
+      })
+      .subscribe()
+
+    return () => {
+      lobbiesSubscription.unsubscribe()
+      tournamentsSubscription.unsubscribe()
+    }
+  }, [fetchLiveContent])
 
   const getStatusColor = (status: string) => {
     switch (status) {

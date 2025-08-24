@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useRef } from "react"
+
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,13 +41,13 @@ export default function Draft4v4Page() {
   const [creating, setCreating] = useState(false)
   const [processedLobbies, setProcessedLobbies] = useState<Set<string>>(new Set())
   const [countdownState, setCountdownState] = useState<CountdownState | null>(null)
-  const [countdownIntervalRef, setCountdownIntervalRef] = useState<NodeJS.Timeout | null>(null)
-  const [previousLobbyData, setPreviousLobbyData] = useState<string>("")
   const router = useRouter()
   const supabase = createClient()
   const { user } = useAuth()
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const loadLobbies = async () => {
+  const loadLobbies = useCallback(async () => {
     try {
       console.log("[v0] Loading 4v4 lobbies...")
 
@@ -77,10 +79,10 @@ export default function Draft4v4Page() {
       if (matchError) throw matchError
 
       const currentDataHash = JSON.stringify(matches)
-      if (currentDataHash === previousLobbyData) {
+      if (currentDataHash === intervalRef.current) {
         return // No changes, skip update
       }
-      setPreviousLobbyData(currentDataHash)
+      intervalRef.current = currentDataHash
 
       console.log("[v0] Loaded matches:", matches?.length || 0, "matches")
 
@@ -106,13 +108,13 @@ export default function Draft4v4Page() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [processedLobbies, countdownState])
 
-  const startCountdown = (lobbyId: string, lobbyName: string) => {
+  const startCountdown = useCallback((lobbyId: string, lobbyName: string) => {
     console.log("[v0] Starting 8-second countdown for lobby:", lobbyId)
 
-    if (countdownIntervalRef) {
-      clearInterval(countdownIntervalRef)
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
     }
 
     setCountdownState({ lobbyId, countdown: 8, lobbyName })
@@ -127,10 +129,10 @@ export default function Draft4v4Page() {
       }
     }
 
-    const interval = setInterval(() => {
+    countdownIntervalRef.current = setInterval(() => {
       setCountdownState((prev) => {
         if (!prev || prev.lobbyId !== lobbyId) {
-          clearInterval(interval)
+          clearInterval(countdownIntervalRef.current!)
           return null
         }
 
@@ -139,7 +141,9 @@ export default function Draft4v4Page() {
 
         if (newCountdown <= 3 && newCountdown > 0 && typeof window !== "undefined") {
           try {
-            const tickAudio = new Audio("https://hebbkx1anhila5yf.public.blob.vercel-storage.com/git-blob/prj_Hkk0uJRpKMBGA3jp9MMzdlH0Z2Hz/pyYSBHYyq_Xh6kezcibOTW/public/tick-sound.mp3")
+            const tickAudio = new Audio(
+              "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/git-blob/prj_Hkk0uJRpKMBGA3jp9MMzdlH0Z2Hz/pyYSBHYyq_Xh6kezcibOTW/public/tick-sound.mp3",
+            )
             tickAudio.volume = 0.3
             tickAudio.play().catch((e) => console.log("[v0] Could not play tick sound:", e))
           } catch (e) {
@@ -148,7 +152,7 @@ export default function Draft4v4Page() {
         }
 
         if (newCountdown <= 0) {
-          clearInterval(interval)
+          clearInterval(countdownIntervalRef.current!)
           autoStartLobby(lobbyId, lobbyName)
           return null
         }
@@ -156,9 +160,7 @@ export default function Draft4v4Page() {
         return { ...prev, countdown: newCountdown }
       })
     }, 1000)
-
-    setCountdownIntervalRef(interval)
-  }
+  }, [])
 
   const autoStartLobby = async (lobbyId: string, lobbyName: string) => {
     try {
@@ -328,12 +330,12 @@ export default function Draft4v4Page() {
 
       if (matchError) throw matchError
 
-      const { error: participantError } = await supabase.from("match_participants").insert({
+      const { error } = await supabase.from("match_participants").insert({
         match_id: match.id,
         user_id: user.id,
       })
 
-      if (participantError) throw participantError
+      if (error) throw error
 
       console.log("[v0] Created lobby:", match.id)
       router.push(`/leagues/lobby/${match.id}`)
@@ -394,17 +396,22 @@ export default function Draft4v4Page() {
 
   useEffect(() => {
     return () => {
-      if (countdownIntervalRef) {
-        clearInterval(countdownIntervalRef)
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
       }
     }
-  }, [countdownIntervalRef])
+  }, [])
 
   useEffect(() => {
     loadLobbies()
-    const interval = setInterval(loadLobbies, 5000)
-    return () => clearInterval(interval)
-  }, [])
+    intervalRef.current = setInterval(loadLobbies, 5000)
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [loadLobbies])
 
   if (loading) {
     return (
