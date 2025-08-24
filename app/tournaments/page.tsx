@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Trophy, DollarSign, Users, Plus, Gavel, Clock, Zap, BarChart3 } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
+import { tournamentService } from "@/lib/services/tournament-service"
 
 interface Tournament {
   id: string
@@ -32,7 +32,6 @@ interface Tournament {
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     fetchTournaments()
@@ -40,18 +39,9 @@ export default function TournamentsPage() {
 
   const fetchTournaments = async () => {
     try {
-      console.log("[v0] Fetching tournaments from leagues table...")
+      console.log("[v0] Fetching tournaments using tournament service...")
 
-      const { data: tournamentData } = await supabase
-        .from("leagues")
-        .select(`
-          *,
-          participant_count:league_memberships(count)
-        `)
-        .in("status", ["registration", "team_building", "active", "draft", "in_progress"])
-        .eq("league_mode", "tournament")
-        .order("created_at", { ascending: false })
-        .limit(10)
+      const tournamentData = await tournamentService.getTournaments()
 
       console.log("[v0] Raw tournament data:", tournamentData)
 
@@ -59,20 +49,20 @@ export default function TournamentsPage() {
         const processedTournaments = tournamentData.map((tournament) => ({
           id: tournament.id,
           name: tournament.name || "Tournament",
-          game: tournament.sport || "zealot_hockey",
+          game: tournament.game || "zealot_hockey",
           max_teams: tournament.max_teams || 16,
-          current_teams: tournament.participant_count?.[0]?.count || 0,
+          current_teams: tournament.participant_count || 0,
           entry_fee: tournament.entry_fee || 0,
           prize_pool: tournament.prize_pool || 1000,
-          start_date: tournament.created_at || new Date().toISOString(),
-          status: tournament.status,
+          start_date: tournament.start_date || tournament.created_at || new Date().toISOString(),
+          status: tournament.status || "registration",
           format: "bracket", // Default format
           betting_enabled: false, // Default betting
           total_bets: 0,
-          player_pool_size: tournament.participant_count?.[0]?.count || 0,
-          max_player_pool: tournament.max_teams || 64,
+          player_pool_size: tournament.participant_count || 0,
+          max_player_pool: tournament.max_participants || 64,
           registration_open: tournament.status === "registration" || tournament.status === "draft",
-          tournament_type: tournament.league_mode || "team",
+          tournament_type: tournament.tournament_type || "snake_draft",
         }))
 
         console.log("[v0] Processed tournaments:", processedTournaments)
