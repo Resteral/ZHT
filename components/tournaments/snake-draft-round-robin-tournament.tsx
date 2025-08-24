@@ -84,9 +84,11 @@ export function SnakeDraftRoundRobinTournament({
   }
 
   const loadTournamentData = async () => {
-    let teamData: any[] = [] // Declare teamData variable
+    let teamData: any[] = []
     try {
-      const { data: captainData } = await supabase
+      console.log("[v0] Loading tournament data for:", tournamentId)
+
+      const { data: captainData, error: captainError } = await supabase
         .from("tournament_captains")
         .select(`
           *,
@@ -94,18 +96,29 @@ export function SnakeDraftRoundRobinTournament({
         `)
         .eq("tournament_id", tournamentId)
 
-      setCaptains(captainData || [])
+      if (captainError) {
+        console.error("[v0] Error loading captains:", captainError)
+      } else {
+        setCaptains(captainData || [])
+        console.log("[v0] Loaded captains:", captainData?.length || 0)
+      }
 
-      const { data: draftData } = await supabase
+      const { data: draftData, error: draftError } = await supabase
         .from("tournament_drafts")
         .select("status")
         .eq("tournament_id", tournamentId)
         .single()
 
-      setDraftCompleted(draftData?.status === "completed")
+      if (draftError && draftError.code !== "PGRST116") {
+        console.error("[v0] Error loading draft data:", draftError)
+      } else {
+        const completed = draftData?.status === "completed"
+        setDraftCompleted(completed)
+        console.log("[v0] Draft completed:", completed)
+      }
 
       if (draftData?.status === "completed") {
-        const { data } = await supabase
+        const { data, error: teamError } = await supabase
           .from("tournament_teams")
           .select(`
             *,
@@ -115,19 +128,18 @@ export function SnakeDraftRoundRobinTournament({
           `)
           .eq("tournament_id", tournamentId)
 
-        teamData = data || [] // Assign data to teamData variable
+        if (teamError) {
+          console.error("[v0] Error loading teams:", teamError)
+        } else {
+          teamData = data || []
+          console.log("[v0] Loaded teams:", teamData.length)
+        }
       }
-
-      console.log("[v0] Loaded tournament data:", {
-        captains: captainData?.length || 0,
-        draftCompleted,
-        teams: teamData.length || 0,
-      })
     } catch (error) {
       console.error("[v0] Error loading tournament data:", error)
     } finally {
       setLoading(false)
-      setTeams(teamData) // Set teams state after loading
+      setTeams(teamData)
     }
   }
 
@@ -294,6 +306,7 @@ export function SnakeDraftRoundRobinTournament({
             <Users className="h-4 w-4" />
             <AlertDescription>
               Players join the tournament pool. Once enough players register, captains will be selected.
+              {tournament.participant_count >= 8 && " Ready for captain selection!"}
             </AlertDescription>
           </Alert>
 
@@ -301,10 +314,27 @@ export function SnakeDraftRoundRobinTournament({
             <CardContent className="text-center py-8">
               <Users className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-xl font-bold mb-2">Player Registration Phase</h3>
-              <p className="text-muted-foreground mb-4">{tournament.participant_count || 0} players registered</p>
-              <Badge variant="secondary" className="text-lg px-4 py-2">
-                Registration {tournament.status === "registration" ? "Open" : "Closed"}
-              </Badge>
+              <p className="text-muted-foreground mb-4">
+                {tournament.participant_count || 0} players registered
+                {tournament.max_teams && ` of ${tournament.max_teams} maximum`}
+              </p>
+              <div className="space-y-4">
+                <Progress
+                  value={tournament.max_teams ? (tournament.participant_count / tournament.max_teams) * 100 : 0}
+                  className="w-full max-w-md mx-auto"
+                />
+                <Badge
+                  variant={tournament.status === "registration" ? "default" : "secondary"}
+                  className="text-lg px-4 py-2"
+                >
+                  Registration {tournament.status === "registration" ? "Open" : "Closed"}
+                </Badge>
+                {tournament.participant_count >= 8 && (
+                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-green-700 font-medium">✅ Minimum players reached! Ready to select captains.</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

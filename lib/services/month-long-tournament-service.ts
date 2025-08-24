@@ -47,6 +47,9 @@ export const monthLongTournamentService = {
     console.log("[v0] Creating month-long tournament:", tournamentData)
     console.log("[v0] Using user ID:", userId)
 
+    let actualUserId = userId
+
+    // Check if user exists in database, create if needed
     const { data: existingUser, error: userCheckError } = await supabase
       .from("users")
       .select("id, username")
@@ -54,40 +57,44 @@ export const monthLongTournamentService = {
       .single()
 
     if (userCheckError && userCheckError.code === "PGRST116") {
-      // User doesn't exist, get from auth and create in users table
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser()
+      // User doesn't exist, try to find system user or create one
+      console.log("[v0] User not found, looking for system user")
 
-      if (!authUser) {
-        throw new Error("User not authenticated")
+      const { data: systemUser } = await supabase.from("users").select("id, username").eq("username", "System").single()
+
+      if (systemUser) {
+        actualUserId = systemUser.id
+        console.log("[v0] Using system user for anonymous tournament:", systemUser.username)
+      } else {
+        // Create system user for anonymous tournaments
+        console.log("[v0] Creating system user for anonymous tournaments")
+        const { data: newUser, error: createError } = await supabase
+          .from("users")
+          .insert({
+            id: "00000000-0000-0000-0000-000000000000",
+            username: "System",
+            email: null,
+            elo_rating: 1200,
+            total_games: 0,
+            wins: 0,
+            losses: 0,
+          })
+          .select()
+          .single()
+
+        if (createError) {
+          console.error("[v0] Failed to create system user:", createError)
+          throw new Error(`Failed to create system user: ${createError.message}`)
+        }
+        actualUserId = newUser.id
+        console.log("[v0] System user created successfully:", newUser.username)
       }
-
-      console.log("[v0] Creating user in users table:", authUser.id)
-      const { data: newUser, error: createError } = await supabase
-        .from("users")
-        .insert({
-          id: authUser.id,
-          username: authUser.email?.split("@")[0] || `user_${authUser.id.slice(0, 8)}`,
-          email: authUser.email,
-          elo_rating: 1200,
-          total_games: 0,
-          wins: 0,
-          losses: 0,
-        })
-        .select()
-        .single()
-
-      if (createError) {
-        console.error("[v0] Failed to create user:", createError)
-        throw new Error(`Failed to create user: ${createError.message}`)
-      }
-      console.log("[v0] User created successfully:", newUser.username)
     } else if (userCheckError) {
       console.error("[v0] Database error checking user:", userCheckError)
       throw new Error(`Database error: ${userCheckError.message}`)
     } else {
       console.log("[v0] User verified in database:", existingUser.username)
+      actualUserId = existingUser.id
     }
 
     const { data: tournament, error: tournamentError } = await supabase
@@ -104,7 +111,7 @@ export const monthLongTournamentService = {
         end_date: new Date(
           new Date(tournamentData.start_date).getTime() + tournamentData.duration_days * 24 * 60 * 60 * 1000,
         ).toISOString(),
-        created_by: userId,
+        created_by: actualUserId, // Use validated database user ID
         status: "registration",
         team_based: false,
         player_pool_settings: {

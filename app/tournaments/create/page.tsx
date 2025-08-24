@@ -120,48 +120,49 @@ export default function CreateTournamentPage() {
     setLoading(true)
 
     try {
-      if (!user?.id) {
-        throw new Error("User not authenticated")
-      }
-
-      console.log("[v0] Starting tournament creation for user:", user.id)
+      console.log("[v0] Starting tournament creation")
       console.log("[v0] Tournament data:", formData)
 
       const supabase = createClient()
+      let actualUserId = user?.id
 
-      const { data: existingUser, error: userCheckError } = await supabase
-        .from("users")
-        .select("id, username")
-        .eq("id", user.id)
-        .single()
-
-      if (userCheckError && userCheckError.code === "PGRST116") {
-        // User doesn't exist, create them
-        console.log("[v0] Creating user in database:", user.id)
-        const { data: newUser, error: createError } = await supabase
+      if (!user?.id) {
+        console.log("[v0] No authenticated user, creating tournament anonymously")
+        actualUserId = undefined // Let the service handle anonymous creation
+      } else {
+        const { data: existingUser, error: userCheckError } = await supabase
           .from("users")
-          .insert({
-            id: user.id,
-            username: user.email?.split("@")[0] || `user_${user.id.slice(0, 8)}`,
-            email: user.email,
-            elo_rating: 1200,
-            total_games: 0,
-            wins: 0,
-            losses: 0,
-          })
-          .select()
+          .select("id, username")
+          .eq("id", user.id)
           .single()
 
-        if (createError) {
-          console.error("[v0] Failed to create user:", createError)
-          throw new Error(`Failed to create user: ${createError.message}`)
+        if (userCheckError && userCheckError.code === "PGRST116") {
+          console.log("[v0] Creating user in database:", user.id)
+          const { data: newUser, error: createError } = await supabase
+            .from("users")
+            .insert({
+              id: user.id,
+              username: user.email?.split("@")[0] || `user_${user.id.slice(0, 8)}`,
+              email: user.email,
+              elo_rating: 1200,
+              total_games: 0,
+              wins: 0,
+              losses: 0,
+            })
+            .select()
+            .single()
+
+          if (createError) {
+            console.error("[v0] Failed to create user:", createError)
+            throw new Error(`Failed to create user: ${createError.message}`)
+          }
+          console.log("[v0] User created successfully:", newUser.username)
+        } else if (userCheckError) {
+          console.error("[v0] Database error checking user:", userCheckError)
+          throw new Error(`Database error: ${userCheckError.message}`)
+        } else {
+          console.log("[v0] User verified in database:", existingUser.username)
         }
-        console.log("[v0] User created successfully:", newUser.username)
-      } else if (userCheckError) {
-        console.error("[v0] Database error checking user:", userCheckError)
-        throw new Error(`Database error: ${userCheckError.message}`)
-      } else {
-        console.log("[v0] User verified in database:", existingUser.username)
       }
 
       console.log("[v0] User verification complete, proceeding with tournament creation")
@@ -181,9 +182,12 @@ export default function CreateTournamentPage() {
         }
 
         console.log("[v0] Month-long tournament data:", tournamentData)
-        console.log("[v0] Using user ID:", user.id)
+        console.log("[v0] Using user ID:", actualUserId || "anonymous")
 
-        const tournament = await monthLongTournamentService.createMonthLongTournament(tournamentData, user.id)
+        const tournament = await monthLongTournamentService.createMonthLongTournament(
+          tournamentData,
+          actualUserId || "00000000-0000-0000-0000-000000000000",
+        )
 
         console.log("[v0] Month-long tournament created successfully:", tournament)
 
@@ -204,7 +208,7 @@ export default function CreateTournamentPage() {
       } else {
         console.log("[v0] Creating regular tournament")
         console.log("[v0] Tournament service data:", formData)
-        console.log("[v0] Using user ID:", user.id)
+        console.log("[v0] Using user ID:", actualUserId || "anonymous")
 
         if (!formData.name || formData.name.trim() === "") {
           throw new Error("Tournament name is required")
@@ -218,7 +222,7 @@ export default function CreateTournamentPage() {
           throw new Error("Tournament must have at least 2 participants")
         }
 
-        const tournament = await tournamentService.createTournament(formData, user.id)
+        const tournament = await tournamentService.createTournament(formData, actualUserId)
         console.log("[v0] Regular tournament created successfully:", tournament)
 
         const { data: verifyTournament, error: verifyError } = await supabase
@@ -246,8 +250,6 @@ export default function CreateTournamentPage() {
         alert("A tournament with this name already exists. Please choose a different name.")
       } else if (errorMessage.includes("foreign key")) {
         alert("Database constraint error. Please try again or contact support.")
-      } else if (errorMessage.includes("not authenticated")) {
-        alert("Please log in to create tournaments.")
       } else {
         alert(`Failed to create tournament: ${errorMessage}. Please check your settings and try again.`)
       }

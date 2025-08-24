@@ -15,6 +15,7 @@ import { PlayerPoolManagement } from "@/components/tournaments/player-pool-manag
 import { CaptainSelectionInterface } from "@/components/tournaments/captain-selection-interface"
 import { DraftInitiationSystem } from "@/components/tournaments/draft-initiation-system"
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
+import { SnakeDraftRoundRobinTournament } from "@/components/tournaments/snake-draft-round-robin-tournament"
 
 interface TournamentPageProps {
   params: {
@@ -47,6 +48,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
+  const [user, setUser] = useState<any | null>(null) // Assuming user state is needed for isOrganizer check
 
   useEffect(() => {
     if (!isValidUUID(params.id)) {
@@ -55,6 +57,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
     }
 
     fetchTournament()
+    fetchUser() // Assuming fetchUser function is needed to get user data
   }, [params.id, router])
 
   const fetchTournament = async () => {
@@ -99,6 +102,12 @@ export default function TournamentPage({ params }: TournamentPageProps) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchUser = async () => {
+    // Assuming this function fetches user data
+    const user = { id: "some_user_id" } // Replace with actual user data fetching logic
+    setUser(user)
   }
 
   if (!isValidUUID(params.id)) {
@@ -226,58 +235,66 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tournament Overview</CardTitle>
-              <CardDescription>Tournament details and current status</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-4">
-                  <h4 className="font-semibold">Tournament Information</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Status:</span>
-                      <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
+          {tournament.league_mode === "snake_draft" ? (
+            <SnakeDraftRoundRobinTournament
+              tournamentId={tournament.id}
+              tournament={tournament}
+              isOrganizer={tournament.commissioner_id === user?.id}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Tournament Overview</CardTitle>
+                <CardDescription>Tournament details and current status</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-4">
+                    <h4 className="font-semibold">Tournament Information</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Status:</span>
+                        <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Game:</span>
+                        <span>{tournament.sport.replace("_", " ")}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Max Teams:</span>
+                        <span>{tournament.max_teams}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Entry Fee:</span>
+                        <span>${tournament.entry_fee}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Prize Pool:</span>
+                        <span className="font-semibold text-green-600">${tournament.prize_pool.toLocaleString()}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Game:</span>
-                      <span>{tournament.sport.replace("_", " ")}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Max Teams:</span>
-                      <span>{tournament.max_teams}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Entry Fee:</span>
-                      <span>${tournament.entry_fee}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Prize Pool:</span>
-                      <span className="font-semibold text-green-600">${tournament.prize_pool.toLocaleString()}</span>
+                  </div>
+                  <div className="space-y-4">
+                    <h4 className="font-semibold">Participation</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Registered:</span>
+                        <span>
+                          {tournament.participant_count}/{tournament.max_teams}
+                        </span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div
+                          className="bg-primary h-2 rounded-full transition-all"
+                          style={{ width: `${(tournament.participant_count! / tournament.max_teams) * 100}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="space-y-4">
-                  <h4 className="font-semibold">Participation</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Registered:</span>
-                      <span>
-                        {tournament.participant_count}/{tournament.max_teams}
-                      </span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-primary h-2 rounded-full transition-all"
-                        style={{ width: `${(tournament.participant_count! / tournament.max_teams) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="signup" className="space-y-6">
