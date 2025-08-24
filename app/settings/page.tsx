@@ -25,6 +25,8 @@ import {
   Mail,
   CheckCircle,
   AlertCircle,
+  RefreshCw,
+  Database,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { Textarea } from "@/components/ui/textarea"
@@ -58,6 +60,14 @@ export default function SettingsPage() {
   const [newEmail, setNewEmail] = useState("")
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false)
 
+  const [profileData, setProfileData] = useState({
+    username: "",
+    account_id: "",
+    favorite_game: "omega-strikers",
+  })
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [isResettingData, setIsResettingData] = useState(false)
+
   useEffect(() => {
     const checkEmailVerification = async () => {
       const supabase = createClient()
@@ -74,8 +84,107 @@ export default function SettingsPage() {
 
     if (user) {
       checkEmailVerification()
+      setProfileData({
+        username: user.username || "",
+        account_id: user.account_id || "",
+        favorite_game: "omega-strikers",
+      })
     }
   }, [user])
+
+  const handleSaveProfile = async () => {
+    if (!user?.id) return
+
+    setIsSavingProfile(true)
+    const supabase = createClient()
+
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({
+          username: profileData.username,
+          account_id: profileData.account_id,
+          favorite_game: profileData.favorite_game,
+        })
+        .eq("id", user.id)
+
+      if (error) throw error
+
+      alert("Profile updated successfully!")
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      alert("Failed to update profile. Please try again.")
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
+
+  const handleResetData = async () => {
+    if (!user?.id) return
+
+    const confirmed = confirm(
+      "⚠️ WARNING: This will permanently delete ALL your data including:\n\n" +
+        "• Tournament history\n" +
+        "• Match records\n" +
+        "• ELO ratings\n" +
+        "• Betting history\n" +
+        "• Team memberships\n" +
+        "• Draft participation\n\n" +
+        "This action CANNOT be undone. Are you absolutely sure?",
+    )
+
+    if (!confirmed) return
+
+    const doubleConfirm = confirm(
+      "This is your final warning. Clicking OK will permanently delete all your data. Continue?",
+    )
+
+    if (!doubleConfirm) return
+
+    setIsResettingData(true)
+    const supabase = createClient()
+
+    try {
+      // Reset user data across all tables
+      const resetOperations = [
+        supabase.from("user_tournament_signups").delete().eq("user_id", user.id),
+        supabase.from("match_results").delete().eq("user_id", user.id),
+        supabase.from("player_performances").delete().eq("user_id", user.id),
+        supabase.from("elo_games").delete().eq("user_id", user.id),
+        supabase.from("betting_transactions").delete().eq("user_id", user.id),
+        supabase.from("wager_matches_participants").delete().eq("user_id", user.id),
+        supabase.from("draft_participants").delete().eq("user_id", user.id),
+        supabase.from("team_members").delete().eq("user_id", user.id),
+        supabase.from("announcements").delete().eq("created_by", user.id),
+        // Reset user stats
+        supabase
+          .from("users")
+          .update({
+            elo_rating: 1000,
+            elo_variation: 100,
+            matches_played: 0,
+            matches_won: 0,
+            total_earnings: 0,
+            current_balance: 100, // Reset to starting balance
+            tournament_wins: 0,
+            mvp_count: 0,
+          })
+          .eq("id", user.id),
+      ]
+
+      await Promise.all(resetOperations)
+
+      alert("✅ All data has been reset successfully! Your account has been restored to default settings.")
+
+      // Refresh the page to show updated data
+      window.location.reload()
+    } catch (error) {
+      console.error("Error resetting data:", error)
+      alert("Failed to reset data. Please contact support if this issue persists.")
+    } finally {
+      setIsResettingData(false)
+    }
+  }
 
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -182,16 +291,27 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="username">Username</Label>
-                  <Input id="username" defaultValue={user?.username} />
+                  <Input
+                    id="username"
+                    value={profileData.username}
+                    onChange={(e) => setProfileData({ ...profileData, username: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="accountId">Account ID</Label>
-                  <Input id="accountId" defaultValue={user?.account_id} />
+                  <Input
+                    id="accountId"
+                    value={profileData.account_id}
+                    onChange={(e) => setProfileData({ ...profileData, account_id: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="favoriteGame">Favorite Game</Label>
-                <Select defaultValue="omega-strikers">
+                <Select
+                  value={profileData.favorite_game}
+                  onValueChange={(value) => setProfileData({ ...profileData, favorite_game: value })}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -204,7 +324,58 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button>Save Changes</Button>
+              <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
+                {isSavingProfile ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-destructive/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <Database className="h-5 w-5" />
+                Reset Data
+              </CardTitle>
+              <CardDescription>
+                Permanently delete all your data and reset your account to default settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-destructive">Danger Zone</p>
+                    <p className="text-xs text-muted-foreground">
+                      This will permanently delete ALL your data including tournament history, match records, ELO
+                      ratings, betting history, team memberships, and draft participation. This action cannot be undone.
+                    </p>
+                    <ul className="text-xs text-muted-foreground space-y-1 ml-4">
+                      <li>• Tournament signups and history</li>
+                      <li>• Match results and performance data</li>
+                      <li>• ELO ratings (reset to 1000)</li>
+                      <li>• Betting transactions and history</li>
+                      <li>• Team memberships and created teams</li>
+                      <li>• Draft participation records</li>
+                      <li>• Account balance (reset to $100)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <Button variant="destructive" onClick={handleResetData} disabled={isResettingData} className="w-full">
+                {isResettingData ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Resetting Data...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Reset All Data
+                  </>
+                )}
+              </Button>
             </CardContent>
           </Card>
 

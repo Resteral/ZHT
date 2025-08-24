@@ -88,7 +88,51 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
     setStarting(true)
     try {
-      console.log("[v0] Starting tournament draft with ELO-based captain selection")
+      console.log("[v0] Starting tournament draft with conflict validation")
+
+      // Check if any participants are already in active drafts
+      const participantIds = participants.map((p) => p.user_id)
+      const { data: existingDraftParticipants, error: conflictError } = await supabase
+        .from("captain_draft_participants")
+        .select(`
+          user_id,
+          captain_drafts!inner(status)
+        `)
+        .in("user_id", participantIds)
+        .in("captain_drafts.status", ["waiting", "drafting", "active"])
+
+      if (conflictError) {
+        console.error("[v0] Error checking for draft conflicts:", conflictError)
+      }
+
+      if (existingDraftParticipants && existingDraftParticipants.length > 0) {
+        const conflictingUsers = existingDraftParticipants.map((p) => p.user_id)
+        const conflictingUsernames = participants
+          .filter((p) => conflictingUsers.includes(p.user_id))
+          .map((p) => p.users?.username)
+          .join(", ")
+
+        toast.error(`Cannot start draft: ${conflictingUsernames} are already in active drafts`)
+        return
+      }
+
+      const { data: poolValidation, error: poolError } = await supabase
+        .from("tournament_player_pool")
+        .select("user_id, status")
+        .eq("tournament_id", tournamentId)
+        .in("user_id", participantIds)
+
+      if (poolError) {
+        console.error("[v0] Error validating player pool:", poolError)
+        toast.error("Failed to validate player pool status")
+        return
+      }
+
+      const unavailablePlayers = poolValidation?.filter((p) => p.status !== "available") || []
+      if (unavailablePlayers.length > 0) {
+        toast.error("Some players are no longer available for draft")
+        return
+      }
 
       const sortedByElo = participants.sort((a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200))
 
@@ -97,8 +141,8 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
         return
       }
 
-      const highestElo = sortedByElo[0] // Tournament owner
-      const lowestElo = sortedByElo[sortedByElo.length - 1] // First pick captain
+      const highestElo = sortedByElo[0]
+      const lowestElo = sortedByElo[sortedByElo.length - 1]
 
       console.log(
         "[v0] Selected captains - Owner (highest ELO):",
@@ -115,16 +159,16 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
         .from("captain_drafts")
         .insert({
           match_id: tournament.id,
-          captain1_id: lowestElo.user_id, // Lowest ELO gets first pick advantage
-          captain2_id: highestElo.user_id, // Highest ELO is tournament owner
+          captain1_id: lowestElo.user_id,
+          captain2_id: highestElo.user_id,
           format: tournament.match_type.replace("_draft", ""),
           max_rounds: Math.floor(participants.length / 2),
           current_round: 1,
           current_pick: 1,
-          current_captain: lowestElo.user_id, // Lowest ELO starts drafting
+          current_captain: lowestElo.user_id,
           status: "drafting",
-          tournament_owner: highestElo.user_id, // Track tournament owner
-          tournament_mode: true, // Flag as tournament draft
+          tournament_owner: highestElo.user_id,
+          tournament_mode: true,
           elo_difference: (highestElo.users?.elo_rating || 1200) - (lowestElo.users?.elo_rating || 1200),
           created_at: new Date().toISOString(),
         })
@@ -133,11 +177,24 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
       if (draftError) throw draftError
 
+      const { error: poolUpdateError } = await supabase
+        .from("tournament_player_pool")
+        .update({
+          status: "captain",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("tournament_id", tournamentId)
+        .in("user_id", [highestElo.user_id, lowestElo.user_id])
+
+      if (poolUpdateError) {
+        console.error("[v0] Error updating captain status:", poolUpdateError)
+      }
+
       const draftParticipants = participants.map((p) => ({
         draft_id: captainDraft.id,
         user_id: p.user_id,
         is_captain: p.user_id === highestElo.user_id || p.user_id === lowestElo.user_id,
-        team: null, // Will be assigned during draft
+        team: null,
         elo_rating: p.users?.elo_rating || 1200,
       }))
 
@@ -155,7 +212,7 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
       if (statusError) throw statusError
 
-      console.log("[v0] Tournament draft created successfully:", captainDraft.id)
+      console.log("[v0] Tournament draft created successfully with conflict prevention:", captainDraft.id)
       toast.success("Tournament draft started! Redirecting to draft room...")
 
       if (onDraftStarted) {

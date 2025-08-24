@@ -108,12 +108,25 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
 
       if (error) throw error
 
+      const userIds = (poolData || []).map((entry) => entry.user_id)
+      const { data: draftConflicts } = await supabase
+        .from("captain_draft_participants")
+        .select(`
+          user_id,
+          captain_drafts!inner(status, match_id)
+        `)
+        .in("user_id", userIds)
+        .in("captain_drafts.status", ["waiting", "drafting", "active"])
+        .neq("captain_drafts.match_id", tournamentId) // Exclude current tournament's draft
+
+      const conflictingUserIds = new Set(draftConflicts?.map((d) => d.user_id) || [])
+
       const processedPlayers: PoolPlayer[] = (poolData || []).map((entry: any) => ({
         id: entry.id,
         user_id: entry.user_id,
         username: entry.users?.username || "Unknown Player",
         elo_rating: entry.users?.elo_rating || 1200,
-        status: entry.status,
+        status: conflictingUserIds.has(entry.user_id) ? "withdrawn" : entry.status, // Mark conflicting players as withdrawn
         captain_type: entry.captain_type,
         team_id: entry.team_id,
         draft_position: entry.draft_position,
@@ -125,6 +138,19 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
           games_played: 0,
         },
       }))
+
+      if (conflictingUserIds.size > 0) {
+        await supabase
+          .from("tournament_player_pool")
+          .update({
+            status: "withdrawn",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("tournament_id", tournamentId)
+          .in("user_id", Array.from(conflictingUserIds))
+
+        console.log("[v0] Marked", conflictingUserIds.size, "conflicting players as withdrawn")
+      }
 
       setPlayers(processedPlayers)
       calculateStats(processedPlayers)
@@ -194,6 +220,23 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
     if (!isOrganizer) return
 
     try {
+      const availablePlayers = players.filter((p) => p.status === "available")
+      const playerIds = availablePlayers.map((p) => p.user_id)
+
+      const { data: draftConflicts } = await supabase
+        .from("captain_draft_participants")
+        .select(`
+          user_id,
+          captain_drafts!inner(status)
+        `)
+        .in("user_id", playerIds)
+        .in("captain_drafts.status", ["waiting", "drafting", "active"])
+
+      if (draftConflicts && draftConflicts.length > 0) {
+        toast.error("Cannot select captains: some players are in active drafts")
+        return
+      }
+
       const result = await captainSelectionService.selectCaptainsAutomatically(tournamentId)
 
       if (result.success) {

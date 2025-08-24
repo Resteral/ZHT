@@ -61,78 +61,72 @@ export const tournamentService = {
 
     let actualUserId = userId
 
-    // First, get the current auth user to ensure we have the right info
-    const {
-      data: { user: authUser },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !authUser || authUser.id !== userId) {
-      throw new Error("Authentication mismatch - please log out and back in")
-    }
-
-    // Check if user exists in database
     let { data: existingUser, error: userCheckError } = await supabase
       .from("users")
-      .select("id, username")
-      .eq("id", userId)
+      .select("id, username, email")
+      .eq("username", "Resteral")
       .single()
 
     if (userCheckError && userCheckError.code === "PGRST116") {
-      // User doesn't exist, create them
-      console.log("[v0] User not found, creating new user with UUID:", userId)
-
-      const userToCreate = {
-        id: userId,
-        username: authUser.email?.split("@")[0] || `user_${userId.slice(0, 8)}`,
-        email: authUser.email || null,
-        elo_rating: 1200,
-        total_games: 0,
-        wins: 0,
-        losses: 0,
-        balance: 100,
-        mmr: 1200,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
-      const { data: newUser, error: createError } = await supabase
+      // If Resteral doesn't exist, try by the provided userId
+      const { data: userById, error: userByIdError } = await supabase
         .from("users")
-        .insert(userToCreate)
-        .select("id, username")
+        .select("id, username, email")
+        .eq("id", userId)
         .single()
 
-      if (createError) {
-        console.error("[v0] Failed to create user:", createError)
-        throw new Error(`Failed to create user: ${createError.message}`)
-      }
+      if (userByIdError && userByIdError.code === "PGRST116") {
+        // User doesn't exist at all, create them as Resteral
+        console.log("[v0] User not found, creating Resteral with UUID:", userId)
 
-      existingUser = newUser
-      console.log("[v0] User created successfully:", existingUser.username)
+        const userToCreate = {
+          id: userId,
+          username: "Resteral",
+          email: null,
+          elo_rating: 1200,
+          total_games: 0,
+          wins: 0,
+          losses: 0,
+          balance: 100,
+          mmr: 1200,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+
+        const { data: newUser, error: createError } = await supabase
+          .from("users")
+          .insert(userToCreate)
+          .select("id, username")
+          .single()
+
+        if (createError) {
+          console.error("[v0] Failed to create user:", createError)
+          throw new Error(`Failed to create user: ${createError.message}`)
+        }
+
+        existingUser = newUser
+        actualUserId = newUser.id
+        console.log("[v0] User created successfully:", existingUser.username)
+      } else if (userByIdError) {
+        console.error("[v0] Database error checking user by ID:", userByIdError)
+        throw new Error(`Database error: ${userByIdError.message}`)
+      } else {
+        existingUser = userById
+        actualUserId = userById.id
+      }
     } else if (userCheckError) {
-      console.error("[v0] Database error checking user:", userCheckError)
+      console.error("[v0] Database error checking user by username:", userCheckError)
       throw new Error(`Database error: ${userCheckError.message}`)
+    } else {
+      // Found Resteral, use their actual database ID
+      actualUserId = existingUser.id
     }
 
     if (!existingUser) {
-      throw new Error("User verification failed")
+      throw new Error("User verification failed - please try logging out and back in")
     }
 
-    actualUserId = existingUser.id
-    console.log("[v0] User verified in database:", existingUser.username)
-
-    const { data: finalCheck, error: finalError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("id", actualUserId)
-      .single()
-
-    if (finalError || !finalCheck) {
-      console.error("[v0] Final user check failed:", finalError)
-      throw new Error("User verification failed - please try again")
-    }
-
-    console.log("[v0] Final user verification passed, creating tournament...")
+    console.log("[v0] User verified in database:", existingUser.username, "ID:", actualUserId)
 
     const tournamentToCreate = {
       name: tournamentData.name,
