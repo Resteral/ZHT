@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { Trophy, Users, Calendar, DollarSign, ArrowLeft, Zap, Target, Settings, Crown, Shield } from "lucide-react"
 import { tournamentService } from "@/lib/services/tournament-service"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "@/components/ui/use-toast"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
@@ -129,43 +130,9 @@ export default function CreateTournamentPage() {
       if (!user?.id) {
         console.log("[v0] No authenticated user, creating tournament anonymously")
         actualUserId = undefined // Let the service handle anonymous creation
-      } else {
-        const { data: existingUser, error: userCheckError } = await supabase
-          .from("users")
-          .select("id, username")
-          .eq("id", user.id)
-          .single()
-
-        if (userCheckError && userCheckError.code === "PGRST116") {
-          console.log("[v0] Creating user in database:", user.id)
-          const { data: newUser, error: createError } = await supabase
-            .from("users")
-            .insert({
-              id: user.id,
-              username: user.email?.split("@")[0] || `user_${user.id.slice(0, 8)}`,
-              email: user.email,
-              elo_rating: 1200,
-              total_games: 0,
-              wins: 0,
-              losses: 0,
-            })
-            .select()
-            .single()
-
-          if (createError) {
-            console.error("[v0] Failed to create user:", createError)
-            throw new Error(`Failed to create user: ${createError.message}`)
-          }
-          console.log("[v0] User created successfully:", newUser.username)
-        } else if (userCheckError) {
-          console.error("[v0] Database error checking user:", userCheckError)
-          throw new Error(`Database error: ${userCheckError.message}`)
-        } else {
-          console.log("[v0] User verified in database:", existingUser.username)
-        }
       }
 
-      console.log("[v0] User verification complete, proceeding with tournament creation")
+      console.log("[v0] Proceeding with tournament creation")
 
       if (formData.tournament_type === "month_long_draft") {
         console.log("[v0] Creating month-long draft tournament")
@@ -222,37 +189,21 @@ export default function CreateTournamentPage() {
           throw new Error("Tournament must have at least 2 participants")
         }
 
-        const tournament = await tournamentService.createTournament(formData, actualUserId)
-        console.log("[v0] Regular tournament created successfully:", tournament)
+        const result = await tournamentService.createTournament(formData, actualUserId)
+        console.log("[v0] Tournament created successfully:", result)
 
-        const { data: verifyTournament, error: verifyError } = await supabase
-          .from("leagues")
-          .select("*")
-          .eq("id", tournament.id)
-          .single()
+        toast.success("🎉 Tournament created successfully!", {
+          description: `${formData.name} is now open for registration`,
+          duration: 5000,
+        })
 
-        if (verifyError) {
-          console.error("[v0] Failed to verify tournament creation:", verifyError)
-          throw new Error(`Tournament creation verification failed: ${verifyError.message}`)
-        }
-
-        console.log("[v0] Tournament verified in database:", verifyTournament)
-        router.push(`/tournaments/${tournament.id}`)
+        router.push(`/tournaments/${result.id}`)
       }
-
-      console.log("[v0] Tournament creation process completed successfully")
-    } catch (error) {
+    } catch (error: any) {
       console.error("[v0] Error creating tournament:", error)
-      const errorMessage = error instanceof Error ? error.message : "Unknown error"
-      console.error("[v0] Full error details:", error)
-
-      if (errorMessage.includes("duplicate key")) {
-        alert("A tournament with this name already exists. Please choose a different name.")
-      } else if (errorMessage.includes("foreign key")) {
-        alert("Database constraint error. Please try again or contact support.")
-      } else {
-        alert(`Failed to create tournament: ${errorMessage}. Please check your settings and try again.`)
-      }
+      toast.error("Failed to create tournament", {
+        description: error.message || "Please try again",
+      })
     } finally {
       setLoading(false)
     }

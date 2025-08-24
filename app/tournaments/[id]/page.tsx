@@ -15,7 +15,7 @@ import { PlayerPoolManagement } from "@/components/tournaments/player-pool-manag
 import { CaptainSelectionInterface } from "@/components/tournaments/captain-selection-interface"
 import { DraftInitiationSystem } from "@/components/tournaments/draft-initiation-system"
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
-import { SnakeDraftRoundRobinTournament } from "@/components/tournaments/snake-draft-round-robin-tournament"
+import { EloStyleTournament } from "@/components/tournaments/elo-style-tournament"
 
 interface TournamentPageProps {
   params: {
@@ -236,11 +236,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
 
         <TabsContent value="overview" className="space-y-6">
           {tournament.league_mode === "snake_draft" ? (
-            <SnakeDraftRoundRobinTournament
-              tournamentId={tournament.id}
-              tournament={tournament}
-              isOrganizer={tournament.commissioner_id === user?.id}
-            />
+            <EloStyleTournament tournamentId={tournament.id} tournament={tournament} />
           ) : (
             <Card>
               <CardHeader>

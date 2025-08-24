@@ -9,20 +9,42 @@ function isValidUUID(uuid: string): boolean {
 
 export const tournamentService = {
   async getTournaments() {
-    const { data, error } = await supabase
-      .from("tournaments")
-      .select(`
-        *,
-        participant_count:tournament_participants(count)
-      `)
-      .order("created_at", { ascending: false })
+    const [tournamentsData, leaguesData] = await Promise.all([
+      supabase
+        .from("tournaments")
+        .select(`
+          *,
+          participant_count:tournament_participants(count)
+        `)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("leagues")
+        .select(`
+          *,
+          participant_count:league_memberships(count)
+        `)
+        .eq("league_mode", "tournament")
+        .order("created_at", { ascending: false }),
+    ])
 
-    if (error) throw error
+    const tournaments = tournamentsData.data || []
+    const leagues = leaguesData.data || []
 
-    return data.map((tournament) => ({
-      ...tournament,
-      participant_count: tournament.participant_count[0]?.count || 0,
-    }))
+    // Combine and normalize data from both sources
+    const allTournaments = [
+      ...tournaments.map((tournament) => ({
+        ...tournament,
+        participant_count: tournament.participant_count[0]?.count || 0,
+        source: "tournaments",
+      })),
+      ...leagues.map((league) => ({
+        ...league,
+        participant_count: league.participant_count[0]?.count || 0,
+        source: "leagues",
+      })),
+    ]
+
+    return allTournaments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   },
 
   async getTournament(id: string) {

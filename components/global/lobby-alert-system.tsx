@@ -39,7 +39,7 @@ export function LobbyAlertSystem() {
         console.log("[v0] Checking for active lobbies...")
 
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
 
         const { data: matches, error } = await supabase
           .from("matches")
@@ -53,6 +53,7 @@ export function LobbyAlertSystem() {
             created_at
           `)
           .eq("status", "waiting")
+          .limit(10) // Limit results to prevent large queries
           .abortSignal(controller.signal)
 
         clearTimeout(timeoutId)
@@ -178,7 +179,7 @@ export function LobbyAlertSystem() {
     }
 
     checkAndCleanupLobbies()
-    intervalRef.current = setInterval(checkAndCleanupLobbies, 30000)
+    intervalRef.current = setInterval(checkAndCleanupLobbies, 60000)
 
     return () => {
       if (intervalRef.current) {
