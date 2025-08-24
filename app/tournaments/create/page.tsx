@@ -97,6 +97,11 @@ export default function CreateTournamentPage() {
       num_teams: 4,
       players_per_team: 4,
       create_lobbies_on_finish: true,
+      bracket_type: "single_elimination" as
+        | "single_elimination"
+        | "double_elimination"
+        | "round_robin"
+        | "swiss_system",
     },
   })
 
@@ -127,7 +132,7 @@ export default function CreateTournamentPage() {
 
       if (!user?.id) {
         console.log("[v0] No authenticated user, creating tournament anonymously")
-        actualUserId = undefined // Let the service handle anonymous creation
+        actualUserId = undefined
       }
 
       console.log("[v0] Proceeding with tournament creation")
@@ -144,6 +149,7 @@ export default function CreateTournamentPage() {
           max_participants: formData.max_participants,
           entry_fee: formData.entry_fee,
           start_date: formData.start_date,
+          bracket_type: formData.settings.bracket_type,
         }
 
         console.log("[v0] Month-long tournament data:", tournamentData)
@@ -169,7 +175,11 @@ export default function CreateTournamentPage() {
 
         console.log("[v0] Tournament verified in database:", verifyTournament)
 
-        router.push(`/tournaments/${tournament.id}`)
+        if (formData.settings.draft_mode === "snake_draft") {
+          router.push(`/tournaments/${tournament.id}/draft`)
+        } else {
+          router.push(`/tournaments/${tournament.id}`)
+        }
       } else {
         console.log("[v0] Creating regular tournament")
         console.log("[v0] Tournament service data:", formData)
@@ -252,6 +262,33 @@ export default function CreateTournamentPage() {
   ]
 
   const participantOptions = [8, 16, 32, 64, 128]
+
+  const bracketTypeOptions = [
+    {
+      value: "single_elimination",
+      label: "Single Elimination",
+      description: "One loss and you're out - fast and intense",
+      icon: "⚡",
+    },
+    {
+      value: "double_elimination",
+      label: "Double Elimination",
+      description: "Second chances with losers bracket",
+      icon: "🔄",
+    },
+    {
+      value: "round_robin",
+      label: "Round Robin",
+      description: "Everyone plays everyone - most fair",
+      icon: "🔄",
+    },
+    {
+      value: "swiss_system",
+      label: "Swiss System",
+      description: "Pair teams with similar records",
+      icon: "🏔️",
+    },
+  ]
 
   return (
     <div className="container mx-auto py-6 max-w-4xl">
@@ -531,104 +568,88 @@ export default function CreateTournamentPage() {
                   </div>
                 </div>
 
-                {/* Duration for Month-Long Draft */}
-                {formData.tournament_type === "month_long_draft" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="duration_days">Tournament Duration (Days)</Label>
-                    <Select
-                      value={formData.duration_days.toString()}
-                      onValueChange={(value) => setFormData({ ...formData, duration_days: Number.parseInt(value) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="14">2 Weeks</SelectItem>
-                        <SelectItem value="30">1 Month</SelectItem>
-                        <SelectItem value="60">2 Months</SelectItem>
-                        <SelectItem value="90">3 Months (Season)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Settings className="h-5 w-5" />
-                      Tournament Settings
-                    </CardTitle>
-                    <CardDescription>Configure how your tournament will work</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(tournamentType === "snake_draft" || formData.tournament_type === "month_long_draft") && (
+                  <Card className="border-blue-200 bg-blue-50/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-blue-800">
+                        <Calendar className="h-5 w-5" />
+                        Snake Tournament Schedule
+                      </CardTitle>
+                      <CardDescription>Set when your snake draft tournament begins</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
                       <div className="space-y-2">
-                        <Label>Number of Teams</Label>
-                        <Select
-                          value={formData.settings.num_teams.toString()}
-                          onValueChange={(value) =>
-                            setFormData({
-                              ...formData,
-                              settings: { ...formData.settings, num_teams: Number.parseInt(value) },
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="4">4 Teams</SelectItem>
-                            <SelectItem value="6">6 Teams</SelectItem>
-                            <SelectItem value="8">8 Teams</SelectItem>
-                            <SelectItem value="12">12 Teams</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Players per Team</Label>
-                        <Select
-                          value={formData.settings.players_per_team.toString()}
-                          onValueChange={(value) =>
-                            setFormData({
-                              ...formData,
-                              settings: { ...formData.settings, players_per_team: Number.parseInt(value) },
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="3">3 Players</SelectItem>
-                            <SelectItem value="4">4 Players</SelectItem>
-                            <SelectItem value="5">5 Players</SelectItem>
-                            <SelectItem value="6">6 Players</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <Label htmlFor="create_lobbies">Create Lobbies When Finished</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Automatically create lobbies for matches when tournament completes
+                        <Label htmlFor="snake_start_date" className="text-base font-medium">
+                          Tournament Start Date & Time
+                        </Label>
+                        <Input
+                          id="snake_start_date"
+                          type="datetime-local"
+                          value={formData.start_date}
+                          onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                          className="text-lg p-3"
+                          required
+                        />
+                        <p className="text-sm text-blue-700">
+                          This is when players can start joining and the draft phase begins
                         </p>
                       </div>
-                      <Switch
-                        id="create_lobbies"
-                        checked={formData.settings.create_lobbies_on_finish}
-                        onCheckedChange={(checked) =>
-                          setFormData({
-                            ...formData,
-                            settings: { ...formData.settings, create_lobbies_on_finish: checked },
-                          })
-                        }
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {(tournamentType === "snake_draft" || formData.settings.draft_mode === "snake_draft") && (
+                  <Card className="border-green-200 bg-green-50/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-green-800">
+                        <Trophy className="h-5 w-5" />
+                        Bracket Type Selection
+                      </CardTitle>
+                      <CardDescription>Choose how teams will compete after the draft</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <Label className="text-base font-medium">Tournament Bracket Format</Label>
+                        <div className="grid gap-3">
+                          {bracketTypeOptions.map((bracket) => (
+                            <div
+                              key={bracket.value}
+                              className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                                formData.settings.bracket_type === bracket.value
+                                  ? "border-green-500 bg-green-100"
+                                  : "border-border hover:border-green-300"
+                              }`}
+                              onClick={() =>
+                                setFormData({
+                                  ...formData,
+                                  settings: { ...formData.settings, bracket_type: bracket.value as any },
+                                })
+                              }
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="text-2xl">{bracket.icon}</span>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="font-medium">{bracket.label}</h4>
+                                    {formData.settings.bracket_type === bracket.value && (
+                                      <Badge variant="secondary" className="bg-green-200 text-green-800">
+                                        Selected
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-1">{bracket.description}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-sm text-green-700 mt-2">
+                          After the snake draft completes, teams will compete in this bracket format
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <Button type="submit" disabled={loading} className="w-full" size="lg">
                   {loading ? (
@@ -636,7 +657,7 @@ export default function CreateTournamentPage() {
                   ) : (
                     <>
                       <Zap className="h-4 w-4 mr-2" />
-                      Create Tournament
+                      {tournamentType === "snake_draft" ? "Create Snake Tournament & Go to Draft" : "Create Tournament"}
                     </>
                   )}
                 </Button>
@@ -702,20 +723,35 @@ export default function CreateTournamentPage() {
                     <span className="font-medium text-green-600">${formData.prize_pool.toLocaleString()}</span>
                   </div>
                 )}
+
+                {(tournamentType === "snake_draft" || formData.settings.draft_mode === "snake_draft") && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Trophy className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Bracket:</span>
+                    <span className="font-medium">
+                      {bracketTypeOptions.find((b) => b.value === formData.settings.bracket_type)?.label}
+                    </span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center space-y-2">
-                <div className="text-2xl">🏆</div>
-                <p className="text-sm text-muted-foreground">
-                  Tournament will automatically create lobbies when finished for seamless match play!
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          {(tournamentType === "snake_draft" || formData.settings.draft_mode === "snake_draft") && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="pt-6">
+                <div className="text-center space-y-2">
+                  <div className="text-2xl">🐍</div>
+                  <p className="text-sm font-medium text-blue-800">Snake Draft Tournament</p>
+                  <p className="text-xs text-blue-600">
+                    Draft order reverses each round, then teams compete in{" "}
+                    {bracketTypeOptions.find((b) => b.value === formData.settings.bracket_type)?.label.toLowerCase()}{" "}
+                    format!
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

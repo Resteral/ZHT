@@ -26,10 +26,13 @@ export interface Bet {
 }
 
 export class BettingService {
-  private supabase = createClient()
+  private async getSupabase() {
+    return await createClient()
+  }
 
   async getActiveMarkets(gameId?: string) {
-    let query = this.supabase
+    const supabase = await this.getSupabase()
+    let query = supabase
       .from("betting_markets")
       .select(`
         *,
@@ -64,13 +67,10 @@ export class BettingService {
   }
 
   async placeBet(userId: string, marketId: string, selection: string, odds: number, stake: number) {
+    const supabase = await this.getSupabase()
     const potentialPayout = stake * (odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1)
 
-    const { data: user, error: userError } = await this.supabase
-      .from("users")
-      .select("balance")
-      .eq("id", userId)
-      .single()
+    const { data: user, error: userError } = await supabase.from("users").select("balance").eq("id", userId).single()
 
     if (userError) throw userError
     if (!user || (user.balance || 0) < stake) {
@@ -79,7 +79,7 @@ export class BettingService {
       )
     }
 
-    const { data: bet, error: betError } = await this.supabase
+    const { data: bet, error: betError } = await supabase
       .from("bets")
       .insert({
         user_id: userId,
@@ -102,7 +102,7 @@ export class BettingService {
       throw new Error(`Failed to place bet: ${betError.message}`)
     }
 
-    const { error: balanceError } = await this.supabase
+    const { error: balanceError } = await supabase
       .from("users")
       .update({ balance: (user.balance || 0) - stake })
       .eq("id", userId)
@@ -110,7 +110,7 @@ export class BettingService {
     if (balanceError) {
       console.error("Error updating balance:", balanceError)
       // Try to rollback the bet if balance update fails
-      await this.supabase.from("bets").delete().eq("id", bet.id)
+      await supabase.from("bets").delete().eq("id", bet.id)
       throw new Error("Failed to update balance")
     }
 
@@ -118,7 +118,8 @@ export class BettingService {
   }
 
   async getUserBets(userId: string, status?: string) {
-    let query = this.supabase
+    const supabase = await this.getSupabase()
+    let query = supabase
       .from("bets")
       .select(`
         *,
@@ -153,7 +154,8 @@ export class BettingService {
   }
 
   async settleBet(betId: string, result: "won" | "lost") {
-    const { data: bet, error: betError } = await this.supabase.from("bets").select("*").eq("id", betId).single()
+    const supabase = await this.getSupabase()
+    const { data: bet, error: betError } = await supabase.from("bets").select("*").eq("id", betId).single()
 
     if (betError) throw betError
     if (!bet || bet.status !== "pending") {
@@ -161,7 +163,7 @@ export class BettingService {
     }
 
     // Update bet status
-    const { error: updateError } = await this.supabase
+    const { error: updateError } = await supabase
       .from("bets")
       .update({
         status: result,
@@ -173,7 +175,7 @@ export class BettingService {
 
     // If won, add payout to user balance
     if (result === "won") {
-      const { data: user, error: userError } = await this.supabase
+      const { data: user, error: userError } = await supabase
         .from("users")
         .select("balance")
         .eq("id", bet.user_id)
@@ -181,7 +183,7 @@ export class BettingService {
 
       if (userError) throw userError
 
-      const { error: balanceError } = await this.supabase
+      const { error: balanceError } = await supabase
         .from("users")
         .update({ balance: (user.balance || 0) + bet.potential_payout })
         .eq("id", bet.user_id)
@@ -193,7 +195,8 @@ export class BettingService {
   }
 
   async getBettingStats(userId: string) {
-    const { data: bets, error } = await this.supabase
+    const supabase = await this.getSupabase()
+    const { data: bets, error } = await supabase
       .from("bets")
       .select("*")
       .eq("user_id", userId)
@@ -228,9 +231,10 @@ export class BettingService {
   }
 
   async updateOdds(marketId: string, newOdds: number) {
+    const supabase = await this.getSupabase()
     const decimalOdds = newOdds > 0 ? newOdds / 100 + 1 : 100 / Math.abs(newOdds) + 1
 
-    const { data, error } = await this.supabase
+    const { data, error } = await supabase
       .from("betting_markets")
       .update({
         odds: newOdds,
