@@ -109,10 +109,19 @@ export default function CreateTournamentPage() {
         description: "Players can now join the tournament pool",
       })
     } catch (error: any) {
-      console.error("[v0] Error creating tournament:", error)
+      console.error("[v0] Error creating tournament - Full error object:", error)
+      console.error("[v0] Error message:", error?.message)
+      console.error("[v0] Error status:", error?.status)
+      console.error("[v0] Error code:", error?.code)
+      console.error("[v0] Error details:", error?.details)
+      console.error("[v0] Error hint:", error?.hint)
+
+      // Log the stringified error to see all properties
+      console.error("[v0] Stringified error:", JSON.stringify(error, null, 2))
+
       toast({
         title: "Failed to create tournament",
-        description: error?.message || "Please try again",
+        description: error?.message || error?.details || "Please try again",
         variant: "destructive",
       })
     } finally {
