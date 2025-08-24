@@ -86,31 +86,31 @@ export default function TournamentsPage() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-lg p-6 mb-6">
+      <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-6 mb-6">
         <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-full bg-yellow-500/20 flex items-center justify-center">
-            <Trophy className="h-6 w-6 text-yellow-500" />
+          <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+            <Trophy className="h-6 w-6 text-blue-500" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold mb-1">Tournament Formats</h3>
+            <h3 className="font-semibold mb-1">🚀 Tournament System Ready!</h3>
             <p className="text-sm text-muted-foreground">
-              Choose from Snake Draft, Linear Draft, or Auction tournaments • Strategic drafting • Competitive brackets
-              • Prize pools up to $50K
+              <strong>How to create tournaments:</strong> Click any "Create Tournament" button below → Fill out the form
+              → Tournament goes live immediately for players to join → No authentication required!
             </p>
           </div>
           <div className="text-right">
             <div className="flex items-center gap-4">
               <div>
-                <div className="text-lg font-bold text-green-500">$50K</div>
-                <div className="text-xs text-muted-foreground">Max Prize Pool</div>
+                <div className="text-lg font-bold text-green-500">✅ Ready</div>
+                <div className="text-xs text-muted-foreground">System Status</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-blue-500">3 Formats</div>
-                <div className="text-xs text-muted-foreground">Draft Types</div>
+                <div className="text-lg font-bold text-blue-500">No Auth</div>
+                <div className="text-xs text-muted-foreground">Required</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-yellow-500">Live Brackets</div>
-                <div className="text-xs text-muted-foreground">Real-time</div>
+                <div className="text-lg font-bold text-yellow-500">Instant</div>
+                <div className="text-xs text-muted-foreground">Go Live</div>
               </div>
             </div>
           </div>
@@ -247,14 +247,32 @@ export default function TournamentsPage() {
           ) : tournaments.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-semibold mb-2">No active tournaments</h3>
-              <p className="text-sm mb-4">Create a new tournament to get started!</p>
-              <Button asChild>
-                <Link href="/tournaments/create?type=snake_draft">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Tournament
-                </Link>
-              </Button>
+              <h3 className="text-lg font-semibold mb-2">No tournaments yet - be the first!</h3>
+              <div className="max-w-md mx-auto space-y-3 mb-6">
+                <p className="text-sm">
+                  <strong>Ready to create tournaments:</strong>
+                </p>
+                <div className="text-xs space-y-1 text-left bg-muted/50 p-3 rounded-lg">
+                  <div>✅ Database connected and ready</div>
+                  <div>✅ No authentication required</div>
+                  <div>✅ Tournaments go live immediately</div>
+                  <div>✅ Players can join instantly</div>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-center">
+                <Button asChild size="lg">
+                  <Link href="/tournaments/create?type=snake_draft">
+                    <Zap className="h-4 w-4 mr-2" />
+                    Create Snake Tournament
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg">
+                  <Link href="/tournaments/create?type=auction_draft">
+                    <Gavel className="h-4 w-4 mr-2" />
+                    Create Auction Tournament
+                  </Link>
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

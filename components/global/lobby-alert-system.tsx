@@ -179,7 +179,7 @@ export function LobbyAlertSystem() {
     }
 
     checkAndCleanupLobbies()
-    intervalRef.current = setInterval(checkAndCleanupLobbies, 60000)
+    intervalRef.current = setInterval(checkAndCleanupLobbies, 120000) // 2 minutes instead of 1 minute
 
     return () => {
       if (intervalRef.current) {
