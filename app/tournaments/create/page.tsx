@@ -124,11 +124,56 @@ export default function CreateTournamentPage() {
       )
 
       console.log("[v0] Tournament created successfully:", tournament)
+
+      if (user?.id) {
+        try {
+          console.log("[v0] Adding tournament creator to lobby as first player")
+
+          // Check if user exists in users table, create if not
+          const { data: existingUser, error: userCheckError } = await supabase
+            .from("users")
+            .select("id, username")
+            .eq("id", user.id)
+            .single()
+
+          if (userCheckError && userCheckError.code === "PGRST116") {
+            // User doesn't exist, create them
+            console.log("[v0] Creating user record for tournament creator")
+            const { error: createUserError } = await supabase.from("users").insert({
+              id: user.id,
+              username: user.user_metadata?.username || user.email?.split("@")[0] || "Host",
+              email: user.email,
+              elo_rating: 1200, // Give host a decent starting ELO
+            })
+
+            if (createUserError) {
+              console.error("[v0] Error creating user:", createUserError)
+            }
+          }
+
+          // Add the creator as the first tournament participant
+          const { error: participantError } = await supabase.from("tournament_participants").insert({
+            tournament_id: tournament.id,
+            user_id: user.id,
+            status: "registered",
+            joined_at: new Date().toISOString(),
+          })
+
+          if (participantError) {
+            console.error("[v0] Error adding creator to tournament:", participantError)
+          } else {
+            console.log("[v0] Successfully added tournament creator as first player")
+          }
+        } catch (error) {
+          console.error("[v0] Error in host auto-join process:", error)
+        }
+      }
+
       router.push(`/tournaments/${tournament.id}/lobby`)
 
       toast({
         title: "Tournament created!",
-        description: "Players can now join the tournament pool",
+        description: "You've been added as the first player in the lobby",
       })
     } catch (error: any) {
       console.error("[v0] Error creating tournament - Full error object:", error)
