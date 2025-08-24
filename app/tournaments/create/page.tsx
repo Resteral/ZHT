@@ -95,7 +95,6 @@ export default function CreateTournamentPage() {
     try {
       console.log("[v0] Starting tournament creation")
       console.log("[v0] Tournament data:", formData)
-      console.log("[v0] Current user state:", user)
 
       const supabase = createClient()
 
@@ -103,32 +102,43 @@ export default function CreateTournamentPage() {
         data: { user: currentUser },
       } = await supabase.auth.getUser()
 
-      let actualUserId = currentUser?.id || user?.id
+      let actualUserId = currentUser?.id
       let dbUser = null
 
+      console.log("[v0] Current user from auth:", currentUser?.id ? "authenticated" : "not authenticated")
+
       if (actualUserId) {
+        // Check if user exists in database
         const { data: userData } = await supabase.from("users").select("id, username").eq("id", actualUserId).single()
 
         if (userData) {
           dbUser = userData
           console.log("[v0] User found in database:", userData.username)
-        }
-      }
+        } else {
+          // Create user in database if they don't exist
+          const { data: newUser } = await supabase
+            .from("users")
+            .insert({
+              id: actualUserId,
+              username: currentUser.email?.split("@")[0] || "User",
+              email: currentUser.email || "",
+              display_name: currentUser.user_metadata?.display_name || currentUser.email?.split("@")[0] || "User",
+              elo_rating: 1200,
+            })
+            .select()
+            .single()
 
-      if (!actualUserId) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (session?.user?.id) {
-          actualUserId = session.user.id
-          console.log("[v0] Using session user ID:", actualUserId)
+          if (newUser) {
+            dbUser = newUser
+            console.log("[v0] Created new user in database:", newUser.username)
+          }
         }
-      }
-
-      if (!actualUserId) {
+      } else {
+        // Only use system user if absolutely no authentication is available
         console.log("[v0] No authenticated user found, using system user for tournament creation")
-        actualUserId = "00000000-0000-0000-0000-000000000000" // System user fallback
+        actualUserId = "00000000-0000-0000-0000-000000000000"
 
+        // Ensure system user exists
         const { data: systemUser } = await supabase.from("users").select("id").eq("id", actualUserId).single()
 
         if (!systemUser) {
@@ -143,7 +153,7 @@ export default function CreateTournamentPage() {
         }
       }
 
-      console.log("[v0] Using user ID:", actualUserId)
+      console.log("[v0] Using user ID for tournament creation:", actualUserId)
 
       const startDateTime = new Date(formData.start_date).toISOString()
       const endDateTime = new Date(formData.end_date).toISOString()
@@ -208,8 +218,6 @@ export default function CreateTournamentPage() {
       console.error("[v0] Error code:", error?.code)
       console.error("[v0] Error details:", error?.details)
       console.error("[v0] Error hint:", error?.hint)
-
-      console.error("[v0] Stringified error:", JSON.stringify(error, null, 2))
 
       toast({
         title: "Failed to create tournament",
