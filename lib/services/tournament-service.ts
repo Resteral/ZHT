@@ -104,7 +104,7 @@ export const tournamentService = {
       start_date: new Date().toISOString(), // Start immediately
       end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // End in 1 year
       team_based: tournamentData.team_based || false,
-      settings: {
+      player_pool_settings: {
         draft_mode: tournamentData.draft_mode || "snake_draft",
         pick_time_limit: tournamentData.pick_time_limit || 60,
         auto_start: true, // Always auto-start
@@ -267,8 +267,8 @@ export const tournamentService = {
         throw new Error("Failed to get tournament participants")
       }
 
-      const numTeams = tournament.settings?.num_teams || 4
-      const playersPerTeam = tournament.settings?.players_per_team || 4
+      const numTeams = tournament.player_pool_settings?.num_teams || 4
+      const playersPerTeam = tournament.player_pool_settings?.players_per_team || 4
       const lobbiesCreated = []
 
       // Create lobbies for each team matchup

@@ -24,7 +24,7 @@ interface Tournament {
   description: string
   start_date: string
   max_participants: number
-  settings: {
+  player_pool_settings: {
     num_teams: number
     players_per_team: number
     bracket_type: string
@@ -159,10 +159,11 @@ export default function TournamentLobbyPage() {
 
     try {
       console.log("[v0] Initiating draft phase...")
-      const numCaptains = tournament.settings.num_teams
+      const numCaptains = tournament.player_pool_settings.num_teams
       const captains = players.slice(0, numCaptains)
 
-      const totalPlayersNeeded = tournament.settings.num_teams * tournament.settings.players_per_team
+      const totalPlayersNeeded =
+        tournament.player_pool_settings.num_teams * tournament.player_pool_settings.players_per_team
 
       const selectedPlayers = players.slice(0, totalPlayersNeeded)
       const excessPlayers = players.slice(totalPlayersNeeded)
@@ -197,7 +198,8 @@ export default function TournamentLobbyPage() {
   }
 
   const isUserInTournament = players.some((p) => p.id === currentUser?.id)
-  const totalPlayersNeeded = tournament.settings.num_teams * tournament.settings.players_per_team
+  const totalPlayersNeeded =
+    tournament.player_pool_settings.num_teams * tournament.player_pool_settings.players_per_team
   const progressPercentage = (players.length / totalPlayersNeeded) * 100
 
   return (
@@ -226,7 +228,8 @@ export default function TournamentLobbyPage() {
               <Progress value={progressPercentage} className="h-3" />
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {tournament.settings.num_teams} teams × {tournament.settings.players_per_team} players each
+                  {tournament.player_pool_settings.num_teams} teams × {tournament.player_pool_settings.players_per_team}{" "}
+                  players each
                 </span>
                 <span className="font-medium">{Math.max(0, totalPlayersNeeded - players.length)} more needed</span>
               </div>
@@ -251,7 +254,9 @@ export default function TournamentLobbyPage() {
                   <div
                     key={player.id}
                     className={`flex items-center justify-between p-3 rounded-lg border ${
-                      index < tournament.settings.num_teams ? "border-yellow-200 bg-yellow-50" : "border-border"
+                      index < tournament.player_pool_settings.num_teams
+                        ? "border-yellow-200 bg-yellow-50"
+                        : "border-border"
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -261,7 +266,7 @@ export default function TournamentLobbyPage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{player.username}</span>
-                          {index < tournament.settings.num_teams && (
+                          {index < tournament.player_pool_settings.num_teams && (
                             <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
                               <Crown className="h-3 w-3 mr-1" />
                               Captain
@@ -274,7 +279,7 @@ export default function TournamentLobbyPage() {
                     <div className="text-right">
                       <div className="text-sm font-medium">#{index + 1}</div>
                       <div className="text-xs text-muted-foreground">
-                        {index < tournament.settings.num_teams ? "Captain" : "Player"}
+                        {index < tournament.player_pool_settings.num_teams ? "Captain" : "Player"}
                       </div>
                     </div>
                   </div>
@@ -302,15 +307,15 @@ export default function TournamentLobbyPage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Format:</span>
-                  <span className="font-medium">{tournament.settings.bracket_type}</span>
+                  <span className="font-medium">{tournament.player_pool_settings.bracket_type}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Teams:</span>
-                  <span className="font-medium">{tournament.settings.num_teams}</span>
+                  <span className="font-medium">{tournament.player_pool_settings.num_teams}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Players per team:</span>
-                  <span className="font-medium">{tournament.settings.players_per_team}</span>
+                  <span className="font-medium">{tournament.player_pool_settings.players_per_team}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Start time:</span>
@@ -350,8 +355,8 @@ export default function TournamentLobbyPage() {
             <CardContent>
               <div className="text-sm text-yellow-700">
                 <p className="mb-2">
-                  The <strong>{tournament.settings.num_teams} highest ELO players</strong> will be selected as team
-                  captains.
+                  The <strong>{tournament.player_pool_settings.num_teams} highest ELO players</strong> will be selected
+                  as team captains.
                 </p>
                 <p>Captains will draft teams, then score live bracket games after the tournament.</p>
               </div>
