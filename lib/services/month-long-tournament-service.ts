@@ -140,7 +140,20 @@ export const monthLongTournamentService = {
   },
 
   async createTournamentPhases(tournamentId: string, startDate: string, durationDays: number) {
+    if (!startDate || startDate === "Invalid Date" || isNaN(Date.parse(startDate))) {
+      console.error("[v0] Invalid start date provided:", startDate)
+      throw new Error("Invalid start date provided for tournament phases")
+    }
+
     const start = new Date(startDate)
+
+    if (isNaN(start.getTime())) {
+      console.error("[v0] Failed to create valid Date object from:", startDate)
+      throw new Error("Failed to create valid date from provided start date")
+    }
+
+    console.log("[v0] Creating tournament phases with start date:", start.toISOString())
+
     const phases: Omit<TournamentPhase, "id">[] = []
 
     if (durationDays >= 30) {
