@@ -775,7 +775,8 @@ export default function Dashboard() {
   }, [authLoading])
 
   const renderAuthDebug = () => {
-    if (process.env.NODE_ENV !== "development") return null
+    // Only show debug in development builds, but check this differently
+    return null // Disable auth debug for now to prevent NODE_ENV client access
 
     return (
       <div className="fixed bottom-4 right-4 bg-black/80 text-white p-3 rounded-lg text-xs z-50">

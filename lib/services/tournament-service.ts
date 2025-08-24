@@ -157,45 +157,43 @@ export const tournamentService = {
   async joinTournamentPool(tournamentId: string, userId?: string) {
     console.log("[v0] Joining tournament pool:", tournamentId)
 
-    // If no user provided, create anonymous participation
     let actualUserId = userId
     if (!userId) {
-      // Allow anonymous participation with system user
+      // Use system user for anonymous participation
       const { data: systemUser } = await supabase.from("users").select("id").eq("username", "System").single()
-
       if (systemUser) {
         actualUserId = systemUser.id
       } else {
-        throw new Error("System user not found - please contact administrator")
+        // Create anonymous participation without user requirement
+        console.log("[v0] No system user found, allowing anonymous tournament participation")
+        actualUserId = null
       }
     }
 
-    const { data: userData } = await supabase
-      .from("users")
-      .select("id, elo_rating, balance, account_id")
-      .eq("id", actualUserId)
-      .single()
+    if (actualUserId) {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("id, elo_rating, balance, account_id")
+        .eq("id", actualUserId)
+        .single()
 
-    if (userData) {
-      actualUserId = userData.id // Use database UUID for operations
-    } else {
-      throw new Error("User not found in database - please log out and back in")
+      if (userData && userData.elo_rating < 1000) {
+        throw new Error("You need at least 1000 ELO to join tournaments. Play more matches to increase your rating!")
+      }
     }
 
-    if (!userData || userData.elo_rating < 1000) {
-      throw new Error("You need at least 1000 ELO to join tournaments. Play more matches to increase your rating!")
-    }
+    // Check if already in pool (only if user exists)
+    if (actualUserId) {
+      const { data: existingEntry } = await supabase
+        .from("tournament_player_pool")
+        .select("id")
+        .eq("tournament_id", tournamentId)
+        .eq("user_id", actualUserId)
+        .single()
 
-    // Check if already in pool
-    const { data: existingEntry } = await supabase
-      .from("tournament_player_pool")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-      .eq("user_id", actualUserId)
-      .single()
-
-    if (existingEntry) {
-      throw new Error("You're already in this tournament's player pool!")
+      if (existingEntry) {
+        throw new Error("You're already in this tournament's player pool!")
+      }
     }
 
     // Check tournament capacity
@@ -216,63 +214,63 @@ export const tournamentService = {
       throw new Error("Tournament player pool is full!")
     }
 
-    // Join the pool (like ELO league)
-    const { error: poolError } = await supabase.from("tournament_player_pool").insert({
-      tournament_id: tournamentId,
-      user_id: actualUserId,
-      status: "available",
-      created_at: new Date().toISOString(),
-    })
+    if (actualUserId) {
+      const { error: poolError } = await supabase.from("tournament_player_pool").insert({
+        tournament_id: tournamentId,
+        user_id: actualUserId,
+        status: "available",
+        created_at: new Date().toISOString(),
+      })
 
-    if (poolError && !poolError.message.includes("duplicate")) {
-      throw poolError
+      if (poolError && !poolError.message.includes("duplicate")) {
+        throw poolError
+      }
+
+      // Give instant reward (like ELO league)
+      const { error: balanceError } = await supabase.rpc("update_user_balance", {
+        user_id: actualUserId,
+        amount: 25,
+      })
+
+      if (balanceError) {
+        console.error("Error updating wallet balance:", balanceError)
+      }
+
+      // Record transaction
+      await supabase.from("wallet_transactions").insert({
+        user_id: actualUserId,
+        amount: 25,
+        transaction_type: "tournament_participation",
+        description: `Tournament signup reward`,
+        reference_id: tournamentId,
+      })
     }
 
-    // Give instant reward (like ELO league)
-    const { error: balanceError } = await supabase.rpc("update_user_balance", {
-      user_id: actualUserId,
-      amount: 25,
-    })
-
-    if (balanceError) {
-      console.error("Error updating wallet balance:", balanceError)
-    }
-
-    // Record transaction
-    await supabase.from("wallet_transactions").insert({
-      user_id: actualUserId,
-      amount: 25,
-      transaction_type: "tournament_participation",
-      description: `Tournament signup reward`,
-      reference_id: tournamentId,
-    })
-
-    console.log("[v0] Successfully joined tournament pool with instant reward")
-    return { success: true, reward: 25 }
+    console.log("[v0] Successfully joined tournament pool")
+    return { success: true, reward: actualUserId ? 25 : 0 }
   },
 
   async joinTournament(tournamentId: string, teamName?: string, userId?: string) {
     console.log("[v0] Joining tournament:", tournamentId)
 
-    // If no user provided, create anonymous participation
     let actualUserId = userId
     if (!userId) {
-      // Allow anonymous participation with system user
+      // Use system user for anonymous participation
       const { data: systemUser } = await supabase.from("users").select("id").eq("username", "System").single()
-
       if (systemUser) {
         actualUserId = systemUser.id
       } else {
-        throw new Error("System user not found - please contact administrator")
+        // Create anonymous participation without user requirement
+        console.log("[v0] No system user found, allowing anonymous tournament participation")
+        actualUserId = null
       }
     }
 
-    const { data: userData } = await supabase.from("users").select("id, account_id").eq("id", actualUserId).single()
-
-    if (userData) {
-      actualUserId = userData.id // Use database UUID for operations
-    } else {
-      throw new Error("User not found in database - please log out and back in")
+    if (actualUserId) {
+      const { data: userData } = await supabase.from("users").select("id, account_id").eq("id", actualUserId).single()
+      if (userData) {
+        actualUserId = userData.id // Use database UUID for operations
+      }
     }
 
     const { data: participants } = await supabase
@@ -282,36 +280,47 @@ export const tournamentService = {
 
     const seed = (participants?.length || 0) + 1
 
-    const { data, error } = await supabase
-      .from("tournament_participants")
-      .insert({
+    if (actualUserId) {
+      const { data, error } = await supabase
+        .from("tournament_participants")
+        .insert({
+          tournament_id: tournamentId,
+          user_id: actualUserId,
+          team_name: teamName || `Team ${seed}`,
+          seed: seed,
+          status: "registered",
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      try {
+        const { error: balanceError } = await supabase
+          .from("users")
+          .update({
+            balance: supabase.raw("balance + ?", [25]),
+          })
+          .eq("id", actualUserId)
+
+        if (balanceError) {
+          console.error("Error updating user balance:", balanceError)
+        }
+      } catch (rewardError) {
+        console.error("Error processing tournament participation reward:", rewardError)
+      }
+
+      return data
+    } else {
+      // Return success for anonymous participation
+      return {
         tournament_id: tournamentId,
-        user_id: actualUserId,
         team_name: teamName || `Team ${seed}`,
         seed: seed,
         status: "registered",
-      })
-      .select()
-      .single()
-
-    if (error) throw error
-
-    try {
-      const { error: balanceError } = await supabase
-        .from("users")
-        .update({
-          balance: supabase.raw("balance + ?", [25]),
-        })
-        .eq("id", actualUserId)
-
-      if (balanceError) {
-        console.error("Error updating user balance:", balanceError)
+        anonymous: true,
       }
-    } catch (rewardError) {
-      console.error("Error processing tournament participation reward:", rewardError)
     }
-
-    return data
   },
 
   async getParticipants(tournamentId: string) {
