@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Users, Clock, DollarSign, Crown, Gamepad2, Target, Zap } from "lucide-react"
+import { Trophy, Users, Clock, DollarSign, Crown, Gamepad2, Target, Zap, Play } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
 import Link from "next/link"
+import { UnifiedDraftSelector } from "@/components/draft/unified-draft-selector"
 
 interface Lobby {
   id: string
@@ -26,6 +27,7 @@ interface Lobby {
 export default function LobbiesPage() {
   const [lobbies, setLobbies] = useState<Lobby[]>([])
   const [tournaments, setTournaments] = useState<Lobby[]>([])
+  const [activeGames, setActiveGames] = useState<Lobby[]>([])
   const [loading, setLoading] = useState(true)
 
   const supabase = createBrowserClient(
@@ -47,6 +49,12 @@ export default function LobbiesPage() {
         .from("tournaments")
         .select("*")
         .in("status", ["registration", "team_building", "active"])
+        .order("created_at", { ascending: false })
+
+      const { data: matchesData } = await supabase
+        .from("matches")
+        .select("*")
+        .in("status", ["active", "drafting"])
         .order("created_at", { ascending: false })
 
       const formattedLobbies = (lobbiesData || []).map((lobby) => ({
@@ -76,8 +84,22 @@ export default function LobbiesPage() {
         tournament_type: tournament.tournament_type,
       }))
 
+      const formattedActiveGames = (matchesData || []).map((match) => ({
+        id: match.id,
+        name: match.name || `${match.match_type} Match`,
+        game_mode: match.match_type || "ELO Draft",
+        max_participants: match.max_participants || 8,
+        current_participants: match.current_participants || 0,
+        entry_fee: 0,
+        prize_pool: match.prize_pool || 0,
+        status: match.status,
+        created_at: match.created_at,
+        type: "lobby" as const,
+      }))
+
       setLobbies(formattedLobbies)
       setTournaments(formattedTournaments)
+      setActiveGames(formattedActiveGames)
     } catch (error) {
       console.error("Error fetching live content:", error)
     } finally {
@@ -102,9 +124,17 @@ export default function LobbiesPage() {
       })
       .subscribe()
 
+    const matchesSubscription = supabase
+      .channel("matches-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => {
+        fetchLiveContent()
+      })
+      .subscribe()
+
     return () => {
       lobbiesSubscription.unsubscribe()
       tournamentsSubscription.unsubscribe()
+      matchesSubscription.unsubscribe()
     }
   }, [fetchLiveContent])
 
@@ -115,6 +145,7 @@ export default function LobbiesPage() {
         return "bg-yellow-500"
       case "active":
       case "team_building":
+      case "drafting":
         return "bg-green-500"
       default:
         return "bg-gray-500"
@@ -196,22 +227,49 @@ export default function LobbiesPage() {
     )
   }
 
-  const allContent = [...lobbies, ...tournaments].sort(
+  const allContent = [...lobbies, ...tournaments, ...activeGames].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   )
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Live Lobbies & Tournaments</h1>
-        <p className="text-muted-foreground">
-          Join active lobbies and tournaments from ELO drafts to competitive tournaments
-        </p>
+        <h1 className="text-4xl font-bold mb-2">ELO Draft Lobbies & Active Games</h1>
+        <p className="text-muted-foreground">Join ELO draft lobbies, active games, and competitive tournaments</p>
+      </div>
+
+      <div className="mb-8 grid md:grid-cols-2 gap-6">
+        <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              Create ELO Draft Lobby
+            </CardTitle>
+            <CardDescription>Start a new ELO draft in any format (1v1 to 6v6)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <UnifiedDraftSelector buttonText="Create Draft Lobby" buttonSize="lg" className="w-full" mode="create" />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-secondary/10 to-primary/10 border-secondary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Play className="h-5 w-5" />
+              Browse All Formats
+            </CardTitle>
+            <CardDescription>View all ELO draft formats and join existing lobbies</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <UnifiedDraftSelector buttonText="Browse Draft Formats" buttonSize="lg" className="w-full" mode="both" />
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="all">All Live ({allContent.length})</TabsTrigger>
+          <TabsTrigger value="active">Active Games ({activeGames.length})</TabsTrigger>
           <TabsTrigger value="lobbies">Lobbies ({lobbies.length})</TabsTrigger>
           <TabsTrigger value="tournaments">Tournaments ({tournaments.length})</TabsTrigger>
         </TabsList>
@@ -222,16 +280,33 @@ export default function LobbiesPage() {
               <CardContent>
                 <Gamepad2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-xl font-semibold mb-2">No Live Content</h3>
-                <p className="text-muted-foreground mb-4">There are currently no active lobbies or tournaments.</p>
-                <Button asChild>
-                  <Link href="/draft">Create New Lobby</Link>
-                </Button>
+                <p className="text-muted-foreground mb-4">Create a new ELO draft lobby to get started!</p>
+                <UnifiedDraftSelector buttonText="Create ELO Draft" mode="create" />
               </CardContent>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {allContent.map((item) => (
                 <LobbyCard key={`${item.type}-${item.id}`} lobby={item} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="active" className="mt-6">
+          {activeGames.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <Play className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-xl font-semibold mb-2">No Active Games</h3>
+                <p className="text-muted-foreground mb-4">No games are currently in progress.</p>
+                <UnifiedDraftSelector buttonText="Start New Game" mode="create" />
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeGames.map((game) => (
+                <LobbyCard key={game.id} lobby={game} />
               ))}
             </div>
           )}

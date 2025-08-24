@@ -27,6 +27,7 @@ import {
   Menu,
   DollarSign,
   TrendingUp,
+  Gamepad2,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import Image from "next/image"
@@ -34,6 +35,7 @@ import Image from "next/image"
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Players", href: "/players", icon: Users },
+  { name: "Lobbies", href: "/lobbies", icon: Gamepad2 }, // Added Lobbies tab for ELO draft and active games
   { name: "Leagues", href: "/leagues", icon: Trophy },
   { name: "Tournaments", href: "/tournaments", icon: Trophy },
   { name: "Schedule", href: "/schedule", icon: Calendar },
@@ -220,10 +222,6 @@ export function Navigation() {
                     </DropdownMenuItem>
                   </>
                 )}
-                <DropdownMenuItem asChild>
-                  <Link href="/admin/reset-data">Reset Data</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
