@@ -129,6 +129,7 @@ export default function TournamentLobbyPage() {
       } else {
         setTimeUntilStart("Starting now!")
         if (tournament.status === "registration") {
+          console.log("[v0] Tournament timer reached zero, automatically starting draft...")
           startDraft()
         }
       }
@@ -157,6 +158,7 @@ export default function TournamentLobbyPage() {
     if (!tournament) return
 
     try {
+      console.log("[v0] Initiating draft phase...")
       const numCaptains = tournament.settings.num_teams
       const captains = players.slice(0, numCaptains)
 
@@ -171,6 +173,7 @@ export default function TournamentLobbyPage() {
 
       await supabase.from("tournaments").update({ status: "drafting" }).eq("id", tournamentId)
 
+      console.log("[v0] Transitioning to draft page...")
       router.push(`/tournaments/${tournamentId}/draft`)
     } catch (error) {
       console.error("[v0] Error starting draft:", error)

@@ -338,8 +338,7 @@ export const monthLongTournamentService = {
       .from("tournaments")
       .select(`
         *,
-        participant_count:tournament_participants(count),
-        creator:users!tournaments_created_by_fkey(username)
+        participant_count:tournament_participants(count)
       `)
       .gte("end_date", new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()) // At least 2 weeks duration
 
@@ -349,7 +348,12 @@ export const monthLongTournamentService = {
 
     const { data: tournaments, error } = await query.order("created_at", { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      console.error("[v0] Error fetching tournaments:", error)
+      throw error
+    }
+
+    console.log("[v0] Raw tournament data from database:", tournaments)
 
     const enhancedTournaments = await Promise.all(
       tournaments.map(async (tournament) => {
@@ -366,6 +370,7 @@ export const monthLongTournamentService = {
       }),
     )
 
+    console.log("[v0] Enhanced tournaments with phases:", enhancedTournaments)
     return enhancedTournaments
   },
 
