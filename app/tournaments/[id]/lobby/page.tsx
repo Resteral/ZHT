@@ -43,12 +43,17 @@ export default function TournamentLobbyPage() {
   const [timeUntilStart, setTimeUntilStart] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   const supabase = createClient()
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log("[v0] Fetching tournament data for ID:", tournamentId)
+        setError(null) // Clear any previous errors
+
         const {
           data: { user },
         } = await supabase.auth.getUser()
@@ -60,7 +65,19 @@ export default function TournamentLobbyPage() {
           .eq("id", tournamentId)
           .single()
 
-        if (tournamentError) throw tournamentError
+        if (tournamentError) {
+          console.error("[v0] Tournament query error:", tournamentError)
+          if (tournamentError.code === "PGRST116" && retryCount < 3) {
+            console.log("[v0] Tournament not found, retrying in 1 second... (attempt", retryCount + 1, ")")
+            setTimeout(() => {
+              setRetryCount((prev) => prev + 1)
+            }, 1000)
+            return
+          }
+          throw new Error("Tournament not found. It may still be loading.")
+        }
+
+        console.log("[v0] Tournament loaded successfully:", tournamentData.name)
         setTournament(tournamentData)
 
         const { data: participantsData, error: participantsError } = await supabase
@@ -72,19 +89,26 @@ export default function TournamentLobbyPage() {
           .eq("tournament_id", tournamentId)
           .eq("status", "registered")
 
-        if (participantsError) throw participantsError
+        if (participantsError) {
+          console.error("[v0] Participants query error:", participantsError)
+          setPlayers([])
+        } else {
+          const playersData = participantsData
+            .map((p: any) => ({
+              id: p.user_id,
+              username: p.users.username,
+              elo_rating: p.users.elo_rating || 1000,
+            }))
+            .sort((a: Player, b: Player) => b.elo_rating - a.elo_rating)
 
-        const playersData = participantsData
-          .map((p: any) => ({
-            id: p.user_id,
-            username: p.users.username,
-            elo_rating: p.users.elo_rating || 1000,
-          }))
-          .sort((a: Player, b: Player) => b.elo_rating - a.elo_rating)
+          console.log("[v0] Loaded", playersData.length, "tournament participants")
+          setPlayers(playersData)
+        }
 
-        setPlayers(playersData)
-      } catch (error) {
+        setRetryCount(0)
+      } catch (error: any) {
         console.error("[v0] Error fetching tournament data:", error)
+        setError(error.message || "Failed to load tournament")
       } finally {
         setLoading(false)
       }
@@ -103,6 +127,7 @@ export default function TournamentLobbyPage() {
           filter: `tournament_id=eq.${tournamentId}`,
         },
         () => {
+          console.log("[v0] Tournament participants updated, refreshing data")
           fetchData()
         },
       )
@@ -111,7 +136,7 @@ export default function TournamentLobbyPage() {
     return () => {
       subscription.unsubscribe()
     }
-  }, [tournamentId])
+  }, [tournamentId, retryCount])
 
   useEffect(() => {
     const updateTimer = () => {
@@ -184,7 +209,37 @@ export default function TournamentLobbyPage() {
   if (loading) {
     return (
       <div className="container mx-auto py-8">
-        <div className="text-center">Loading tournament lobby...</div>
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <div>Loading tournament lobby...</div>
+          {retryCount > 0 && (
+            <div className="text-sm text-muted-foreground">
+              Tournament was just created, loading... (attempt {retryCount + 1})
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center space-y-4">
+          <div className="text-destructive font-medium">Error loading tournament</div>
+          <div className="text-sm text-muted-foreground">{error}</div>
+          <Button
+            onClick={() => {
+              setLoading(true)
+              setError(null)
+              setRetryCount(0)
+              window.location.reload()
+            }}
+            variant="outline"
+          >
+            Try Again
+          </Button>
+        </div>
       </div>
     )
   }
@@ -192,7 +247,13 @@ export default function TournamentLobbyPage() {
   if (!tournament) {
     return (
       <div className="container mx-auto py-8">
-        <div className="text-center">Tournament not found</div>
+        <div className="text-center space-y-4">
+          <div>Tournament not found</div>
+          <div className="text-sm text-muted-foreground">The tournament may still be loading or doesn't exist.</div>
+          <Button onClick={() => router.push("/tournaments")} variant="outline">
+            Back to Tournaments
+          </Button>
+        </div>
       </div>
     )
   }

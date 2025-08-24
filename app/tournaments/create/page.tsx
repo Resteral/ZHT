@@ -102,10 +102,13 @@ export default function CreateTournamentPage() {
         data: { user: currentUser },
       } = await supabase.auth.getUser()
 
-      const actualUserId = currentUser?.id
+      // Try multiple sources for user ID
+      const actualUserId = currentUser?.id || user?.id
       let dbUser = null
 
       console.log("[v0] Current user from auth:", currentUser?.id ? "authenticated" : "not authenticated")
+      console.log("[v0] Existing user state:", user?.id ? "authenticated" : "not authenticated")
+      console.log("[v0] Final user ID:", actualUserId || "none")
 
       if (actualUserId) {
         // Check if user exists in database
@@ -116,13 +119,16 @@ export default function CreateTournamentPage() {
           console.log("[v0] User found in database:", userData.username)
         } else {
           // Create user in database if they don't exist
+          const userEmail = currentUser?.email || user?.email
+          const userName = userEmail?.split("@")[0] || "User"
+
           const { data: newUser } = await supabase
             .from("users")
             .insert({
               id: actualUserId,
-              username: currentUser.email?.split("@")[0] || "User",
-              email: currentUser.email || "",
-              display_name: currentUser.user_metadata?.display_name || currentUser.email?.split("@")[0] || "User",
+              username: userName,
+              email: userEmail || "",
+              display_name: currentUser?.user_metadata?.display_name || userName,
               elo_rating: 1200,
             })
             .select()
@@ -136,7 +142,48 @@ export default function CreateTournamentPage() {
       }
 
       if (!actualUserId) {
-        throw new Error("Authentication required to create tournaments. Please log in and try again.")
+        console.log("[v0] No user ID found, checking session...")
+
+        // Try to get session as final fallback
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (session?.user?.id) {
+          console.log("[v0] Found user in session, proceeding with tournament creation")
+          // Use session user ID as fallback
+          const sessionUserId = session.user.id
+
+          // Create tournament with session user
+          const tournamentData = {
+            name: formData.name,
+            description: `${formData.settings.num_teams} teams, ${formData.settings.players_per_team} players each`,
+            tournament_type: formData.settings.draft_mode,
+            duration_days: Math.ceil(
+              (new Date(formData.end_date).getTime() - new Date(formData.start_date).getTime()) / (1000 * 60 * 60 * 24),
+            ),
+            max_participants: formData.max_participants,
+            entry_fee: 0,
+            start_date: new Date(formData.start_date).toISOString(),
+            end_date: new Date(formData.end_date).toISOString(),
+            game: formData.game,
+            player_pool_settings: formData.settings,
+            created_by: sessionUserId,
+          }
+
+          console.log("[v0] Creating tournament with session user:", sessionUserId)
+
+          const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
+          const tournament = await monthLongTournamentService.createMonthLongTournament(tournamentData, sessionUserId)
+
+          router.push(`/tournaments/${tournament.id}/lobby`)
+          toast({
+            title: "Tournament created!",
+            description: "Tournament created successfully",
+          })
+          return
+        }
+
+        throw new Error("Authentication required to create tournaments. Please refresh the page and try again.")
       }
 
       console.log("[v0] Using authenticated user ID for tournament creation:", actualUserId)
