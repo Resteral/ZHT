@@ -66,7 +66,7 @@ export const tournamentService = {
   },
 
   async createTournament(tournamentData: any, userId?: string) {
-    console.log("[v0] Creating tournament with data:", tournamentData)
+    console.log("[v0] Creating tournament with unlimited capacity:", tournamentData)
 
     console.log("[v0] Creating anonymous tournament with no user affiliation")
 
@@ -77,30 +77,24 @@ export const tournamentService = {
       description: tournamentData.description,
       game: tournamentData.game || "hockey",
       tournament_type: tournamentData.tournament_type || "snake_draft",
-      max_participants: tournamentData.max_participants || 16,
-      max_teams: Math.ceil((tournamentData.max_participants || 16) / (tournamentData.players_per_team || 4)),
-      entry_fee: tournamentData.entry_fee || 0,
+      max_participants: 999999, // Unlimited participants
+      max_teams: 999999, // Unlimited teams
+      entry_fee: 0, // Always free
       prize_pool: tournamentData.prize_pool || 0,
-      status: "registration", // Immediate registration
-      start_date: tournamentData.start_date || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      end_date: tournamentData.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      status: "registration", // Always open for registration
+      start_date: new Date().toISOString(), // Start immediately
+      end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // End in 1 year
       team_based: tournamentData.team_based || false,
-      // Store all additional settings in the jsonb field
-      player_pool_settings: {
+      settings: {
         draft_mode: tournamentData.draft_mode || "snake_draft",
         pick_time_limit: tournamentData.pick_time_limit || 60,
-        auto_start: tournamentData.auto_start || true,
-        allow_trades: tournamentData.allow_trades || false,
-        auction_budget: tournamentData.auction_budget || 1000,
-        bid_time_limit: tournamentData.bid_time_limit || 30,
-        enable_player_pool: tournamentData.enable_player_pool || true,
-        num_teams: tournamentData.num_teams || 4,
+        auto_start: true, // Always auto-start
+        num_teams: 999999, // Unlimited teams
         players_per_team: tournamentData.players_per_team || 4,
-        max_pool_size: tournamentData.max_pool_size || tournamentData.max_participants || 30,
-        registration_open: true, // Enable immediate registration
-        registration_opens: new Date().toISOString(), // Open now
-        registration_closes: tournamentData.start_date || new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
-        ...tournamentData.player_pool_settings,
+        create_lobbies_on_finish: true,
+        instant_access: true, // New flag for instant access
+        no_restrictions: true, // New flag to bypass all checks
+        ...tournamentData.settings,
       },
     }
 
@@ -111,15 +105,15 @@ export const tournamentService = {
           name: tournamentData.name,
           description: tournamentData.description,
           tournament_type:
-            tournamentData.player_pool_settings.draft_type === "snake"
+            tournamentData.settings?.draft_type === "snake"
               ? "snake_draft"
-              : tournamentData.player_pool_settings.draft_type === "linear"
+              : tournamentData.settings?.draft_type === "linear"
                 ? "linear_draft"
                 : "auction_draft",
           duration_days: tournamentData.duration_days || 30,
-          max_participants: tournamentData.max_participants,
-          entry_fee: tournamentData.entry_fee,
-          start_date: tournamentData.start_date,
+          max_participants: 999999, // Unlimited
+          entry_fee: 0, // Always free
+          start_date: new Date().toISOString(), // Start immediately
         },
         null,
       )
@@ -137,7 +131,7 @@ export const tournamentService = {
       throw error
     }
 
-    console.log("[v0] Anonymous tournament created successfully:", data)
+    console.log("[v0] Unlimited tournament created successfully:", data)
 
     const { data: verifyData, error: verifyError } = await supabase
       .from("tournaments")
@@ -150,117 +144,19 @@ export const tournamentService = {
       throw new Error("Tournament was not saved properly to database")
     }
 
-    console.log("[v0] Anonymous tournament verified and ready for immediate signup:", verifyData.name)
+    console.log("[v0] Tournament verified and ready for unlimited instant signup:", verifyData.name)
     return data
   },
 
-  async joinTournamentPool(tournamentId: string, userId?: string) {
-    console.log("[v0] Joining tournament pool:", tournamentId)
-
-    let actualUserId = userId
-    if (!userId) {
-      // Use system user for anonymous participation
-      const { data: systemUser } = await supabase.from("users").select("id").eq("username", "System").single()
-      if (systemUser) {
-        actualUserId = systemUser.id
-      } else {
-        // Create anonymous participation without user requirement
-        console.log("[v0] No system user found, allowing anonymous tournament participation")
-        actualUserId = null
-      }
-    }
-
-    if (actualUserId) {
-      const { data: userData } = await supabase
-        .from("users")
-        .select("id, elo_rating, balance, account_id")
-        .eq("id", actualUserId)
-        .single()
-
-      if (userData && userData.elo_rating < 1000) {
-        throw new Error("You need at least 1000 ELO to join tournaments. Play more matches to increase your rating!")
-      }
-    }
-
-    // Check if already in pool (only if user exists)
-    if (actualUserId) {
-      const { data: existingEntry } = await supabase
-        .from("tournament_player_pool")
-        .select("id")
-        .eq("tournament_id", tournamentId)
-        .eq("user_id", actualUserId)
-        .single()
-
-      if (existingEntry) {
-        throw new Error("You're already in this tournament's player pool!")
-      }
-    }
-
-    // Check tournament capacity
-    const { data: tournament } = await supabase
-      .from("tournaments")
-      .select("player_pool_settings, max_participants")
-      .eq("id", tournamentId)
-      .single()
-
-    const maxPoolSize = tournament?.player_pool_settings?.max_pool_size || tournament?.max_participants || 30
-
-    const { data: currentPool } = await supabase
-      .from("tournament_player_pool")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-
-    if (currentPool && currentPool.length >= maxPoolSize) {
-      throw new Error("Tournament player pool is full!")
-    }
-
-    if (actualUserId) {
-      const { error: poolError } = await supabase.from("tournament_player_pool").insert({
-        tournament_id: tournamentId,
-        user_id: actualUserId,
-        status: "available",
-        created_at: new Date().toISOString(),
-      })
-
-      if (poolError && !poolError.message.includes("duplicate")) {
-        throw poolError
-      }
-
-      // Give instant reward (like ELO league)
-      const { error: balanceError } = await supabase.rpc("update_user_balance", {
-        user_id: actualUserId,
-        amount: 25,
-      })
-
-      if (balanceError) {
-        console.error("Error updating wallet balance:", balanceError)
-      }
-
-      // Record transaction
-      await supabase.from("wallet_transactions").insert({
-        user_id: actualUserId,
-        amount: 25,
-        transaction_type: "tournament_participation",
-        description: `Tournament signup reward`,
-        reference_id: tournamentId,
-      })
-    }
-
-    console.log("[v0] Successfully joined tournament pool")
-    return { success: true, reward: actualUserId ? 25 : 0 }
-  },
-
   async joinTournament(tournamentId: string, teamName?: string, userId?: string) {
-    console.log("[v0] Joining tournament:", tournamentId)
+    console.log("[v0] Joining tournament with no restrictions:", tournamentId)
 
     let actualUserId = userId
     if (!userId) {
-      // Use system user for anonymous participation
       const { data: systemUser } = await supabase.from("users").select("id").eq("username", "System").single()
       if (systemUser) {
         actualUserId = systemUser.id
       } else {
-        // Create anonymous participation without user requirement
         console.log("[v0] No system user found, allowing anonymous tournament participation")
         actualUserId = null
       }
@@ -269,7 +165,7 @@ export const tournamentService = {
     if (actualUserId) {
       const { data: userData } = await supabase.from("users").select("id, account_id").eq("id", actualUserId).single()
       if (userData) {
-        actualUserId = userData.id // Use database UUID for operations
+        actualUserId = userData.id
       }
     }
 
@@ -293,7 +189,9 @@ export const tournamentService = {
         .select()
         .single()
 
-      if (error) throw error
+      if (error && !error.message.includes("duplicate")) {
+        throw error
+      }
 
       try {
         const { error: balanceError } = await supabase
@@ -310,15 +208,112 @@ export const tournamentService = {
         console.error("Error processing tournament participation reward:", rewardError)
       }
 
-      return data
+      return data || { success: true, message: "Already joined" }
     } else {
-      // Return success for anonymous participation
       return {
         tournament_id: tournamentId,
         team_name: teamName || `Team ${seed}`,
         seed: seed,
         status: "registered",
         anonymous: true,
+      }
+    }
+  },
+
+  async createLobbiesFromTournament(tournamentId: string) {
+    console.log("[v0] Creating lobbies from finished tournament:", tournamentId)
+
+    try {
+      // Get tournament details
+      const { data: tournament, error: tournamentError } = await supabase
+        .from("tournaments")
+        .select("*")
+        .eq("id", tournamentId)
+        .single()
+
+      if (tournamentError || !tournament) {
+        throw new Error("Tournament not found")
+      }
+
+      // Get tournament participants
+      const { data: participants, error: participantsError } = await supabase
+        .from("tournament_participants")
+        .select(`
+          *,
+          user:users(username, elo_rating)
+        `)
+        .eq("tournament_id", tournamentId)
+
+      if (participantsError) {
+        throw new Error("Failed to get tournament participants")
+      }
+
+      const numTeams = tournament.settings?.num_teams || 4
+      const playersPerTeam = tournament.settings?.players_per_team || 4
+      const lobbiesCreated = []
+
+      // Create lobbies for each team matchup
+      for (let i = 0; i < numTeams; i += 2) {
+        const lobbyName = `${tournament.name} - Match ${Math.floor(i / 2) + 1}`
+
+        const { data: lobby, error: lobbyError } = await supabase
+          .from("matches")
+          .insert({
+            name: lobbyName,
+            match_type: "4v4_draft",
+            status: "waiting",
+            max_participants: playersPerTeam * 2,
+            description: `Tournament match from ${tournament.name}`,
+            game_state: "lobby",
+            tournament_id: tournamentId,
+          })
+          .select()
+          .single()
+
+        if (lobbyError) {
+          console.error("Error creating lobby:", lobbyError)
+          continue
+        }
+
+        lobbiesCreated.push(lobby)
+        console.log("[v0] Created lobby:", lobby.id, "for tournament:", tournamentId)
+      }
+
+      // Update tournament status to completed
+      await supabase
+        .from("tournaments")
+        .update({
+          status: "completed",
+          lobbies_created: lobbiesCreated.length,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", tournamentId)
+
+      console.log("[v0] Successfully created", lobbiesCreated.length, "lobbies from tournament")
+      return lobbiesCreated
+    } catch (error) {
+      console.error("[v0] Error creating lobbies from tournament:", error)
+      throw error
+    }
+  },
+
+  async finishTournament(tournamentId: string) {
+    console.log("[v0] Finishing tournament and creating lobbies:", tournamentId)
+
+    try {
+      const lobbies = await this.createLobbiesFromTournament(tournamentId)
+
+      return {
+        success: true,
+        message: `Tournament finished! Created ${lobbies.length} lobbies for matches.`,
+        lobbies: lobbies,
+      }
+    } catch (error) {
+      console.error("[v0] Error finishing tournament:", error)
+      return {
+        success: false,
+        message: `Failed to finish tournament: ${error instanceof Error ? error.message : "Unknown error"}`,
+        lobbies: [],
       }
     }
   },

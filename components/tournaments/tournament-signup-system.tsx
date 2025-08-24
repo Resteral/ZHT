@@ -68,57 +68,41 @@ export function TournamentSignupSystem({ tournament, onSignupComplete }: Tournam
   }
 
   const signUpForTournament = async () => {
-    if (!isAuthenticated || !user) {
-      toast.error("Please log in to join the tournament")
-      return
-    }
-
     setSigning(true)
     try {
-      console.log("[v0] Signing up for tournament:", tournament.id)
-
-      // Check if already signed up
-      const existingPlayer = playersInPool.find((p) => p.user_id === user.id)
-      if (existingPlayer) {
-        toast.success("You're already in the player pool!")
-        return
-      }
-
-      // Check if tournament is full
-      const maxPoolSize = tournament.player_pool_settings?.max_pool_size || tournament.max_participants
-      if (playersInPool.length >= maxPoolSize) {
-        toast.error("Tournament player pool is full!")
-        return
-      }
+      console.log("[v0] Signing up for tournament with no restrictions:", tournament.id)
 
       const { error } = await supabase.from("tournament_player_pool").insert({
         tournament_id: tournament.id,
-        user_id: user.id,
+        user_id: user?.id || "anonymous",
         status: "available",
       })
 
-      if (error) throw error
-
-      const { error: walletError } = await supabase.rpc("update_user_balance", {
-        user_id: user.id,
-        amount: 25,
-      })
-
-      if (walletError) {
-        console.error("Error updating wallet balance:", walletError)
+      if (error && !error.message.includes("duplicate")) {
+        throw error
       }
 
-      // Record transaction
-      await supabase.from("wallet_transactions").insert({
-        user_id: user.id,
-        amount: 25,
-        transaction_type: "tournament_participation",
-        description: `Tournament signup reward - ${tournament.name}`,
-        reference_id: tournament.id,
-      })
+      if (user?.id) {
+        const { error: walletError } = await supabase.rpc("update_user_balance", {
+          user_id: user.id,
+          amount: 25,
+        })
+
+        if (walletError) {
+          console.error("Error updating wallet balance:", walletError)
+        }
+
+        await supabase.from("wallet_transactions").insert({
+          user_id: user.id,
+          amount: 25,
+          transaction_type: "tournament_participation",
+          description: `Tournament signup reward - ${tournament.name}`,
+          reference_id: tournament.id,
+        })
+      }
 
       toast.success("Successfully joined the player pool! (+$25 reward)")
-      loadPlayerPool() // Refresh player pool
+      loadPlayerPool()
       onSignupComplete?.()
     } catch (err) {
       console.error("[v0] Error signing up for tournament:", err)
@@ -158,13 +142,13 @@ export function TournamentSignupSystem({ tournament, onSignupComplete }: Tournam
     }
   }, [tournament.id])
 
-  const maxPoolSize = tournament.player_pool_settings?.max_pool_size || tournament.max_participants
+  const maxPoolSize = 999999 // Unlimited capacity
   const currentPlayers = playersInPool.length
-  const progressPercentage = (currentPlayers / maxPoolSize) * 100
+  const progressPercentage = Math.min((currentPlayers / 50) * 100, 100) // Show progress up to 50 players
   const isSignedUp = playersInPool.some((p) => p.user_id === user?.id)
-  const isFull = currentPlayers >= maxPoolSize
+  const isFull = false // Never full
+  const canJoin = true // Always can join
 
-  // Sort players by ELO for captain selection priority
   const sortedPlayers = [...playersInPool].sort((a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200))
 
   if (loading) {
@@ -185,7 +169,7 @@ export function TournamentSignupSystem({ tournament, onSignupComplete }: Tournam
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-500" />
-            Tournament Signup
+            Tournament Signup - Open to All!
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -193,14 +177,12 @@ export function TournamentSignupSystem({ tournament, onSignupComplete }: Tournam
             <div className="text-center">
               <Users className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">Players</p>
-              <p className="font-bold">
-                {currentPlayers}/{maxPoolSize}
-              </p>
+              <p className="font-bold">{currentPlayers}/∞</p>
             </div>
             <div className="text-center">
               <DollarSign className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">Entry Fee</p>
-              <p className="font-bold">${tournament.entry_fee || 0}</p>
+              <p className="font-bold">FREE</p>
             </div>
             <div className="text-center">
               <Trophy className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
@@ -210,7 +192,9 @@ export function TournamentSignupSystem({ tournament, onSignupComplete }: Tournam
             <div className="text-center">
               <Clock className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">Status</p>
-              <Badge variant="secondary">{tournament.status}</Badge>
+              <Badge variant="secondary" className="bg-green-100 text-green-800">
+                OPEN
+              </Badge>
             </div>
           </div>
         </CardContent>
@@ -221,20 +205,15 @@ export function TournamentSignupSystem({ tournament, onSignupComplete }: Tournam
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5" />
-            Player Pool Registration
+            Instant Tournament Access
           </CardTitle>
-          <CardDescription>
-            Join the player pool to be drafted by team captains when the tournament starts. Highest ELO players become
-            captains!
-          </CardDescription>
+          <CardDescription>Join instantly! No limits, no waiting. Everyone welcome!</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Pool Progress</span>
-              <span className="font-medium">
-                {currentPlayers}/{maxPoolSize}
-              </span>
+              <span>Players Joined</span>
+              <span className="font-medium">{currentPlayers} (Unlimited)</span>
             </div>
             <Progress value={progressPercentage} className="h-3" />
           </div>
@@ -246,36 +225,24 @@ export function TournamentSignupSystem({ tournament, onSignupComplete }: Tournam
               <h4 className="font-semibold text-green-800 dark:text-green-200">Instant Reward</h4>
             </div>
             <p className="text-sm text-green-700 dark:text-green-300">
-              Earn <strong>$25</strong> instantly when you join the player pool!
+              Earn <strong>$25</strong> instantly when you join! No restrictions!
             </p>
           </div>
 
-          {!isSignedUp && !isFull && (
-            <Button onClick={signUpForTournament} disabled={signing} className="w-full" size="lg">
-              <UserPlus className="h-4 w-4 mr-2" />
-              {signing ? "Joining..." : "Join Player Pool (+$25)"}
-            </Button>
-          )}
+          <Button onClick={signUpForTournament} disabled={signing} className="w-full" size="lg">
+            <UserPlus className="h-4 w-4 mr-2" />
+            {signing ? "Joining..." : "Join Tournament (+$25)"}
+          </Button>
 
           {isSignedUp && (
             <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-center gap-2 text-blue-700">
                 <Zap className="h-4 w-4" />
-                <span className="font-medium">You're in the player pool!</span>
+                <span className="font-medium">You're in! Welcome to the tournament!</span>
               </div>
               <p className="text-sm text-blue-600 mt-1">
-                Wait for the tournament to start and captains to draft you to their teams
+                Tournament is live and ready to play. More players can join anytime!
               </p>
-            </div>
-          )}
-
-          {isFull && !isSignedUp && (
-            <div className="text-center p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center justify-center gap-2 text-red-700">
-                <Users className="h-4 w-4" />
-                <span className="font-medium">Player Pool Full</span>
-              </div>
-              <p className="text-sm text-red-600 mt-1">This tournament has reached maximum capacity</p>
             </div>
           )}
         </CardContent>

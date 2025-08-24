@@ -16,6 +16,7 @@ import { CaptainSelectionInterface } from "@/components/tournaments/captain-sele
 import { DraftInitiationSystem } from "@/components/tournaments/draft-initiation-system"
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { EloStyleTournament } from "@/components/tournaments/elo-style-tournament"
+import { TournamentJoinInterface } from "@/components/tournaments/tournament-join-interface"
 
 interface TournamentPageProps {
   params: {
@@ -225,8 +226,9 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="join">Join Tournament</TabsTrigger>
           <TabsTrigger value="signup">Signup</TabsTrigger>
           <TabsTrigger value="pools">Player Pools</TabsTrigger>
           <TabsTrigger value="captains">Captains</TabsTrigger>
@@ -291,6 +293,10 @@ export default function TournamentPage({ params }: TournamentPageProps) {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="join" className="space-y-6">
+          <TournamentJoinInterface tournamentId={tournament.id} tournament={tournament} />
         </TabsContent>
 
         <TabsContent value="signup" className="space-y-6">

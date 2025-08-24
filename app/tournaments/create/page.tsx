@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Trophy, Users, Calendar, DollarSign, ArrowLeft, Zap, Target, Settings, Crown, Shield } from "lucide-react"
+import { Trophy, Users, Calendar, DollarSign, ArrowLeft, Zap, Settings, Crown, Shield } from "lucide-react"
 import { tournamentService } from "@/lib/services/tournament-service"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "@/components/ui/use-toast"
@@ -84,21 +84,19 @@ export default function CreateTournamentPage() {
     featured: false,
     duration_days:
       tournamentType === "snake_draft" || tournamentType === "linear_draft" || tournamentType === "auction" ? 30 : 3,
-    enable_player_pool: tournamentType === "team" ? true : false,
-    player_pool_settings: {
-      max_teams: 8,
-      players_per_team: 5,
-      max_pool_size: 50,
-      draft_type: (tournamentType === "snake_draft"
-        ? "snake"
+    settings: {
+      draft_mode: (tournamentType === "snake_draft"
+        ? "snake_draft"
         : tournamentType === "linear_draft"
-          ? "linear"
+          ? "linear_draft"
           : tournamentType === "auction"
-            ? "auction"
-            : "auction") as "auction" | "snake" | "linear",
-      auction_budget: 500,
+            ? "auction_draft"
+            : "snake_draft") as "auction_draft" | "snake_draft" | "linear_draft",
       pick_time_limit: 120,
       auto_start: true,
+      num_teams: 4,
+      players_per_team: 4,
+      create_lobbies_on_finish: true,
     },
   })
 
@@ -141,7 +139,7 @@ export default function CreateTournamentPage() {
         const tournamentData = {
           name: formData.name,
           description: formData.description,
-          tournament_type: formData.player_pool_settings.draft_type as "snake_draft" | "linear_draft" | "auction_draft",
+          tournament_type: formData.settings.draft_mode as "snake_draft" | "linear_draft" | "auction_draft",
           duration_days: formData.duration_days,
           max_participants: formData.max_participants,
           entry_fee: formData.entry_fee,
@@ -255,10 +253,6 @@ export default function CreateTournamentPage() {
 
   const participantOptions = [8, 16, 32, 64, 128]
 
-  const teamCountOptions = [4, 6, 8, 10, 12, 16]
-  const playersPerTeamOptions = [3, 4, 5, 6, 8]
-  const poolSizeOptions = [30, 40, 50, 60, 80, 100]
-
   return (
     <div className="container mx-auto py-6 max-w-4xl">
       <div className="flex items-center gap-4 mb-6">
@@ -292,16 +286,16 @@ export default function CreateTournamentPage() {
           </div>
           <p className="text-muted-foreground">
             {tournamentType === "team"
-              ? "Set up a 3-day team tournament with drafting and competitive brackets"
+              ? "Set up a tournament that creates lobbies when finished"
               : tournamentType === "solo"
-                ? "Create an extended solo league with ELO-based matchmaking"
+                ? "Create a tournament with direct player participation"
                 : tournamentType === "snake_draft"
                   ? "Month-long snake draft tournament with strategic captain selection and reversing pick order"
                   : tournamentType === "linear_draft"
                     ? "Month-long linear draft tournament with consistent pick order and strategic depth"
                     : tournamentType === "auction"
                       ? "Auction draft tournament with bidding system and virtual currency"
-                      : "Set up a new competitive tournament with brackets and prizes"}
+                      : "Set up a new competitive tournament that creates lobbies when completed"}
           </p>
         </div>
       </div>
@@ -475,31 +469,27 @@ export default function CreateTournamentPage() {
 
                 {/* Participants & Timing */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {!formData.enable_player_pool && (
-                    <div className="space-y-2">
-                      <Label>Max Participants</Label>
-                      <Select
-                        value={formData.max_participants.toString()}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, max_participants: Number.parseInt(value) })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {participantOptions.map((num) => (
-                            <SelectItem key={num} value={num.toString()}>
-                              <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4" />
-                                {num} Players
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label>Max Participants</Label>
+                    <Select
+                      value={formData.max_participants.toString()}
+                      onValueChange={(value) => setFormData({ ...formData, max_participants: Number.parseInt(value) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {participantOptions.map((num) => (
+                          <SelectItem key={num} value={num.toString()}>
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4" />
+                              {num} Players
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="start_date">Start Date & Time</Label>
@@ -562,6 +552,84 @@ export default function CreateTournamentPage() {
                   </div>
                 )}
 
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      Tournament Settings
+                    </CardTitle>
+                    <CardDescription>Configure how your tournament will work</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Number of Teams</Label>
+                        <Select
+                          value={formData.settings.num_teams.toString()}
+                          onValueChange={(value) =>
+                            setFormData({
+                              ...formData,
+                              settings: { ...formData.settings, num_teams: Number.parseInt(value) },
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="4">4 Teams</SelectItem>
+                            <SelectItem value="6">6 Teams</SelectItem>
+                            <SelectItem value="8">8 Teams</SelectItem>
+                            <SelectItem value="12">12 Teams</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Players per Team</Label>
+                        <Select
+                          value={formData.settings.players_per_team.toString()}
+                          onValueChange={(value) =>
+                            setFormData({
+                              ...formData,
+                              settings: { ...formData.settings, players_per_team: Number.parseInt(value) },
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="3">3 Players</SelectItem>
+                            <SelectItem value="4">4 Players</SelectItem>
+                            <SelectItem value="5">5 Players</SelectItem>
+                            <SelectItem value="6">6 Players</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label htmlFor="create_lobbies">Create Lobbies When Finished</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically create lobbies for matches when tournament completes
+                        </p>
+                      </div>
+                      <Switch
+                        id="create_lobbies"
+                        checked={formData.settings.create_lobbies_on_finish}
+                        onCheckedChange={(checked) =>
+                          setFormData({
+                            ...formData,
+                            settings: { ...formData.settings, create_lobbies_on_finish: checked },
+                          })
+                        }
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
                 <Button type="submit" disabled={loading} className="w-full" size="lg">
                   {loading ? (
                     "Creating Tournament..."
@@ -573,303 +641,6 @@ export default function CreateTournamentPage() {
                   )}
                 </Button>
               </form>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                Player Pool Draft Settings
-              </CardTitle>
-              <CardDescription>Configure team-based draft with player pool</CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="enable_player_pool">Enable Player Pool Draft</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Allow players to join a pool and be drafted into teams
-                  </p>
-                </div>
-                <Switch
-                  id="enable_player_pool"
-                  checked={formData.enable_player_pool}
-                  onCheckedChange={(checked) => setFormData({ ...formData, enable_player_pool: checked })}
-                />
-              </div>
-
-              {formData.enable_player_pool && (
-                <div className="space-y-6 pt-4 border-t">
-                  <div className="space-y-2">
-                    <Label>Max Tournament Participants</Label>
-                    <Select
-                      value={formData.max_participants.toString()}
-                      onValueChange={(value) => setFormData({ ...formData, max_participants: Number.parseInt(value) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {participantOptions.map((num) => (
-                          <SelectItem key={num} value={num.toString()}>
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4" />
-                              {num} Players
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Total players who can register for the tournament (includes player pool)
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Number of Teams</Label>
-                      <Select
-                        value={formData.player_pool_settings.max_teams.toString()}
-                        onValueChange={(value) =>
-                          setFormData({
-                            ...formData,
-                            player_pool_settings: {
-                              ...formData.player_pool_settings,
-                              max_teams: Number.parseInt(value),
-                            },
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {teamCountOptions.map((num) => (
-                            <SelectItem key={num} value={num.toString()}>
-                              {num} Teams
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Players per Team</Label>
-                      <Select
-                        value={formData.player_pool_settings.players_per_team.toString()}
-                        onValueChange={(value) =>
-                          setFormData({
-                            ...formData,
-                            player_pool_settings: {
-                              ...formData.player_pool_settings,
-                              players_per_team: Number.parseInt(value),
-                            },
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {playersPerTeamOptions.map((num) => (
-                            <SelectItem key={num} value={num.toString()}>
-                              {num} Players
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Max Pool Size</Label>
-                      <Select
-                        value={formData.player_pool_settings.max_pool_size.toString()}
-                        onValueChange={(value) =>
-                          setFormData({
-                            ...formData,
-                            player_pool_settings: {
-                              ...formData.player_pool_settings,
-                              max_pool_size: Number.parseInt(value),
-                            },
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {poolSizeOptions.map((num) => (
-                            <SelectItem key={num} value={num.toString()}>
-                              {num} Players
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label>Draft Type</Label>
-                      <Select
-                        value={formData.player_pool_settings.draft_type}
-                        onValueChange={(value: "auction" | "snake" | "linear") =>
-                          setFormData({
-                            ...formData,
-                            player_pool_settings: {
-                              ...formData.player_pool_settings,
-                              draft_type: value,
-                            },
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auction">
-                            <div className="flex items-center gap-2">
-                              <span>🏛️</span>
-                              <div>
-                                <div>Auction Draft</div>
-                                <div className="text-xs text-muted-foreground">Bid on players with budget</div>
-                              </div>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="snake">
-                            <div className="flex items-center gap-2">
-                              <span>🐍</span>
-                              <div>
-                                <div>Snake Draft</div>
-                                <div className="text-xs text-muted-foreground">Reversing pick order each round</div>
-                              </div>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="linear">
-                            <div className="flex items-center gap-2">
-                              <span>📊</span>
-                              <div>
-                                <div>Linear Draft</div>
-                                <div className="text-xs text-muted-foreground">Same pick order every round</div>
-                              </div>
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {formData.player_pool_settings.draft_type === "auction" && (
-                      <div className="space-y-2">
-                        <Label>Auction Budget ($)</Label>
-                        <Select
-                          value={formData.player_pool_settings.auction_budget.toString()}
-                          onValueChange={(value) =>
-                            setFormData({
-                              ...formData,
-                              player_pool_settings: {
-                                ...formData.player_pool_settings,
-                                auction_budget: Number.parseInt(value),
-                              },
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="300">$300</SelectItem>
-                            <SelectItem value="500">$500</SelectItem>
-                            <SelectItem value="750">$750</SelectItem>
-                            <SelectItem value="1000">$1000</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-
-                  {formData.player_pool_settings.draft_type === "auction" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Pick Time Limit (seconds)</Label>
-                        <Select
-                          value={formData.player_pool_settings.pick_time_limit.toString()}
-                          onValueChange={(value) =>
-                            setFormData({
-                              ...formData,
-                              player_pool_settings: {
-                                ...formData.player_pool_settings,
-                                pick_time_limit: Number.parseInt(value),
-                              },
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="60">1 minute</SelectItem>
-                            <SelectItem value="120">2 minutes</SelectItem>
-                            <SelectItem value="180">3 minutes</SelectItem>
-                            <SelectItem value="300">5 minutes</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <Label htmlFor="auto_start">Auto-start Draft</Label>
-                          <p className="text-sm text-muted-foreground">Start automatically when all teams ready</p>
-                        </div>
-                        <Switch
-                          id="auto_start"
-                          checked={formData.player_pool_settings.auto_start}
-                          onCheckedChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              player_pool_settings: {
-                                ...formData.player_pool_settings,
-                                auto_start: checked,
-                              },
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Settings className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Pool Configuration Summary</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                      <div className="flex flex-col">
-                        <span className="text-muted-foreground">Tournament Capacity</span>
-                        <span className="font-medium text-lg">{formData.max_participants}</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-muted-foreground">Team Slots</span>
-                        <span className="font-medium text-lg">
-                          {formData.player_pool_settings.max_teams * formData.player_pool_settings.players_per_team}
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-muted-foreground">Pool Size</span>
-                        <span className="font-medium text-lg">{formData.player_pool_settings.max_pool_size}</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-muted-foreground">Available Spots</span>
-                        <span className="font-medium text-lg text-green-600">
-                          {formData.max_participants -
-                            formData.player_pool_settings.max_teams * formData.player_pool_settings.players_per_team}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -896,31 +667,17 @@ export default function CreateTournamentPage() {
                   <span className="font-medium">{formData.max_participants}</span>
                 </div>
 
-                {formData.enable_player_pool && (
-                  <>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Target className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Teams:</span>
-                      <span className="font-medium">{formData.player_pool_settings.max_teams}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Per Team:</span>
-                      <span className="font-medium">{formData.player_pool_settings.players_per_team}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Settings className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Draft:</span>
-                      <Badge variant="outline" className="text-xs">
-                        {formData.player_pool_settings.draft_type === "snake"
-                          ? "🐍 Snake"
-                          : formData.player_pool_settings.draft_type === "linear"
-                            ? "📊 Linear"
-                            : "🏛️ Auction"}
-                      </Badge>
-                    </div>
-                  </>
-                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Teams:</span>
+                  <span className="font-medium">{formData.settings.num_teams}</span>
+                </div>
+
+                <div className="flex items-center gap-2 text-sm">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Per Team:</span>
+                  <span className="font-medium">{formData.settings.players_per_team}</span>
+                </div>
 
                 {formData.tournament_type === "month_long_draft" && (
                   <div className="flex items-center gap-2 text-sm">
@@ -954,7 +711,7 @@ export default function CreateTournamentPage() {
               <div className="text-center space-y-2">
                 <div className="text-2xl">🏆</div>
                 <p className="text-sm text-muted-foreground">
-                  Players earn <strong>$100</strong> for each ELO game played in tournaments!
+                  Tournament will automatically create lobbies when finished for seamless match play!
                 </p>
               </div>
             </CardContent>
