@@ -19,6 +19,7 @@ export default function CreateTournamentPage() {
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true) // Added auth loading state
 
   const tournamentType = searchParams.get("type")
 
@@ -72,10 +73,17 @@ export default function CreateTournamentPage() {
   useEffect(() => {
     const supabase = createClient()
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        console.log("[v0] Auth user loaded:", user?.id ? "authenticated" : "not authenticated") // Added debug logging
+        setUser(user)
+      } catch (error) {
+        console.error("[v0] Error loading user:", error) // Added error logging
+      } finally {
+        setAuthLoading(false) // Set auth loading to false when done
+      }
     }
     getUser()
   }, [])
@@ -91,7 +99,10 @@ export default function CreateTournamentPage() {
 
       const supabase = createClient()
 
-      const actualUserId = user?.id
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser()
+      const actualUserId = currentUser?.id || user?.id
 
       if (!actualUserId) {
         console.log("[v0] No authenticated user, cannot create tournament")
@@ -103,35 +114,7 @@ export default function CreateTournamentPage() {
         return
       }
 
-      // Ensure the user exists in the users table before creating tournament
-      const { data: existingUser, error: userCheckError } = await supabase
-        .from("users")
-        .select("id, username")
-        .eq("id", actualUserId)
-        .single()
-
-      if (userCheckError && userCheckError.code === "PGRST116") {
-        // User doesn't exist in users table, create them first
-        console.log("[v0] Creating user record before tournament creation")
-        const { error: createUserError } = await supabase.from("users").insert({
-          id: actualUserId,
-          username: user.user_metadata?.username || user.email?.split("@")[0] || "User",
-          email: user.email,
-          elo_rating: 1200,
-        })
-
-        if (createUserError) {
-          console.error("[v0] Error creating user:", createUserError)
-          toast({
-            title: "Failed to create user record",
-            description: "Please try again",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-
-      console.log("[v0] Using user ID:", actualUserId)
+      console.log("[v0] Using user ID:", actualUserId) // Added debug logging
 
       const startDateTime = new Date(formData.start_date).toISOString()
       const endDateTime = new Date(formData.end_date).toISOString()
@@ -159,13 +142,14 @@ export default function CreateTournamentPage() {
 
       console.log("[v0] Tournament created successfully:", tournament)
 
-      if (user?.id) {
+      if (currentUser?.id || user?.id) {
+        // Use currentUser or fallback to user
         try {
           console.log("[v0] Adding tournament creator to lobby as first player")
 
           const { error: participantError } = await supabase.from("tournament_participants").insert({
             tournament_id: tournament.id,
-            user_id: user.id,
+            user_id: actualUserId, // Use actualUserId instead of user.id
             status: "registered",
             joined_at: new Date().toISOString(),
           })
@@ -184,7 +168,7 @@ export default function CreateTournamentPage() {
 
       toast({
         title: "Tournament created!",
-        description: user?.id
+        description: actualUserId // Use actualUserId instead of user?.id
           ? "You've been added as the first player in the lobby"
           : "Tournament created successfully",
       })
@@ -206,6 +190,19 @@ export default function CreateTournamentPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="container mx-auto py-6 max-w-2xl">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
