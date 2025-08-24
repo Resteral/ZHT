@@ -92,39 +92,13 @@ export default function CreateTournamentPage() {
       const supabase = createClient()
 
       let actualUserId = user?.id
-      console.log("[v0] Initial actualUserId:", actualUserId)
 
       if (!actualUserId) {
-        console.log("[v0] No authenticated user, ensuring system user exists")
-
-        // Check if system user exists, create if not
-        const systemUserId = "00000000-0000-0000-0000-000000000000"
-        const { data: systemUser, error: systemUserError } = await supabase
-          .from("users")
-          .select("id")
-          .eq("id", systemUserId)
-          .single()
-
-        if (systemUserError && systemUserError.code === "PGRST116") {
-          // System user doesn't exist, create it
-          console.log("[v0] Creating system user")
-          const { error: createSystemUserError } = await supabase.from("users").insert({
-            id: systemUserId,
-            username: "System",
-            email: "system@tournament.local",
-            elo_rating: 1000,
-          })
-
-          if (createSystemUserError) {
-            console.error("[v0] Error creating system user:", createSystemUserError)
-            throw new Error("Failed to create system user")
-          }
-        }
-
-        actualUserId = systemUserId
+        console.log("[v0] No authenticated user, using system user")
+        actualUserId = "00000000-0000-0000-0000-000000000000"
       }
 
-      console.log("[v0] Final actualUserId:", actualUserId)
+      console.log("[v0] Using user ID:", actualUserId)
 
       const startDateTime = new Date(formData.start_date).toISOString()
       const endDateTime = new Date(formData.end_date).toISOString()
@@ -152,7 +126,7 @@ export default function CreateTournamentPage() {
 
       console.log("[v0] Tournament created successfully:", tournament)
 
-      if (user?.id && actualUserId !== "00000000-0000-0000-0000-000000000000") {
+      if (user?.id) {
         try {
           console.log("[v0] Adding tournament creator to lobby as first player")
 
@@ -200,7 +174,9 @@ export default function CreateTournamentPage() {
 
       toast({
         title: "Tournament created!",
-        description: "You've been added as the first player in the lobby",
+        description: user?.id
+          ? "You've been added as the first player in the lobby"
+          : "Tournament created successfully",
       })
     } catch (error: any) {
       console.error("[v0] Error creating tournament - Full error object:", error)
