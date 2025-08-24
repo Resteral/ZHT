@@ -32,9 +32,9 @@ export default function CreateAuctionPage() {
 
   const gameOptions = [
     { value: "zealot_hockey", label: "🏒 Zealot Hockey", description: "Fast-paced hockey action" },
-    { value: "call_of_duty", label: "🎯 Call of Duty", description: "Tactical FPS combat" },
-    { value: "rainbow_six_siege", label: "🛡️ Rainbow Six Siege", description: "Strategic team shooter" },
-    { value: "counter_strike", label: "💥 Counter Strike", description: "Classic competitive FPS" },
+    { value: "tactical_fps", label: "🎯 Tactical FPS", description: "Tactical FPS combat" },
+    { value: "strategic_shooter", label: "🛡️ Strategic Shooter", description: "Strategic team shooter" },
+    { value: "team_shooter", label: "💥 Team Shooter", description: "Classic competitive FPS" },
   ]
 
   const teamCountOptions = [

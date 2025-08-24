@@ -24,14 +24,14 @@ export default function CreateTeam() {
     players: [] as Array<{ name: string; position: string; salary: number }>,
   })
 
-  const games = ["Counter Strike", "Rainbow Six Siege", "Call of Duty", "Zealot Hockey"]
-  const leagues = ["Winter Championship", "Spring Qualifiers", "COD Elite League", "Hockey Pro Season"]
+  const games = ["Team Shooter", "Strategic Shooter", "Tactical FPS", "Zealot Hockey"]
+  const leagues = ["Winter Championship", "Spring Qualifiers", "Tactical FPS Elite League", "Hockey Pro Season"]
   const owners = ["AlexChen", "SarahGamer", "MikeRod", "EmmaWilson"]
 
   const positions = {
-    "Counter Strike": ["AWPer", "Entry Fragger", "Support", "IGL", "Lurker"],
-    "Rainbow Six Siege": ["Entry Fragger", "Support", "Anchor", "Roamer", "IGL"],
-    "Call of Duty": ["Assault", "Support", "Sniper", "Objective"],
+    "Team Shooter": ["AWPer", "Entry Fragger", "Support", "IGL", "Lurker"],
+    "Strategic Shooter": ["Entry Fragger", "Support", "Anchor", "Roamer", "IGL"],
+    "Tactical FPS": ["Assault", "Support", "Sniper", "Objective"],
     "Zealot Hockey": ["Forward", "Defender", "Goalie", "Center"],
   }
 

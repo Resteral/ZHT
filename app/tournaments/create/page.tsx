@@ -91,11 +91,44 @@ export default function CreateTournamentPage() {
 
       const supabase = createClient()
 
-      let actualUserId = user?.id
+      const actualUserId = user?.id
 
       if (!actualUserId) {
-        console.log("[v0] No authenticated user, using system user")
-        actualUserId = "00000000-0000-0000-0000-000000000000"
+        console.log("[v0] No authenticated user, cannot create tournament")
+        toast({
+          title: "Authentication required",
+          description: "Please sign in to create tournaments",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Ensure the user exists in the users table before creating tournament
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from("users")
+        .select("id, username")
+        .eq("id", actualUserId)
+        .single()
+
+      if (userCheckError && userCheckError.code === "PGRST116") {
+        // User doesn't exist in users table, create them first
+        console.log("[v0] Creating user record before tournament creation")
+        const { error: createUserError } = await supabase.from("users").insert({
+          id: actualUserId,
+          username: user.user_metadata?.username || user.email?.split("@")[0] || "User",
+          email: user.email,
+          elo_rating: 1200,
+        })
+
+        if (createUserError) {
+          console.error("[v0] Error creating user:", createUserError)
+          toast({
+            title: "Failed to create user record",
+            description: "Please try again",
+            variant: "destructive",
+          })
+          return
+        }
       }
 
       console.log("[v0] Using user ID:", actualUserId)
@@ -130,29 +163,6 @@ export default function CreateTournamentPage() {
         try {
           console.log("[v0] Adding tournament creator to lobby as first player")
 
-          // Check if user exists in users table, create if not
-          const { data: existingUser, error: userCheckError } = await supabase
-            .from("users")
-            .select("id, username")
-            .eq("id", user.id)
-            .single()
-
-          if (userCheckError && userCheckError.code === "PGRST116") {
-            // User doesn't exist, create them
-            console.log("[v0] Creating user record for tournament creator")
-            const { error: createUserError } = await supabase.from("users").insert({
-              id: user.id,
-              username: user.user_metadata?.username || user.email?.split("@")[0] || "Host",
-              email: user.email,
-              elo_rating: 1200, // Give host a decent starting ELO
-            })
-
-            if (createUserError) {
-              console.error("[v0] Error creating user:", createUserError)
-            }
-          }
-
-          // Add the creator as the first tournament participant
           const { error: participantError } = await supabase.from("tournament_participants").insert({
             tournament_id: tournament.id,
             user_id: user.id,

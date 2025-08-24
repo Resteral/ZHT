@@ -23,7 +23,7 @@ INSERT INTO tournaments (
     'A test tournament to verify the system is working',
     'snake_draft',
     'waiting',
-    'League of Legends',
+    'MOBA Game', -- replaced League of Legends with generic MOBA Game
     32,
     0,
     0,

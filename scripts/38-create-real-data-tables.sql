@@ -54,9 +54,9 @@ CREATE TABLE IF NOT EXISTS betting_odds (
 INSERT INTO games (name, display_name, icon) VALUES
 ('omega_strikers', 'Omega Strikers', '⚽'),
 ('zealot_hockey', 'Zealot Hockey', '🏒'),
-('call_of_duty', 'Call of Duty', '🎯'),
-('rainbow_six_siege', 'Rainbow Six Siege', '🛡️'),
-('counter_strike', 'Counter Strike', '💥')
+('tactical_fps', 'Tactical FPS', '🎯'),
+('strategic_shooter', 'Strategic Shooter', '🛡️'),
+('team_shooter', 'Team Shooter', '💥')
 ON CONFLICT DO NOTHING;
 
 -- Insert real venue data

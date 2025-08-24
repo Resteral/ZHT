@@ -25,12 +25,12 @@ export default function CreatePlayer() {
     achievements: [] as string[],
   })
 
-  const games = ["Counter Strike", "Rainbow Six Siege", "Call of Duty", "Zealot Hockey"]
+  const games = ["Team Shooter", "Strategic Shooter", "Tactical FPS", "Zealot Hockey"]
 
   const positions = {
-    "Counter Strike": ["AWPer", "Entry Fragger", "Support", "IGL", "Lurker"],
-    "Rainbow Six Siege": ["Entry Fragger", "Support", "Anchor", "Roamer", "IGL"],
-    "Call of Duty": ["Assault", "Support", "Sniper", "Objective"],
+    "Team Shooter": ["AWPer", "Entry Fragger", "Support", "IGL", "Lurker"],
+    "Strategic Shooter": ["Entry Fragger", "Support", "Anchor", "Roamer", "IGL"],
+    "Tactical FPS": ["Assault", "Support", "Sniper", "Objective"],
     "Zealot Hockey": ["Forward", "Defender", "Goalie", "Center"],
   }
 

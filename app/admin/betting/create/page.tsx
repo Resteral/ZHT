@@ -41,13 +41,13 @@ export default function CreateBettingMarket() {
     "Live Betting",
   ]
 
-  const games = ["Counter Strike", "Rainbow Six Siege", "Call of Duty", "Zealot Hockey"]
+  const games = ["Team Shooter", "Strategic Shooter", "Tactical FPS", "Zealot Hockey"]
 
   // Mock events
   const events = [
-    "CS Championship Finals - Team Alpha vs Team Beta",
-    "R6S Qualifier - Storm Squad vs Lightning Crew",
-    "COD League - Fire Hawks vs Ice Wolves",
+    "Team Shooter Championship Finals - Team Alpha vs Team Beta",
+    "Strategic Shooter Qualifier - Storm Squad vs Lightning Crew",
+    "Tactical FPS League - Fire Hawks vs Ice Wolves",
     "Hockey Elite Cup - Arctic Bears vs Desert Eagles",
   ]
 

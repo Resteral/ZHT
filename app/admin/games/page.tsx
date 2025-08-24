@@ -11,8 +11,8 @@ export default function GameManagement() {
   const games = [
     {
       id: 1,
-      title: "CS Championship Finals",
-      game: "Counter Strike",
+      title: "Team Shooter Championship Finals",
+      game: "Team Shooter",
       team1: "Team Alpha",
       team2: "Team Beta",
       scheduledDate: "2024-01-15",
@@ -23,8 +23,8 @@ export default function GameManagement() {
     },
     {
       id: 2,
-      title: "R6S Qualifier Match",
-      game: "Rainbow Six Siege",
+      title: "Strategic Shooter Qualifier Match",
+      game: "Strategic Shooter",
       team1: "Storm Squad",
       team2: "Lightning Crew",
       scheduledDate: "2024-01-16",
@@ -35,8 +35,8 @@ export default function GameManagement() {
     },
     {
       id: 3,
-      title: "COD League Match",
-      game: "Call of Duty",
+      title: "Tactical FPS League Match",
+      game: "Tactical FPS",
       team1: "Fire Hawks",
       team2: "Ice Wolves",
       scheduledDate: "2024-01-14",
