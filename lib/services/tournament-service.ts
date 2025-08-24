@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/client"
 
 const supabase = createClient()
 
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  return uuidRegex.test(uuid)
+}
+
 export const tournamentService = {
   async getTournaments() {
     const { data, error } = await supabase
@@ -45,40 +50,38 @@ export const tournamentService = {
       throw new Error("Not authenticated - please log in")
     }
 
+    if (!isValidUUID(userId)) {
+      console.error("[v0] Invalid UUID format for user ID:", userId)
+      throw new Error("Invalid user ID format - please log out and back in")
+    }
+
     console.log("[v0] Authenticated user:", userId)
 
     const supabase = createClient()
 
-    // First, try to find user by the auth UUID directly
     let { data: existingUser, error: userCheckError } = await supabase
       .from("users")
       .select("id, username, account_id")
       .eq("id", userId)
       .single()
 
-    // If not found by UUID, try by username (since logs show "Resteral" exists)
     if (userCheckError && userCheckError.code === "PGRST116") {
-      const { data: userByUsername, error: usernameError } = await supabase
-        .from("users")
-        .select("id, username, account_id")
-        .eq("username", "Resteral")
-        .single()
-
-      if (!usernameError && userByUsername) {
-        existingUser = userByUsername
-        userCheckError = null
-        console.log("[v0] Found user by username, using database UUID:", userByUsername.id)
-      }
-    }
-
-    // If still not found, create the user with the auth UUID
-    if (userCheckError && userCheckError.code === "PGRST116") {
+      // User not found by UUID, try to create them
       console.log("[v0] User not found, creating new user with UUID:", userId)
 
+      // Get current auth user for additional info
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser()
+
+      if (!authUser || authUser.id !== userId) {
+        throw new Error("Authentication mismatch - please log out and back in")
+      }
+
       const userToCreate = {
-        id: userId, // Use the auth UUID as the database UUID
-        username: "Resteral",
-        email: "resteral@temp.com",
+        id: userId, // Use the validated auth UUID
+        username: authUser.email?.split("@")[0] || `user_${userId.slice(0, 8)}`,
+        email: authUser.email || `${userId}@temp.com`,
         elo_rating: 1200,
         total_games: 0,
         wins: 0,
@@ -94,19 +97,17 @@ export const tournamentService = {
       if (createError) {
         console.error("[v0] Failed to create user:", createError)
         if (createError.code === "23505") {
-          // User already exists, try to fetch by username again
-          const { data: retryUser } = await supabase
+          // User already exists, try to fetch again
+          const { data: retryUser, error: retryError } = await supabase
             .from("users")
             .select("id, username, account_id")
-            .eq("username", "Resteral")
+            .eq("id", userId)
             .single()
 
-          if (retryUser) {
-            console.log("[v0] User found on retry:", retryUser.username)
-            existingUser = retryUser
-          } else {
-            throw new Error(`User creation failed: ${createError.message}`)
+          if (retryError || !retryUser) {
+            throw new Error("User creation failed - please try again")
           }
+          existingUser = retryUser
         } else {
           throw new Error(`Failed to create user: ${createError.message}`)
         }
@@ -124,11 +125,22 @@ export const tournamentService = {
     }
 
     console.log("[v0] User verified in database:", existingUser.username)
+
+    if (!isValidUUID(existingUser.id)) {
+      console.error("[v0] Invalid database user UUID:", existingUser.id)
+      throw new Error("Database user ID format error - please contact support")
+    }
+
     const actualUserId = existingUser.id // Use the actual database UUID
 
-    const { data: finalUserCheck } = await supabase.from("users").select("id").eq("id", actualUserId).single()
+    const { data: finalUserCheck, error: finalCheckError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", actualUserId)
+      .single()
 
-    if (!finalUserCheck) {
+    if (finalCheckError || !finalUserCheck) {
+      console.error("[v0] Final user verification failed:", finalCheckError)
       throw new Error("User verification failed - database UUID not found")
     }
 
@@ -143,7 +155,7 @@ export const tournamentService = {
       max_teams: Math.ceil((tournamentData.max_participants || 16) / (tournamentData.players_per_team || 4)),
       entry_fee: tournamentData.entry_fee || 0,
       prize_pool: tournamentData.prize_pool || 0,
-      created_by: actualUserId, // Use database UUID for foreign key constraint
+      created_by: actualUserId, // Use validated database UUID for foreign key constraint
       status: "registration", // Immediate registration
       start_date: tournamentData.start_date || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       end_date: tournamentData.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -184,7 +196,7 @@ export const tournamentService = {
           entry_fee: tournamentData.entry_fee,
           start_date: tournamentData.start_date,
         },
-        actualUserId, // Use the actual auth user ID
+        actualUserId, // Use the validated database UUID
       )
     }
 
@@ -192,8 +204,14 @@ export const tournamentService = {
 
     if (error) {
       console.error("[v0] Error creating tournament:", error)
-      if (error.code === "23503" && error.message.includes("tournaments_created_by_fkey")) {
-        throw new Error("User authentication error - please try logging out and back in")
+      if (error.code === "23503") {
+        if (error.message.includes("tournaments_created_by_fkey")) {
+          throw new Error("User authentication error - please log out and back in")
+        } else {
+          throw new Error(`Database constraint error: ${error.message}`)
+        }
+      } else if (error.code === "22P02") {
+        throw new Error("Invalid data format - please check your input and try again")
       }
       throw error
     }
@@ -220,17 +238,23 @@ export const tournamentService = {
       throw new Error("Not authenticated - please log in")
     }
 
+    if (!isValidUUID(userId)) {
+      throw new Error("Invalid user ID format - please log out and back in")
+    }
+
     console.log("[v0] Joining tournament pool:", tournamentId)
 
     let actualUserId = userId
     const { data: userData } = await supabase
       .from("users")
       .select("id, elo_rating, balance, account_id")
-      .or(`account_id.eq.${userId},username.eq.${userId},id.eq.${userId}`)
+      .eq("id", userId)
       .single()
 
     if (userData) {
       actualUserId = userData.id // Use database UUID for operations
+    } else {
+      throw new Error("User not found in database - please log out and back in")
     }
 
     if (!userData || userData.elo_rating < 1000) {
@@ -307,15 +331,17 @@ export const tournamentService = {
       throw new Error("Not authenticated - please log in")
     }
 
+    if (!isValidUUID(userId)) {
+      throw new Error("Invalid user ID format - please log out and back in")
+    }
+
     let actualUserId = userId
-    const { data: userData } = await supabase
-      .from("users")
-      .select("id, account_id")
-      .or(`account_id.eq.${userId},username.eq.${userId},id.eq.${userId}`)
-      .single()
+    const { data: userData } = await supabase.from("users").select("id, account_id").eq("id", userId).single()
 
     if (userData) {
       actualUserId = userData.id // Use database UUID for operations
+    } else {
+      throw new Error("User not found in database - please log out and back in")
     }
 
     const { data: participants } = await supabase
