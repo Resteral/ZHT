@@ -41,6 +41,9 @@ export const monthLongTournamentService = {
       max_participants: number
       entry_fee: number
       start_date: string
+      end_date?: string // Make end_date optional since form provides it
+      game?: string // Make game optional to accept from form
+      player_pool_settings?: any // Accept player_pool_settings from form
     },
     userId: string,
   ) {
@@ -103,18 +106,22 @@ export const monthLongTournamentService = {
         name: tournamentData.name,
         description: tournamentData.description,
         tournament_type: tournamentData.tournament_type,
-        game: "hockey", // Default game
+        game: tournamentData.game || "hockey", // Use game from form data or default to hockey
         max_participants: tournamentData.max_participants,
         entry_fee: tournamentData.entry_fee,
         prize_pool: tournamentData.entry_fee * tournamentData.max_participants * 0.8, // 80% to prize pool
         start_date: tournamentData.start_date,
-        end_date: new Date(
-          new Date(tournamentData.start_date).getTime() + tournamentData.duration_days * 24 * 60 * 60 * 1000,
-        ).toISOString(),
+        end_date:
+          tournamentData.end_date ||
+          new Date(
+            // Use end_date from form or calculate it
+            new Date(tournamentData.start_date).getTime() + tournamentData.duration_days * 24 * 60 * 60 * 1000,
+          ).toISOString(),
         created_by: actualUserId, // Use validated database user ID
-        status: "registration",
+        status: "registration_open", // Use registration_open status to match tournament display logic
         team_based: false,
-        player_pool_settings: {
+        player_pool_settings: tournamentData.player_pool_settings || {
+          // Use player_pool_settings from form
           draft_type: tournamentData.tournament_type,
           duration_days: tournamentData.duration_days,
           phases_enabled: true,
@@ -454,7 +461,7 @@ export const monthLongTournamentService = {
     const { data: tournaments } = await supabase
       .from("tournaments")
       .select("id, status")
-      .in("status", ["registration", "in_progress"])
+      .in("status", ["registration_open", "in_progress"])
 
     if (!tournaments) return
 
