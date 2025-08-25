@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, User, Mail, Lock } from "lucide-react"
 
 interface TournamentAuthGateProps {
-  children: React.ReactNode
+  children: React.ReactNode | ((user: any) => React.ReactNode)
   requireAuth?: boolean
 }
 
@@ -281,7 +281,7 @@ export default function TournamentAuthGate({ children, requireAuth = true }: Tou
             Sign Out
           </Button>
         </div>
-        {children}
+        {typeof children === "function" ? children(user) : children}
       </div>
     )
   }
