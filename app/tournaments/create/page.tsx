@@ -121,17 +121,23 @@ export default function CreateTournamentPage() {
 
                       const supabase = createClient()
 
-                      let { data: dbUser } = await supabase
+                      console.log("[v0] Checking if user exists in database...")
+                      let { data: dbUser, error: userFetchError } = await supabase
                         .from("users")
                         .select("id, username")
                         .eq("id", authenticatedUser.id)
                         .single()
 
+                      if (userFetchError) {
+                        console.log("[v0] User fetch error:", userFetchError)
+                      }
+
                       if (!dbUser) {
+                        console.log("[v0] User not found in database, creating new user...")
                         const userEmail = authenticatedUser.email
                         const userName = userEmail?.split("@")[0] || "User"
 
-                        const { data: newUser } = await supabase
+                        const { data: newUser, error: createError } = await supabase
                           .from("users")
                           .insert({
                             id: authenticatedUser.id,
@@ -143,11 +149,26 @@ export default function CreateTournamentPage() {
                           .select()
                           .single()
 
+                        if (createError) {
+                          console.error("[v0] Error creating user:", createError)
+                          throw new Error(`Failed to create user: ${createError.message}`)
+                        }
+
+                        if (!newUser) {
+                          throw new Error("Failed to create user: No user data returned")
+                        }
+
                         dbUser = newUser
-                        console.log("[v0] Created new user in database:", newUser?.username)
+                        console.log("[v0] Created new user in database:", newUser.username)
                       } else {
                         console.log("[v0] User found in database:", dbUser.username)
                       }
+
+                      if (!dbUser || !dbUser.id) {
+                        throw new Error("User validation failed: Unable to confirm user exists in database")
+                      }
+
+                      console.log("[v0] User validation successful, proceeding with tournament creation")
 
                       const startDateTime = new Date(formData.start_date).toISOString()
                       const endDateTime = new Date(formData.end_date).toISOString()
@@ -167,7 +188,7 @@ export default function CreateTournamentPage() {
                         end_date: endDateTime,
                         game: formData.game,
                         player_pool_settings: formData.settings,
-                        created_by: authenticatedUser.id,
+                        created_by: dbUser.id, // Use verified database user ID instead of auth user ID
                       }
 
                       console.log("[v0] Creating tournament with data:", tournamentData)
@@ -177,7 +198,7 @@ export default function CreateTournamentPage() {
                       )
                       const tournament = await monthLongTournamentService.createMonthLongTournament(
                         tournamentData,
-                        authenticatedUser.id,
+                        dbUser.id, // Use verified database user ID
                       )
 
                       console.log("[v0] Tournament created successfully:", tournament)
@@ -187,7 +208,7 @@ export default function CreateTournamentPage() {
 
                         const { error: participantError } = await supabase.from("tournament_participants").insert({
                           tournament_id: tournament.id,
-                          user_id: authenticatedUser.id,
+                          user_id: dbUser.id, // Use verified database user ID
                           status: "registered",
                           joined_at: new Date().toISOString(),
                         })
