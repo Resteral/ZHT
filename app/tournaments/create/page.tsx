@@ -217,13 +217,16 @@ export default function CreateTournamentPage() {
                 const tournamentData = {
                   name: formData.name,
                   description: `${formData.settings.num_teams} teams, ${formData.settings.players_per_team} players each`,
-                  tournament_type: formData.settings.draft_mode,
+                  tournament_type: "draft",
                   max_participants: formData.max_participants,
                   entry_fee: 0,
                   start_date: startDateTime,
                   end_date: endDateTime,
                   game: formData.game,
-                  player_pool_settings: formData.settings,
+                  player_pool_settings: {
+                    ...formData.settings,
+                    draft_mode: formData.settings.draft_mode,
+                  },
                   created_by: creatorId,
                 }
 

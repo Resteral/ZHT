@@ -17,7 +17,7 @@ export interface MonthLongTournament {
   id: string
   name: string
   description: string
-  tournament_type: "snake_draft" | "linear_draft" | "auction_draft"
+  tournament_type: "snake_draft" | "linear_draft" | "auction_draft" | "draft"
   duration_days: number
   max_participants: number
   current_participants: number
@@ -36,14 +36,14 @@ export const monthLongTournamentService = {
     tournamentData: {
       name: string
       description: string
-      tournament_type: "snake_draft" | "linear_draft" | "auction_draft"
+      tournament_type: "snake_draft" | "linear_draft" | "auction_draft" | "draft"
       duration_days: number
       max_participants: number
       entry_fee: number
       start_date: string
-      end_date?: string // Make end_date optional since form provides it
-      game?: string // Make game optional to accept from form
-      player_pool_settings?: any // Accept player_pool_settings from form
+      end_date?: string
+      game?: string
+      player_pool_settings?: any
     },
     userId: string,
   ) {
@@ -105,24 +105,22 @@ export const monthLongTournamentService = {
       .insert({
         name: tournamentData.name,
         description: tournamentData.description,
-        tournament_type: tournamentData.tournament_type,
-        game: tournamentData.game || "hockey", // Use game from form data or default to hockey
+        tournament_type: "draft",
+        game: tournamentData.game || "hockey",
         max_participants: tournamentData.max_participants,
         entry_fee: tournamentData.entry_fee,
-        prize_pool: tournamentData.entry_fee * tournamentData.max_participants * 0.8, // 80% to prize pool
+        prize_pool: tournamentData.entry_fee * tournamentData.max_participants * 0.8,
         start_date: tournamentData.start_date,
         end_date:
           tournamentData.end_date ||
           new Date(
-            // Use end_date from form or calculate it
             new Date(tournamentData.start_date).getTime() + tournamentData.duration_days * 24 * 60 * 60 * 1000,
           ).toISOString(),
-        created_by: actualUserId, // Use validated database user ID
-        status: "pending", // Use pending status instead of draft to match database constraint
+        created_by: actualUserId,
+        status: "draft",
         team_based: false,
         player_pool_settings: tournamentData.player_pool_settings || {
-          // Use player_pool_settings from form
-          draft_type: tournamentData.tournament_type,
+          draft_type: "draft",
           duration_days: tournamentData.duration_days,
           phases_enabled: true,
         },
@@ -169,8 +167,8 @@ export const monthLongTournamentService = {
         {
           name: "Registration Phase",
           description: "Player registration and team formation",
-          start_date: new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week before
-          end_date: new Date(start.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day before
+          start_date: new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          end_date: new Date(start.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(),
           status: "active",
           phase_type: "registration",
           settings: { max_participants: 64 },
@@ -323,7 +321,7 @@ export const monthLongTournamentService = {
       .from("draft_schedules")
       .insert({
         tournament_id: tournamentId,
-        draft_type: "snake_draft", // Will be determined by tournament type
+        draft_type: "snake_draft",
         status: "scheduled",
         scheduled_date: new Date().toISOString(),
         duration_minutes: 120,
@@ -460,7 +458,7 @@ export const monthLongTournamentService = {
     const { data: tournaments } = await supabase
       .from("tournaments")
       .select("id, status")
-      .in("status", ["pending", "in_progress"])
+      .in("status", ["draft", "pending", "in_progress"])
 
     if (!tournaments) return
 
