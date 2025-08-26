@@ -56,6 +56,7 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
   const [teamName, setTeamName] = useState("")
   const [teamDescription, setTeamDescription] = useState("")
   const [showTeamForm, setShowTeamForm] = useState(false)
+  const [signupMode, setSignupMode] = useState<"solo" | "team" | null>(null)
 
   const supabase = createClient()
   const { user, isAuthenticated } = useAuth()
@@ -80,9 +81,10 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
       }
 
       const hasPreTeams = tournament?.team_based && tournament?.max_teams > 0
+      const allowsSoloPlayers = !tournament?.team_based || tournament?.allow_solo_players
 
+      // Load team data
       if (hasPreTeams) {
-        // Load team data for team-based tournaments
         const { data: teamsData, error: teamsError } = await supabase
           .from("tournament_teams")
           .select("*")
@@ -117,7 +119,10 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
 
           setRegisteredTeams(teamsWithDetails)
         }
-      } else {
+      }
+
+      // Load individual participants (for solo players or hybrid tournaments)
+      if (allowsSoloPlayers) {
         const { data: participantsData, error: participantsError } = await supabase
           .from("tournament_participants")
           .select("*")
@@ -377,18 +382,41 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
   }, [tournamentId])
 
   const hasPreTeams = tournament?.team_based && tournament?.max_teams > 0
-  const currentCount = hasPreTeams ? registeredTeams.length : participants.length
-  const maxCount = hasPreTeams ? tournament.max_teams || 8 : tournament.max_participants || 32
-  const progressPercentage = (currentCount / maxCount) * 100
+  const allowsSoloPlayers = !tournament?.team_based || tournament?.allow_solo_players
+  const isHybridTournament = hasPreTeams && allowsSoloPlayers
 
-  const userRegistration = hasPreTeams
-    ? registeredTeams.find((t) => t.captain_id === user?.id)
-    : participants.find((p) => p.user_id === user?.id)
-  const isUserRegistered = !!userRegistration
-  const isFull = currentCount >= maxCount
-  const canRegister =
-    !isUserRegistered &&
-    !isFull &&
+  const teamCount = registeredTeams.length
+  const soloCount = participants.length
+  const totalCount = teamCount + soloCount
+  const maxTeams = tournament?.max_teams || 0
+  const maxSoloPlayers = tournament?.max_participants || 32
+  const maxTotalCount = maxTeams + maxSoloPlayers
+
+  const progressPercentage = (totalCount / maxTotalCount) * 100
+
+  const userTeamRegistration = registeredTeams.find((t) => t.captain_id === user?.id)
+  const userSoloRegistration = participants.find((p) => p.user_id === user?.id)
+  const isUserRegistered = !!(userTeamRegistration || userSoloRegistration)
+
+  const teamsFull = teamCount >= maxTeams
+  const soloFull = soloCount >= maxSoloPlayers
+  const isFull = teamsFull && soloFull
+
+  const canRegisterTeam =
+    hasPreTeams &&
+    !userTeamRegistration &&
+    !teamsFull &&
+    !userSoloRegistration &&
+    (tournament.status === "active" ||
+      tournament.status === "registration_open" ||
+      tournament.status === "pending" ||
+      tournament.status === "draft")
+
+  const canRegisterSolo =
+    allowsSoloPlayers &&
+    !userSoloRegistration &&
+    !soloFull &&
+    !userTeamRegistration &&
     (tournament.status === "active" ||
       tournament.status === "registration_open" ||
       tournament.status === "pending" ||
@@ -396,13 +424,16 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
 
   console.log("[v0] Join button state:", {
     hasPreTeams,
+    allowsSoloPlayers,
+    isHybridTournament,
     isUserRegistered,
-    isFull,
+    canRegisterTeam,
+    canRegisterSolo,
+    teamCount,
+    soloCount,
+    totalCount,
+    maxTotalCount,
     tournamentStatus: tournament.status,
-    canRegister,
-    showTeamForm,
-    currentCount,
-    maxCount,
   })
 
   const getStatusColor = (status: string) => {
@@ -445,7 +476,7 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
                 <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
                 <Badge variant="outline" className="flex items-center gap-1">
                   <Shield className="h-3 w-3" />
-                  {hasPreTeams ? "Team Tournament" : "Player Lobby"}
+                  {isHybridTournament ? "Hybrid Tournament" : hasPreTeams ? "Team Tournament" : "Player Lobby"}
                 </Badge>
               </div>
               <CardDescription className="text-base">{tournament.description}</CardDescription>
@@ -464,16 +495,24 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               <Trophy className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Type</p>
-                <p className="font-medium">{hasPreTeams ? "Team Tournament" : "Player Lobby"}</p>
+                <p className="font-medium">
+                  {isHybridTournament ? "Teams + Solo" : hasPreTeams ? "Team Tournament" : "Player Lobby"}
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="text-sm text-muted-foreground">{hasPreTeams ? "Teams" : "Players"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {isHybridTournament ? "Participants" : hasPreTeams ? "Teams" : "Players"}
+                </p>
                 <p className="font-medium">
-                  {currentCount}/{maxCount}
+                  {isHybridTournament
+                    ? `${totalCount}/${maxTotalCount} (${teamCount}T + ${soloCount}P)`
+                    : hasPreTeams
+                      ? `${teamCount}/${maxTeams}`
+                      : `${soloCount}/${maxSoloPlayers}`}
                 </p>
               </div>
             </div>
@@ -503,20 +542,90 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               <div className="flex justify-between text-sm">
                 <span>Tournament Progress</span>
                 <span className="font-medium">
-                  {currentCount}/{maxCount} {hasPreTeams ? "teams" : "players"}
+                  {isHybridTournament
+                    ? `${totalCount}/${maxTotalCount} participants`
+                    : hasPreTeams
+                      ? `${teamCount}/${maxTeams} teams`
+                      : `${soloCount}/${maxSoloPlayers} players`}
                 </span>
               </div>
               <Progress value={progressPercentage} className="h-3" />
             </div>
 
-            {canRegister && (
-              <div>
-                {hasPreTeams ? (
+            {isHybridTournament && !isUserRegistered && (
+              <div className="space-y-3">
+                <h4 className="font-medium">Choose Your Registration Type:</h4>
+                <div className="grid grid-cols-2 gap-3">
                   <Button
-                    onClick={() => {
-                      console.log("[v0] Register team button clicked")
-                      setShowTeamForm(true)
-                    }}
+                    variant={signupMode === "team" ? "default" : "outline"}
+                    onClick={() => setSignupMode("team")}
+                    disabled={!canRegisterTeam}
+                    className="h-auto p-4 flex flex-col items-center gap-2"
+                  >
+                    <Shield className="h-5 w-5" />
+                    <div className="text-center">
+                      <div className="font-medium">Register Team</div>
+                      <div className="text-xs text-muted-foreground">
+                        {teamsFull ? "Teams Full" : `${teamCount}/${maxTeams} teams`}
+                      </div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant={signupMode === "solo" ? "default" : "outline"}
+                    onClick={() => setSignupMode("solo")}
+                    disabled={!canRegisterSolo}
+                    className="h-auto p-4 flex flex-col items-center gap-2"
+                  >
+                    <Users className="h-5 w-5" />
+                    <div className="text-center">
+                      <div className="font-medium">Join as Solo</div>
+                      <div className="text-xs text-muted-foreground">
+                        {soloFull ? "Solo Full" : `${soloCount}/${maxSoloPlayers} players`}
+                      </div>
+                    </div>
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Registration Buttons */}
+            {(canRegisterTeam || canRegisterSolo) && (
+              <div>
+                {isHybridTournament ? (
+                  // Hybrid tournament - show button based on selected mode
+                  signupMode === "team" ? (
+                    <Button
+                      onClick={() => setShowTeamForm(true)}
+                      className="w-full bg-green-600 hover:bg-green-700"
+                      size="lg"
+                      disabled={showTeamForm || !canRegisterTeam}
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      {showTeamForm
+                        ? "Team Registration Form Open"
+                        : `Register Team${tournament.entry_fee > 0 ? ` ($${tournament.entry_fee})` : ""}`}
+                    </Button>
+                  ) : signupMode === "solo" ? (
+                    <Button
+                      onClick={joinTournament}
+                      className="w-full bg-blue-600 hover:bg-blue-700"
+                      size="lg"
+                      disabled={joining || !canRegisterSolo}
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      {joining
+                        ? "Joining..."
+                        : `Join as Solo Player${tournament.entry_fee > 0 ? ` ($${tournament.entry_fee})` : ""}`}
+                    </Button>
+                  ) : (
+                    <div className="text-center text-muted-foreground p-4 border border-dashed rounded-lg">
+                      Select a registration type above to continue
+                    </div>
+                  )
+                ) : hasPreTeams ? (
+                  // Team-only tournament
+                  <Button
+                    onClick={() => setShowTeamForm(true)}
                     className="w-full bg-green-600 hover:bg-green-700"
                     size="lg"
                     disabled={showTeamForm}
@@ -527,11 +636,9 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
                       : `Register Team${tournament.entry_fee > 0 ? ` ($${tournament.entry_fee})` : ""}`}
                   </Button>
                 ) : (
+                  // Solo-only tournament
                   <Button
-                    onClick={() => {
-                      console.log("[v0] Join lobby button clicked")
-                      joinTournament()
-                    }}
+                    onClick={joinTournament}
                     className="w-full bg-blue-600 hover:bg-blue-700"
                     size="lg"
                     disabled={joining}
@@ -545,10 +652,10 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               </div>
             )}
 
-            {!canRegister && (
+            {!(canRegisterTeam || canRegisterSolo) && (
               <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
-                Debug: isUserRegistered={isUserRegistered.toString()}, isFull={isFull.toString()}, status=
-                {tournament.status}
+                Debug: isUserRegistered={isUserRegistered.toString()}, teamsFull={teamsFull.toString()}, soloFull=
+                {soloFull.toString()}, status={tournament.status}
               </div>
             )}
 
@@ -611,9 +718,9 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               <Alert>
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>
-                  {hasPreTeams
-                    ? `Your team "${userRegistration?.team_name}" is registered for this tournament!`
-                    : "You have successfully joined this tournament!"}
+                  {userTeamRegistration
+                    ? `Your team "${userTeamRegistration.team_name}" is registered for this tournament!`
+                    : "You have successfully joined this tournament as a solo player!"}
                 </AlertDescription>
               </Alert>
             )}
@@ -625,7 +732,7 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               </Alert>
             )}
 
-            {!canRegister && !isUserRegistered && !isFull && (
+            {!(canRegisterTeam || canRegisterSolo) && !isUserRegistered && !isFull && (
               <Alert>
                 <Clock className="h-4 w-4" />
                 <AlertDescription>
@@ -642,7 +749,11 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="participants">
-            {hasPreTeams ? `Teams (${currentCount})` : `Players (${currentCount})`}
+            {isHybridTournament
+              ? `Participants (${totalCount})`
+              : hasPreTeams
+                ? `Teams (${teamCount})`
+                : `Players (${soloCount})`}
           </TabsTrigger>
         </TabsList>
 
@@ -656,18 +767,20 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
                 <div>
                   <h4 className="font-medium mb-2">Tournament Type</h4>
                   <p className="text-sm text-muted-foreground">
-                    {hasPreTeams
-                      ? "Team-based tournament where premade teams compete against each other"
-                      : "Lobby-style tournament where individual players join"}
+                    {isHybridTournament
+                      ? "Hybrid tournament where both premade teams and solo players can participate"
+                      : hasPreTeams
+                        ? "Team-based tournament where premade teams compete against each other"
+                        : "Lobby-style tournament where individual players join"}
                   </p>
                 </div>
                 <div>
                   <h4 className="font-medium mb-2">Entry Requirements</h4>
                   <p className="text-sm text-muted-foreground">
                     {tournament.entry_fee > 0
-                      ? `$${tournament.entry_fee} entry fee per ${hasPreTeams ? "team" : "player"}`
+                      ? `$${tournament.entry_fee} entry fee per ${isHybridTournament ? "participant" : hasPreTeams ? "team" : "player"}`
                       : "Free to join"}{" "}
-                    • Register as {hasPreTeams ? "team captain" : "player"}
+                    • Register as {isHybridTournament ? "team or solo player" : hasPreTeams ? "team captain" : "player"}
                   </p>
                 </div>
               </div>
@@ -675,7 +788,8 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               {tournament.entry_fee > 0 && (
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-sm">
-                    <strong>Entry Fee:</strong> ${tournament.entry_fee} per {hasPreTeams ? "team" : "player"}
+                    <strong>Entry Fee:</strong> ${tournament.entry_fee} per{" "}
+                    {isHybridTournament ? "participant" : hasPreTeams ? "team" : "player"}
                   </p>
                 </div>
               )}
@@ -684,118 +798,205 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
         </TabsContent>
 
         <TabsContent value="participants" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>{hasPreTeams ? "Registered Teams" : "Joined Players"}</span>
-                <Badge variant="secondary">
-                  {currentCount} {hasPreTeams ? "teams" : "players"}
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                {hasPreTeams
-                  ? "Teams registered for this tournament in order of registration."
-                  : "Players who have joined this tournament lobby."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {hasPreTeams ? (
-                  // Team display (existing code)
-                  <>
-                    {registeredTeams.map((team, index) => (
-                      <div key={team.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs">
-                              {team.team_name.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{team.team_name}</div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Crown className="h-3 w-3" />
-                              Captain: {team.captain.username} ({team.captain.elo_rating} ELO)
+          {isHybridTournament ? (
+            <div className="space-y-4">
+              {/* Teams Section */}
+              {hasPreTeams && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Registered Teams</span>
+                      <Badge variant="secondary">{teamCount} teams</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {registeredTeams.map((team, index) => (
+                        <div key={team.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="text-xs">
+                                {team.team_name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium">{team.team_name}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Crown className="h-3 w-3" />
+                                Captain: {team.captain.username} ({team.captain.elo_rating} ELO)
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {team.captain_id === user?.id && (
-                            <Badge variant="outline" className="text-xs">
-                              Your Team
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Empty team slots */}
-                    {Array.from({ length: maxCount - currentCount }).map((_, index) => (
-                      <div
-                        key={`empty-${index}`}
-                        className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border-dashed border"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback>
-                              <Shield className="h-4 w-4 text-muted-foreground" />
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-muted-foreground">Waiting for team...</span>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                ) : (
-                  // Player display
-                  <>
-                    {participants.map((participant, index) => (
-                      <div
-                        key={participant.id}
-                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs">
-                              {participant.user.username.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{participant.user.username}</div>
-                            <div className="text-xs text-muted-foreground">{participant.user.elo_rating} ELO</div>
+                          <div className="flex items-center gap-2">
+                            {team.captain_id === user?.id && (
+                              <Badge variant="outline" className="text-xs">
+                                Your Team
+                              </Badge>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {participant.user_id === user?.id && (
-                            <Badge variant="outline" className="text-xs">
-                              You
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
-                    {/* Empty player slots */}
-                    {Array.from({ length: maxCount - currentCount }).map((_, index) => (
-                      <div
-                        key={`empty-${index}`}
-                        className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border-dashed border"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback>
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-muted-foreground">Waiting for player...</span>
+              {/* Solo Players Section */}
+              {allowsSoloPlayers && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Solo Players</span>
+                      <Badge variant="secondary">{soloCount} players</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {participants.map((participant, index) => (
+                        <div
+                          key={participant.id}
+                          className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="text-xs">
+                                {participant.user.username.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium">{participant.user.username}</div>
+                              <div className="text-xs text-muted-foreground">{participant.user.elo_rating} ELO</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {participant.user_id === user?.id && (
+                              <Badge variant="outline" className="text-xs">
+                                You
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          ) : (
+            // Single mode tournaments (existing code)
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>{hasPreTeams ? "Registered Teams" : "Joined Players"}</span>
+                  <Badge variant="secondary">
+                    {hasPreTeams ? teamCount : soloCount} {hasPreTeams ? "teams" : "players"}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>
+                  {hasPreTeams
+                    ? "Teams registered for this tournament in order of registration."
+                    : "Players who have joined this tournament lobby."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {hasPreTeams ? (
+                    // Team display (existing code)
+                    <>
+                      {registeredTeams.map((team, index) => (
+                        <div key={team.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="text-xs">
+                                {team.team_name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium">{team.team_name}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Crown className="h-3 w-3" />
+                                Captain: {team.captain.username} ({team.captain.elo_rating} ELO)
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {team.captain_id === user?.id && (
+                              <Badge variant="outline" className="text-xs">
+                                Your Team
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Empty team slots */}
+                      {Array.from({ length: maxTeams - teamCount }).map((_, index) => (
+                        <div
+                          key={`empty-${index}`}
+                          className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border-dashed border"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback>
+                                <Shield className="h-4 w-4 text-muted-foreground" />
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-muted-foreground">Waiting for team...</span>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    // Player display
+                    <>
+                      {participants.map((participant, index) => (
+                        <div
+                          key={participant.id}
+                          className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="text-xs">
+                                {participant.user.username.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium">{participant.user.username}</div>
+                              <div className="text-xs text-muted-foreground">{participant.user.elo_rating} ELO</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {participant.user_id === user?.id && (
+                              <Badge variant="outline" className="text-xs">
+                                You
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Empty player slots */}
+                      {Array.from({ length: maxSoloPlayers - soloCount }).map((_, index) => (
+                        <div
+                          key={`empty-${index}`}
+                          className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border-dashed border"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback>
+                                <Users className="h-4 w-4 text-muted-foreground" />
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-muted-foreground">Waiting for player...</span>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>
