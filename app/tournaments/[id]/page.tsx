@@ -308,7 +308,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         </TabsContent>
 
         <TabsContent value="signup" className="space-y-6">
-          <TournamentSignupSystem tournamentId={tournament.id} />
+          <TournamentSignupSystem tournament={tournament} />
         </TabsContent>
 
         <TabsContent value="pools" className="space-y-6">

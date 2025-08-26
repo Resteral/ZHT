@@ -68,16 +68,24 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
     try {
       const { data: matchData, error: matchError } = await supabase
         .from("tournament_matches")
-        .select(`
-          *,
-          team1:tournament_teams!team1_id(team_name),
-          team2:tournament_teams!team2_id(team_name)
-        `)
+        .select("*")
         .eq("tournament_id", tournamentId)
         .order("round_number", { ascending: true })
         .order("match_number", { ascending: true })
 
       if (matchError) throw matchError
+
+      const { data: teamsData, error: teamsError } = await supabase
+        .from("tournament_teams")
+        .select("id, team_name")
+        .eq("tournament_id", tournamentId)
+
+      if (teamsError) throw teamsError
+
+      const teamLookup = (teamsData || []).reduce((acc: Record<string, string>, team: any) => {
+        acc[team.id] = team.team_name
+        return acc
+      }, {})
 
       const formattedMatches: RoundRobinMatch[] = (matchData || []).map((match: any) => ({
         id: match.id,
@@ -86,8 +94,8 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
         match_number: match.match_number,
         team1_id: match.team1_id,
         team2_id: match.team2_id,
-        team1_name: match.team1?.team_name || "TBD",
-        team2_name: match.team2?.team_name || "TBD",
+        team1_name: teamLookup[match.team1_id] || "TBD",
+        team2_name: teamLookup[match.team2_id] || "TBD",
         team1_score: match.team1_score || 0,
         team2_score: match.team2_score || 0,
         winner_id: match.winner_team_id,
