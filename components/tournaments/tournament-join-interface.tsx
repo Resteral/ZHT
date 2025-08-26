@@ -120,21 +120,45 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
   }
 
   const joinTournament = async () => {
-    if (!isAuthenticated || !user) {
-      toast.error("Please sign in to join tournaments")
-      return
-    }
-
     setJoining(true)
     try {
       console.log("[v0] Attempting to join tournament:", tournamentId)
+
+      let userId = user?.id
+
+      // If user is not authenticated, create a temporary anonymous user
+      if (!isAuthenticated || !user) {
+        console.log("[v0] Creating anonymous user for tournament join")
+        const anonymousUsername = `Guest_${Math.random().toString(36).substring(2, 8)}`
+
+        // Create anonymous user in database
+        const { data: newUser, error: userError } = await supabase
+          .from("users")
+          .insert({
+            id: crypto.randomUUID(),
+            username: anonymousUsername,
+            elo_rating: 1200,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single()
+
+        if (userError) {
+          console.error("[v0] Error creating anonymous user:", userError)
+          toast.error("Failed to join tournament. Please try again.")
+          return
+        }
+
+        userId = newUser.id
+        console.log("[v0] Created anonymous user:", anonymousUsername)
+      }
 
       // Check if user already joined
       const { data: existingParticipant } = await supabase
         .from("tournament_participants")
         .select("id")
         .eq("tournament_id", tournamentId)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .single()
 
       if (existingParticipant) {
@@ -145,9 +169,9 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
       // Add user to tournament participants
       const { error } = await supabase.from("tournament_participants").insert({
         tournament_id: tournamentId,
-        user_id: user.id,
+        user_id: userId,
         joined_at: new Date().toISOString(),
-        elo_rating: 1200, // Default ELO rating
+        status: "registered",
       })
 
       if (error) {
@@ -238,7 +262,7 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
   const isUserJoined = userInPool || userInParticipants
   const isFull = currentParticipants >= maxParticipants
   const canJoin =
-    !isUserJoined && !isFull && (tournament.status === "registration" || tournament.status === "registration_open")
+    !isUserJoined && !isFull && (tournament.status === "active" || tournament.status === "registration_open")
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -352,7 +376,9 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
                 size="lg"
               >
                 <UserPlus className="h-4 w-4 mr-2" />
-                {joining ? "Joining..." : `Join Tournament`}
+                {joining
+                  ? "Joining..."
+                  : `Join Tournament${tournament.entry_fee > 0 ? ` ($${tournament.entry_fee})` : ""}`}
               </Button>
             )}
 
@@ -385,8 +411,8 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
 
             {!isAuthenticated && (
               <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>Please sign in to join tournaments.</AlertDescription>
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>You can join as a guest player or sign in for full features.</AlertDescription>
               </Alert>
             )}
           </div>

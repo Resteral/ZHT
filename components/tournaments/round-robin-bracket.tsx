@@ -315,13 +315,13 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
 
     const interval = setInterval(() => {
       const hasLiveMatches = matches.some((m) => m.status === "live")
-      if (tournament.status === "in_progress" && hasLiveMatches) {
+      if (tournament?.status === "in_progress" && hasLiveMatches) {
         loadRoundRobinData()
       }
     }, 30000)
 
     return () => clearInterval(interval)
-  }, [autoRefresh, matches, tournament.status, loadRoundRobinData])
+  }, [autoRefresh, matches, tournament?.status, loadRoundRobinData])
 
   const rounds = [...new Set(matches.map((m) => m.round_number))].sort((a, b) => a - b)
 
@@ -345,7 +345,7 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
         </div>
 
         <div className="flex items-center gap-2">
-          {tournament.status === "in_progress" && (
+          {tournament?.status === "in_progress" && (
             <Badge variant="secondary" className="bg-green-100 text-green-800 animate-pulse">
               <Users className="h-3 w-3 mr-1" />
               Live Tournament
@@ -366,14 +366,14 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
         </div>
       </div>
 
-      {matches.length === 0 && tournament?.participant_count > 0 && tournament.status === "registration" && (
+      {matches.length === 0 && tournament?.participant_count > 0 && tournament?.status === "registration" && (
         <Card className="border-dashed border-2 border-primary/20">
           <CardContent className="text-center py-12">
             <Target className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-xl font-bold mb-2">Ready to Generate Round Robin Bracket</h3>
             <p className="text-muted-foreground mb-6">
-              {tournament.participant_count} players registered. Generate the round robin bracket where every team plays
-              every other team.
+              {tournament?.participant_count || 0} players registered. Generate the round robin bracket where every team
+              plays every other team.
             </p>
             <Button
               onClick={generateRoundRobinBracket}
