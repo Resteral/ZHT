@@ -70,36 +70,42 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
         .from("tournament_matches")
         .select("*")
         .eq("tournament_id", tournamentId)
-        .order("round_number", { ascending: true })
         .order("match_number", { ascending: true })
 
       if (matchError) throw matchError
 
-      const { data: teamsData, error: teamsError } = await supabase
+      const { data: tournamentTeamsData, error: tournamentTeamsError } = await supabase
         .from("tournament_teams")
-        .select("id, team_name")
+        .select(`
+          id,
+          team_id,
+          teams!inner(
+            id,
+            name
+          )
+        `)
         .eq("tournament_id", tournamentId)
 
-      if (teamsError) throw teamsError
+      if (tournamentTeamsError) throw tournamentTeamsError
 
-      const teamLookup = (teamsData || []).reduce((acc: Record<string, string>, team: any) => {
-        acc[team.id] = team.team_name
+      const teamLookup = (tournamentTeamsData || []).reduce((acc: Record<string, string>, tournamentTeam: any) => {
+        acc[tournamentTeam.team_id] = tournamentTeam.teams?.name || "Unknown Team"
         return acc
       }, {})
 
       const formattedMatches: RoundRobinMatch[] = (matchData || []).map((match: any) => ({
         id: match.id,
         tournament_id: match.tournament_id,
-        round_number: match.round_number,
+        round_number: Math.ceil(match.match_number / 2) || 1,
         match_number: match.match_number,
-        team1_id: match.team1_id,
-        team2_id: match.team2_id,
-        team1_name: teamLookup[match.team1_id] || "TBD",
-        team2_name: teamLookup[match.team2_id] || "TBD",
+        team1_id: match.team1_captain_id,
+        team2_id: match.team2_captain_id,
+        team1_name: teamLookup[match.team1_captain_id] || "TBD",
+        team2_name: teamLookup[match.team2_captain_id] || "TBD",
         team1_score: match.team1_score || 0,
         team2_score: match.team2_score || 0,
-        winner_id: match.winner_team_id,
-        status: match.status,
+        winner_id: match.winner_captain_id,
+        status: match.status || "ready",
         scheduled_time: match.scheduled_time,
         started_at: match.started_at,
         completed_at: match.completed_at,
@@ -197,13 +203,20 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
 
   const generateRoundRobinBracket = async () => {
     try {
-      const { data: teams, error: teamsError } = await supabase
+      const { data: tournamentTeamsData, error: teamsError } = await supabase
         .from("tournament_teams")
-        .select("id, team_name")
+        .select(`
+          id,
+          team_id,
+          teams!inner(
+            id,
+            name
+          )
+        `)
         .eq("tournament_id", tournamentId)
 
       if (teamsError) throw teamsError
-      if (!teams || teams.length < 2) {
+      if (!tournamentTeamsData || tournamentTeamsData.length < 2) {
         toast.error("Need at least 2 teams to generate round robin bracket")
         return
       }
@@ -212,24 +225,18 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
       let matchNumber = 1
 
       // Generate all possible matchups
-      for (let i = 0; i < teams.length; i++) {
-        for (let j = i + 1; j < teams.length; j++) {
-          const roundNumber = Math.ceil(matchNumber / Math.floor(teams.length / 2)) || 1
-
+      for (let i = 0; i < tournamentTeamsData.length; i++) {
+        for (let j = i + 1; j < tournamentTeamsData.length; j++) {
           roundRobinMatches.push({
             id: `${tournamentId}-rr-${matchNumber}`,
             tournament_id: tournamentId,
-            round_number: roundNumber,
             match_number: matchNumber,
-            team1_id: teams[i].id,
-            team2_id: teams[j].id,
+            team1_captain_id: tournamentTeamsData[i].team_id,
+            team2_captain_id: tournamentTeamsData[j].team_id,
             team1_score: 0,
             team2_score: 0,
-            winner_team_id: null,
+            winner_captain_id: null,
             status: "ready",
-            bracket_position: `RR-R${roundNumber}-M${matchNumber}`,
-            scheduled_time: new Date(Date.now() + matchNumber * 2 * 60 * 60 * 1000).toISOString(),
-            spectator_count: 0,
             created_at: new Date().toISOString(),
           })
           matchNumber++
@@ -271,7 +278,7 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
         .update({
           team1_score: team1Score,
           team2_score: team2Score,
-          winner_team_id: winnerId,
+          winner_captain_id: winnerId,
           status: "completed",
           completed_at: new Date().toISOString(),
         })
