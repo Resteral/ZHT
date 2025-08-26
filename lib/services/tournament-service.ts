@@ -85,9 +85,7 @@ export const tournamentService = {
   },
 
   async createTournament(tournamentData: any, userId?: string) {
-    console.log("[v0] Creating tournament with unlimited capacity:", tournamentData)
-
-    console.log("[v0] Creating anonymous tournament with no user affiliation")
+    console.log("[v0] Creating regular tournament:", tournamentData)
 
     const supabase = createClient()
 
@@ -95,62 +93,41 @@ export const tournamentService = {
       name: tournamentData.name,
       description: tournamentData.description,
       game: tournamentData.game || "hockey",
-      tournament_type: tournamentData.tournament_type || "snake_draft",
-      max_participants: 999999, // Unlimited participants
-      max_teams: 999999, // Unlimited teams
-      entry_fee: 0, // Always free
+      tournament_type: "draft", // Always use "draft" for all draft modes
+      max_participants: tournamentData.max_participants,
+      entry_fee: tournamentData.entry_fee || 0,
       prize_pool: tournamentData.prize_pool || 0,
-      status: "registration", // Always open for registration
-      start_date: new Date().toISOString(), // Start immediately
-      end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // End in 1 year
-      team_based: tournamentData.team_based || false,
+      status: "pending", // Use "pending" status to avoid constraint violations
+      start_date: tournamentData.start_date,
+      end_date: tournamentData.end_date,
+      team_based: true,
       player_pool_settings: {
-        draft_mode: tournamentData.draft_mode || "snake_draft",
-        pick_time_limit: tournamentData.pick_time_limit || 60,
-        auto_start: true, // Always auto-start
-        num_teams: 999999, // Unlimited teams
-        players_per_team: tournamentData.players_per_team || 4,
-        create_lobbies_on_finish: true,
-        instant_access: true, // New flag for instant access
-        no_restrictions: true, // New flag to bypass all checks
-        ...tournamentData.settings,
+        draft_mode: tournamentData.player_pool_settings?.draft_mode || "snake_draft",
+        num_teams: tournamentData.player_pool_settings?.num_teams || 8,
+        players_per_team: tournamentData.player_pool_settings?.players_per_team || 4,
+        auto_start: tournamentData.player_pool_settings?.auto_start || true,
+        create_lobbies_on_finish: tournamentData.player_pool_settings?.create_lobbies_on_finish || true,
+        bracket_type: tournamentData.player_pool_settings?.bracket_type || "single_elimination",
+        ...tournamentData.player_pool_settings,
       },
+      created_by: userId || "00000000-0000-0000-0000-000000000000", // Use system user as fallback
     }
 
-    if (tournamentData.tournament_type === "month_long_draft") {
-      const { monthLongTournamentService } = await import("./month-long-tournament-service")
-      return await monthLongTournamentService.createMonthLongTournament(
-        {
-          name: tournamentData.name,
-          description: tournamentData.description,
-          tournament_type:
-            tournamentData.settings?.draft_type === "snake"
-              ? "snake_draft"
-              : tournamentData.settings?.draft_type === "linear"
-                ? "linear_draft"
-                : "auction_draft",
-          duration_days: tournamentData.duration_days || 30,
-          max_participants: 999999, // Unlimited
-          entry_fee: 0, // Always free
-          start_date: new Date().toISOString(), // Start immediately
-        },
-        null,
-      )
-    }
+    console.log("[v0] Tournament data to create:", tournamentToCreate)
 
     const { data, error } = await supabase.from("tournaments").insert(tournamentToCreate).select().single()
 
     if (error) {
       console.error("[v0] Error creating tournament:", error)
       if (error.code === "23503") {
-        throw new Error(`Database constraint error: ${error.message}`)
-      } else if (error.code === "22P02") {
-        throw new Error("Invalid data format - please check your input and try again")
+        throw new Error(`Failed to create tournament: ${error.message}`)
+      } else if (error.code === "23514") {
+        throw new Error(`Invalid tournament status. Please try again.`)
       }
-      throw error
+      throw new Error(`Failed to create tournament: ${error.message}`)
     }
 
-    console.log("[v0] Unlimited tournament created successfully:", data)
+    console.log("[v0] Regular tournament created successfully:", data)
 
     const { data: verifyData, error: verifyError } = await supabase
       .from("tournaments")
@@ -163,7 +140,7 @@ export const tournamentService = {
       throw new Error("Tournament was not saved properly to database")
     }
 
-    console.log("[v0] Tournament verified and ready for unlimited instant signup:", verifyData.name)
+    console.log("[v0] Tournament verified and ready:", verifyData.name)
     return data
   },
 

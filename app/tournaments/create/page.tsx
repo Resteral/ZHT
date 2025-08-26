@@ -164,7 +164,7 @@ export default function CreateTournamentPage() {
               setLoading(true)
 
               try {
-                console.log("[v0] Starting simplified tournament creation")
+                console.log("[v0] Starting regular tournament creation")
                 console.log("[v0] Tournament data:", formData)
 
                 const supabase = createClient()
@@ -230,10 +230,10 @@ export default function CreateTournamentPage() {
                   created_by: creatorId,
                 }
 
-                console.log("[v0] Creating tournament with simplified data:", tournamentData)
+                console.log("[v0] Creating tournament with regular service:", tournamentData)
 
-                const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
-                const tournament = await monthLongTournamentService.createMonthLongTournament(tournamentData, creatorId)
+                const { tournamentService } = await import("@/lib/services/tournament-service")
+                const tournament = await tournamentService.createTournament(tournamentData, creatorId)
 
                 console.log("[v0] Tournament created successfully:", tournament)
 
