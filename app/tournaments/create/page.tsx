@@ -1,6 +1,6 @@
 "use client"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,35 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Users, Trophy, Settings, Calendar, Clock } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 import { toast } from "@/components/ui/use-toast"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
-  const [user, setUser] = useState<any>(null)
-  const [authLoading, setAuthLoading] = useState(true)
 
   const tournamentType = searchParams.get("type")
-
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const supabase = createClient()
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-        setUser(user)
-        console.log("[v0] User loaded:", user?.id, user?.email)
-      } catch (error) {
-        console.error("[v0] Error loading user:", error)
-      } finally {
-        setAuthLoading(false)
-      }
-    }
-    loadUser()
-  }, [])
 
   const [formData, setFormData] = useState({
     name: `${
@@ -86,21 +65,6 @@ export default function CreateTournamentPage() {
   const isEndDateValid = endDate > startDate
   const isDateValid = isStartDateValid && isEndDateValid
 
-  if (authLoading) {
-    return (
-      <div className="container mx-auto py-6 max-w-2xl">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const showSignInPrompt = !user
-
   return (
     <div className="container mx-auto py-6 max-w-2xl">
       <div className="flex items-center gap-4 mb-6">
@@ -130,24 +94,6 @@ export default function CreateTournamentPage() {
         </div>
       )}
 
-      {showSignInPrompt && (
-        <Card className="mb-6 border-blue-200 bg-blue-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Sign in to track your tournaments</p>
-                <p className="text-sm text-muted-foreground">
-                  You can create tournaments without signing in, but you won't be able to manage them later
-                </p>
-              </div>
-              <Button asChild size="sm">
-                <Link href="/auth/signin?redirect=/tournaments/create">Sign In</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -164,51 +110,8 @@ export default function CreateTournamentPage() {
               setLoading(true)
 
               try {
-                console.log("[v0] Starting regular tournament creation")
+                console.log("[v0] Starting anonymous tournament creation")
                 console.log("[v0] Tournament data:", formData)
-
-                const supabase = createClient()
-
-                const creatorId = user?.id
-
-                if (!creatorId) {
-                  throw new Error("Please sign in to create tournaments")
-                }
-
-                // Ensure the authenticated user exists in the database
-                const userEmail = user.email
-                const userName = userEmail?.split("@")[0] || "User"
-
-                console.log("[v0] Ensuring user exists in database:", creatorId)
-
-                const { data: existingUser, error: checkError } = await supabase
-                  .from("users")
-                  .select("id")
-                  .eq("id", creatorId)
-                  .single()
-
-                if (checkError && checkError.code === "PGRST116") {
-                  // User doesn't exist, create them
-                  console.log("[v0] Creating new user record")
-                  const { error: createError } = await supabase.from("users").insert({
-                    id: creatorId,
-                    username: userName,
-                    email: userEmail || "",
-                    display_name: user.user_metadata?.display_name || userName,
-                    elo_rating: 1200,
-                  })
-
-                  if (createError) {
-                    console.error("[v0] Failed to create user:", createError)
-                    throw new Error("Failed to create user record. Please try again.")
-                  }
-                  console.log("[v0] User created successfully")
-                } else if (checkError) {
-                  console.error("[v0] Error checking user:", checkError)
-                  throw new Error("Failed to validate user. Please try again.")
-                } else {
-                  console.log("[v0] User already exists in database")
-                }
 
                 const startDateTime = new Date(formData.start_date).toISOString()
                 const endDateTime = new Date(formData.end_date).toISOString()
@@ -226,38 +129,20 @@ export default function CreateTournamentPage() {
                     ...formData.settings,
                     draft_mode: formData.settings.draft_mode,
                   },
-                  created_by: creatorId,
                 }
 
-                console.log("[v0] Creating tournament with regular service:", tournamentData)
+                console.log("[v0] Creating anonymous tournament:", tournamentData)
 
                 const { tournamentService } = await import("@/lib/services/tournament-service")
-                const tournament = await tournamentService.createTournament(tournamentData, creatorId)
+                const tournament = await tournamentService.createTournament(tournamentData)
 
                 console.log("[v0] Tournament created successfully:", tournament)
-
-                try {
-                  const { error: participantError } = await supabase.from("tournament_participants").insert({
-                    tournament_id: tournament.id,
-                    user_id: creatorId,
-                    status: "registered",
-                    joined_at: new Date().toISOString(),
-                  })
-
-                  if (participantError) {
-                    console.error("[v0] Error adding creator to tournament:", participantError)
-                  } else {
-                    console.log("[v0] Successfully added tournament creator as first player")
-                  }
-                } catch (error) {
-                  console.error("[v0] Error in host auto-join process:", error)
-                }
 
                 router.push(`/tournaments/${tournament.id}/lobby`)
 
                 toast({
                   title: "Tournament created!",
-                  description: "You've been added as the first player in the lobby",
+                  description: "Tournament is now available for players to join",
                 })
               } catch (error: any) {
                 console.error("[v0] Error creating tournament:", error)
