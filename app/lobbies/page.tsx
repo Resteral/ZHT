@@ -267,9 +267,10 @@ export default function LobbiesPage() {
       </div>
 
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="all">All Live ({allContent.length})</TabsTrigger>
           <TabsTrigger value="active">Active Games ({activeGames.length})</TabsTrigger>
+          <TabsTrigger value="lobbies">Lobbies ({lobbies.length})</TabsTrigger>
           <TabsTrigger value="tournaments">Tournaments ({tournaments.length})</TabsTrigger>
         </TabsList>
 
@@ -306,6 +307,27 @@ export default function LobbiesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {activeGames.map((game) => (
                 <LobbyCard key={game.id} lobby={game} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="lobbies" className="mt-6">
+          {lobbies.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-xl font-semibold mb-2">No Active Lobbies</h3>
+                <p className="text-muted-foreground mb-4">Create a new lobby to start playing with others.</p>
+                <Button asChild>
+                  <Link href="/draft">Create Lobby</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {lobbies.map((lobby) => (
+                <LobbyCard key={lobby.id} lobby={lobby} />
               ))}
             </div>
           )}

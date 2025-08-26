@@ -29,12 +29,10 @@ export default function CreateTournamentPage() {
             : "Snake Draft"
     } Tournament`,
     tournament_type: "month_long_draft",
+    max_participants: 32,
     start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16),
     end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
     game: "zealot_hockey",
-    team_based: false,
-    max_teams: 8,
-    signup_mode: "solo" as "solo" | "teams" | "hybrid",
     settings: {
       draft_mode: (tournamentType === "snake_draft"
         ? "snake_draft"
@@ -52,13 +50,13 @@ export default function CreateTournamentPage() {
         | "double_elimination"
         | "round_robin"
         | "swiss_system",
-      allow_solo_players: true,
-      allow_premade_teams: false,
     },
   })
 
-  const maxParticipants = formData.settings.num_teams * formData.settings.players_per_team
-  const isValid = true // Remove redundant validation
+  const playersNeeded = formData.settings.num_teams * formData.settings.players_per_team
+  const excessPlayers = formData.max_participants - playersNeeded
+  const hasConflict = playersNeeded > formData.max_participants
+  const isValid = !hasConflict
 
   const startDate = new Date(formData.start_date)
   const endDate = new Date(formData.end_date)
@@ -122,9 +120,7 @@ export default function CreateTournamentPage() {
                   name: formData.name,
                   description: `${formData.settings.num_teams} teams, ${formData.settings.players_per_team} players each`,
                   tournament_type: "draft",
-                  max_participants: maxParticipants,
-                  team_based: formData.team_based,
-                  max_teams: formData.max_teams,
+                  max_participants: formData.max_participants,
                   entry_fee: 0,
                   start_date: startDateTime,
                   end_date: endDateTime,
@@ -132,9 +128,6 @@ export default function CreateTournamentPage() {
                   player_pool_settings: {
                     ...formData.settings,
                     draft_mode: formData.settings.draft_mode,
-                    signup_mode: formData.signup_mode,
-                    allow_solo_players: formData.settings.allow_solo_players,
-                    allow_premade_teams: formData.settings.allow_premade_teams,
                   },
                 }
 
@@ -222,106 +215,6 @@ export default function CreateTournamentPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Tournament Type</Label>
-                <Select
-                  value={formData.signup_mode}
-                  onValueChange={(value: "solo" | "teams" | "hybrid") => {
-                    const isTeamBased = value === "teams" || value === "hybrid"
-                    setFormData({
-                      ...formData,
-                      signup_mode: value,
-                      team_based: isTeamBased,
-                      settings: {
-                        ...formData.settings,
-                        allow_solo_players: value === "solo" || value === "hybrid",
-                        allow_premade_teams: value === "teams" || value === "hybrid",
-                      },
-                    })
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="solo">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        Solo Players Only
-                        <span className="text-xs text-muted-foreground ml-2">Individual registration</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="hybrid">
-                      <div className="flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        Hybrid Tournament
-                        <span className="text-xs text-muted-foreground ml-2">Both solo & teams</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">
-                  {formData.signup_mode === "solo" && "Players join individually and are drafted into teams"}
-                  {formData.signup_mode === "teams" && "Only premade teams can register for this tournament"}
-                  {formData.signup_mode === "hybrid" && "Both individual players and premade teams can participate"}
-                </p>
-              </div>
-
-              {(formData.signup_mode === "teams" || formData.signup_mode === "hybrid") && (
-                <div className="space-y-2">
-                  <Label>Maximum Teams</Label>
-                  <Select
-                    value={formData.max_teams.toString()}
-                    onValueChange={(value) => setFormData({ ...formData, max_teams: Number.parseInt(value) })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[4, 6, 8, 10, 12, 16, 20, 24].map((num) => (
-                        <SelectItem key={num} value={num.toString()}>
-                          <div className="flex items-center gap-2">
-                            <Trophy className="h-4 w-4" />
-                            {num} Teams Maximum
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-muted-foreground">Maximum number of teams that can register</p>
-                </div>
-              )}
-
-              {(formData.signup_mode === "solo" || formData.signup_mode === "hybrid") && (
-                <div className="space-y-2">
-                  <Label>Player Pool Size</Label>
-                  <Select
-                    value={formData.settings.max_pool_size.toString()}
-                    onValueChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        settings: { ...formData.settings, max_pool_size: Number.parseInt(value) },
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[30, 40, 50, 60, 80, 100, 128].map((num) => (
-                        <SelectItem key={num} value={num.toString()}>
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            {num} Players Maximum
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-muted-foreground">Maximum individual players in the draft pool</p>
-                </div>
-              )}
-
-              <div className="space-y-2">
                 <Label>Draft Type</Label>
                 <Select
                   value={formData.settings.draft_mode}
@@ -357,6 +250,29 @@ export default function CreateTournamentPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground">How captains will select players for their teams</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tournament Participant Limit</Label>
+                <Select
+                  value={formData.max_participants.toString()}
+                  onValueChange={(value) => setFormData({ ...formData, max_participants: Number.parseInt(value) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[16, 24, 32, 48, 64, 96, 128].map((num) => (
+                      <SelectItem key={num} value={num.toString()}>
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          {num} Players Maximum
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">Maximum number of players that can join this tournament</p>
               </div>
 
               <div className="space-y-2">
@@ -440,7 +356,7 @@ export default function CreateTournamentPage() {
               </div>
             </div>
 
-            <Card className={`${!isDateValid ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}>
+            <Card className={`${hasConflict || !isDateValid ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}>
               <CardContent className="pt-6">
                 <div className="space-y-2">
                   <h4 className="font-medium flex items-center gap-2">
@@ -461,43 +377,46 @@ export default function CreateTournamentPage() {
                       <strong>{formData.settings.draft_mode.replace("_", " ").toUpperCase()}</strong> tournament format
                     </p>
                     <p>
-                      <strong>{maxParticipants}</strong> players maximum can join
+                      <strong>{formData.max_participants}</strong> players maximum can join
                     </p>
                     <p>
                       <strong>{formData.settings.num_teams}</strong> teams with{" "}
                       <strong>{formData.settings.players_per_team}</strong> players each
                     </p>
-                    <p>
-                      <strong>{formData.signup_mode.charAt(0).toUpperCase() + formData.signup_mode.slice(1)}</strong>{" "}
-                      Tournament
-                    </p>
-                    {formData.team_based && (
-                      <p>
-                        <strong>Max Teams:</strong> {formData.max_teams} teams can register
-                      </p>
-                    )}
-                    {(formData.signup_mode === "solo" || formData.signup_mode === "hybrid") && (
-                      <p>
-                        <strong>Player Pool:</strong> Up to {formData.settings.max_pool_size} individual players
-                      </p>
-                    )}
 
                     {!isDateValid && (
                       <div className="text-destructive font-medium">
                         ⚠️ <strong>DATE ERROR:</strong> Please fix the tournament dates
                       </div>
                     )}
+
+                    {hasConflict ? (
+                      <div className="text-destructive font-medium">
+                        ⚠️ <strong>CONFLICT:</strong> Need {playersNeeded} players but only {formData.max_participants}{" "}
+                        maximum allowed
+                      </div>
+                    ) : excessPlayers > 0 ? (
+                      <p className="text-muted-foreground">
+                        Up to <strong>{excessPlayers}</strong> excess players will be removed after draft
+                      </p>
+                    ) : (
+                      <p className="text-green-600 font-medium">
+                        ✓ Perfect match: All {formData.max_participants} players will be drafted
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Button type="submit" disabled={loading || !isDateValid} className="w-full" size="lg">
+            <Button type="submit" disabled={loading || !isValid || !isDateValid} className="w-full" size="lg">
               {loading
                 ? "Creating Tournament..."
                 : !isDateValid
                   ? "Fix Tournament Dates First"
-                  : "Create Tournament & Go to Lobby"}
+                  : hasConflict
+                    ? "Fix Configuration First"
+                    : "Create Tournament & Go to Lobby"}
             </Button>
           </form>
         </CardContent>

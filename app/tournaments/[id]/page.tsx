@@ -49,7 +49,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
-  const [user, setUser] = useState<any | null>(null)
+  const [user, setUser] = useState<any | null>(null) // Assuming user state is needed for isOrganizer check
 
   useEffect(() => {
     if (!isValidUUID(params.id)) {
@@ -58,14 +58,20 @@ export default function TournamentPage({ params }: TournamentPageProps) {
     }
 
     fetchTournament()
-    fetchUser()
+    fetchUser() // Assuming fetchUser function is needed to get user data
   }, [params.id, router])
 
   const fetchTournament = async () => {
     try {
       const supabase = createClient()
 
-      const { data, error } = await supabase.from("tournaments").select(`*`).eq("id", params.id).single()
+      const { data, error } = await supabase
+        .from("tournaments")
+        .select(`
+          *
+        `)
+        .eq("id", params.id)
+        .single()
 
       if (error) {
         console.error("Error fetching tournament:", error)
@@ -81,21 +87,19 @@ export default function TournamentPage({ params }: TournamentPageProps) {
 
         setTournament({
           ...data,
-          sport: data.game || "fantasy_football",
-          league_mode: data.tournament_type || "tournament",
+          sport: data.game || "fantasy_football", // Map game to sport field
+          league_mode: data.tournament_type || "tournament", // Map tournament_type to league_mode
           max_teams: data.max_participants || data.max_teams || 0,
           participant_count: participantData?.length || 0,
         })
 
-        if (data.status === "active" || data.status === "registration_open") {
-          setActiveTab("join")
-        } else if (data.status === "draft") {
+        if (data.status === "registration") {
           setActiveTab("signup")
         } else if (data.status === "team_building") {
           setActiveTab("pools")
-        } else if (data.status === "drafting") {
+        } else if (data.status === "draft" || data.status === "drafting") {
           setActiveTab("draft")
-        } else if (data.status === "in_progress") {
+        } else if (data.status === "active" || data.status === "in_progress") {
           setActiveTab("bracket")
         }
       }
@@ -108,15 +112,9 @@ export default function TournamentPage({ params }: TournamentPageProps) {
   }
 
   const fetchUser = async () => {
-    try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
-    } catch (error) {
-      console.error("Error fetching user:", error)
-    }
+    // Assuming this function fetches user data
+    const user = { id: "some_user_id" } // Replace with actual user data fetching logic
+    setUser(user)
   }
 
   if (!isValidUUID(params.id)) {
@@ -306,35 +304,11 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         </TabsContent>
 
         <TabsContent value="join" className="space-y-6">
-          {tournament ? (
-            <TournamentJoinInterface tournamentId={tournament.id} tournament={tournament} />
-          ) : (
-            <Card>
-              <CardContent className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="mt-2 text-muted-foreground">Loading tournament...</p>
-              </CardContent>
-            </Card>
-          )}
+          <TournamentJoinInterface tournamentId={tournament.id} tournament={tournament} />
         </TabsContent>
 
         <TabsContent value="signup" className="space-y-6">
-          {tournament ? (
-            <TournamentSignupSystem
-              tournament={tournament}
-              onSignupComplete={() => {
-                fetchTournament() // Refresh tournament data after signup
-                setActiveTab("pools") // Move to pools tab after signup
-              }}
-            />
-          ) : (
-            <Card>
-              <CardContent className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="mt-2 text-muted-foreground">Loading signup...</p>
-              </CardContent>
-            </Card>
-          )}
+          <TournamentSignupSystem tournament={tournament} />
         </TabsContent>
 
         <TabsContent value="pools" className="space-y-6">
