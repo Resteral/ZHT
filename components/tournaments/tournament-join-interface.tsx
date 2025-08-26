@@ -8,6 +8,9 @@ import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Users,
   Trophy,
@@ -15,10 +18,10 @@ import {
   Clock,
   Crown,
   UserPlus,
-  Star,
   RefreshCw,
   CheckCircle,
   AlertCircle,
+  Shield,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
@@ -29,12 +32,14 @@ interface TournamentJoinInterfaceProps {
   tournament?: any
 }
 
-interface PlayerInPool {
-  user_id: string
+interface TeamRegistration {
+  id: string
+  team_name: string
+  captain_id: string
+  tournament_id: string
   status: string
-  captain_type?: string
   created_at: string
-  users: {
+  captain: {
     username: string
     elo_rating: number
   }
@@ -42,18 +47,21 @@ interface PlayerInPool {
 
 export function TournamentJoinInterface({ tournamentId, tournament: initialTournament }: TournamentJoinInterfaceProps) {
   const [tournament, setTournament] = useState(initialTournament)
-  const [playerPool, setPlayerPool] = useState<PlayerInPool[]>([])
-  const [participants, setParticipants] = useState<any[]>([])
+  const [registeredTeams, setRegisteredTeams] = useState<TeamRegistration[]>([])
   const [loading, setLoading] = useState(!initialTournament)
   const [joining, setJoining] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+
+  const [teamName, setTeamName] = useState("")
+  const [teamDescription, setTeamDescription] = useState("")
+  const [showTeamForm, setShowTeamForm] = useState(false)
 
   const supabase = createClient()
   const { user, isAuthenticated } = useAuth()
 
   const loadTournamentData = async () => {
     try {
-      console.log("[v0] Loading tournament join data for:", tournamentId)
+      console.log("[v0] Loading tournament team data for:", tournamentId)
 
       // Load tournament details if not provided
       if (!tournament) {
@@ -70,46 +78,39 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
         setTournament(tournamentData)
       }
 
-      // Load player pool for draft-based tournaments
-      const { data: poolData, error: poolError } = await supabase
-        .from("tournament_player_pool")
-        .select(`
-          user_id,
-          status,
-          captain_type,
-          created_at,
-          users (username, elo_rating)
-        `)
+      const { data: teamsData, error: teamsError } = await supabase
+        .from("tournament_teams")
+        .select("*")
         .eq("tournament_id", tournamentId)
         .order("created_at", { ascending: true })
 
-      if (poolError && !poolError.message.includes("does not exist")) {
-        console.error("[v0] Error loading player pool:", poolError)
-      } else {
-        const players: PlayerInPool[] = (poolData || []).map((entry: any) => ({
-          user_id: entry.user_id,
-          status: entry.status,
-          captain_type: entry.captain_type,
-          created_at: entry.created_at,
-          users: entry.users || { username: "Unknown", elo_rating: 1200 },
-        }))
-        setPlayerPool(players)
-      }
+      if (teamsError) {
+        console.error("[v0] Error loading teams:", teamsError)
+      } else if (teamsData && teamsData.length > 0) {
+        // Get team details and captain info
+        const teamIds = teamsData.map((t) => t.team_id)
+        const { data: teamDetails } = await supabase
+          .from("teams")
+          .select("id, name, owner_id, users!teams_owner_id_fkey(username, elo_rating)")
+          .in("id", teamIds)
 
-      // Load direct participants for non-draft tournaments
-      const { data: participantData, error: participantError } = await supabase
-        .from("tournament_participants")
-        .select(`
-          *,
-          users (username, elo_rating)
-        `)
-        .eq("tournament_id", tournamentId)
-        .order("created_at", { ascending: true })
+        const teamsWithDetails: TeamRegistration[] = teamsData.map((teamReg) => {
+          const teamDetail = teamDetails?.find((t) => t.id === teamReg.team_id)
+          return {
+            id: teamReg.id,
+            team_name: teamDetail?.name || "Unknown Team",
+            captain_id: teamDetail?.owner_id || "",
+            tournament_id: teamReg.tournament_id,
+            status: teamReg.is_active ? "active" : "inactive",
+            created_at: teamReg.registered_at,
+            captain: {
+              username: teamDetail?.users?.username || "Unknown",
+              elo_rating: teamDetail?.users?.elo_rating || 1200,
+            },
+          }
+        })
 
-      if (participantError && !participantError.message.includes("does not exist")) {
-        console.error("[v0] Error loading participants:", participantError)
-      } else {
-        setParticipants(participantData || [])
+        setRegisteredTeams(teamsWithDetails)
       }
     } catch (error) {
       console.error("[v0] Error loading tournament data:", error)
@@ -119,72 +120,125 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
     }
   }
 
-  const joinTournament = async () => {
+  const registerTeam = async () => {
+    if (!teamName.trim()) {
+      toast.error("Please enter a team name")
+      return
+    }
+
     setJoining(true)
     try {
-      console.log("[v0] Attempting to join tournament:", tournamentId)
+      console.log("[v0] Registering team for tournament:", tournamentId)
 
       let userId = user?.id
 
-      // If user is not authenticated, create a temporary anonymous user
-      if (!isAuthenticated || !user) {
-        console.log("[v0] Creating anonymous user for tournament join")
-        const anonymousUsername = `Guest_${Math.random().toString(36).substring(2, 8)}`
+      if (isAuthenticated && user) {
+        // Verify authenticated user exists
+        const { data: existingUser, error: userCheckError } = await supabase
+          .from("users")
+          .select("id, username")
+          .eq("id", user.id)
+          .single()
 
-        // Create anonymous user in database
+        if (userCheckError || !existingUser) {
+          // Create user record if needed
+          const { data: newUser, error: userCreateError } = await supabase
+            .from("users")
+            .insert({
+              id: user.id,
+              username: user.user_metadata?.username || user.email?.split("@")[0] || `User_${user.id.slice(0, 8)}`,
+              elo_rating: 1200,
+              total_games: 0,
+              wins: 0,
+              losses: 0,
+              balance: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select("id, username")
+            .single()
+
+          if (userCreateError) {
+            console.error("[v0] Error creating user record:", userCreateError)
+            toast.error("Failed to create user record. Please try again.")
+            return
+          }
+        }
+
+        userId = user.id
+      } else {
+        // Create anonymous user
+        const anonymousUsername = `Guest_${Math.random().toString(36).substring(2, 8)}`
+        const anonymousUserId = crypto.randomUUID()
+
         const { data: newUser, error: userError } = await supabase
           .from("users")
           .insert({
-            id: crypto.randomUUID(),
+            id: anonymousUserId,
             username: anonymousUsername,
             elo_rating: 1200,
+            total_games: 0,
+            wins: 0,
+            losses: 0,
+            balance: 0,
             created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
-          .select()
+          .select("id, username")
           .single()
 
         if (userError) {
           console.error("[v0] Error creating anonymous user:", userError)
-          toast.error("Failed to join tournament. Please try again.")
+          toast.error("Failed to create guest account. Please try again.")
           return
         }
 
         userId = newUser.id
-        console.log("[v0] Created anonymous user:", anonymousUsername)
       }
 
-      // Check if user already joined
-      const { data: existingParticipant } = await supabase
-        .from("tournament_participants")
-        .select("id")
-        .eq("tournament_id", tournamentId)
-        .eq("user_id", userId)
+      // Create team first
+      const { data: newTeam, error: teamError } = await supabase
+        .from("teams")
+        .insert({
+          name: teamName.trim(),
+          description: teamDescription.trim() || `Team for ${tournament.name}`,
+          owner_id: userId,
+          game: tournament.game || "zealot_hockey",
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select("id, name")
         .single()
 
-      if (existingParticipant) {
-        toast.error("You're already registered for this tournament!")
+      if (teamError) {
+        console.error("[v0] Error creating team:", teamError)
+        toast.error("Failed to create team. Please try again.")
         return
       }
 
-      // Add user to tournament participants
-      const { error } = await supabase.from("tournament_participants").insert({
+      // Register team for tournament
+      const { error: registrationError } = await supabase.from("tournament_teams").insert({
         tournament_id: tournamentId,
-        user_id: userId,
-        joined_at: new Date().toISOString(),
-        status: "registered",
+        team_id: newTeam.id,
+        is_active: true,
+        registered_at: new Date().toISOString(),
       })
 
-      if (error) {
-        console.error("[v0] Error joining tournament:", error)
-        toast.error("Failed to join tournament. Please try again.")
+      if (registrationError) {
+        console.error("[v0] Error registering team:", registrationError)
+        toast.error("Failed to register team for tournament. Please try again.")
         return
       }
 
-      toast.success("Successfully joined tournament!")
+      toast.success(`Team "${teamName}" successfully registered!`)
+      setTeamName("")
+      setTeamDescription("")
+      setShowTeamForm(false)
       await loadTournamentData() // Refresh data
     } catch (error) {
-      console.error("[v0] Error joining tournament:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to join tournament")
+      console.error("[v0] Error registering team:", error)
+      toast.error("Failed to register team")
     } finally {
       setJoining(false)
     }
@@ -192,41 +246,6 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
 
   useEffect(() => {
     loadTournamentData()
-
-    // Set up real-time subscription
-    const subscription = supabase
-      .channel(`tournament-join-${tournamentId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tournament_player_pool",
-          filter: `tournament_id=eq.${tournamentId}`,
-        },
-        () => {
-          console.log("[v0] Tournament pool update detected")
-          loadTournamentData()
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tournament_participants",
-          filter: `tournament_id=eq.${tournamentId}`,
-        },
-        () => {
-          console.log("[v0] Tournament participants update detected")
-          loadTournamentData()
-        },
-      )
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
-    }
   }, [tournamentId])
 
   if (loading) {
@@ -251,18 +270,30 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
     )
   }
 
-  const isDraftTournament =
-    tournament.tournament_type?.includes("draft") || tournament.player_pool_settings?.enable_player_pool
-  const currentParticipants = isDraftTournament ? playerPool.length : participants.length
-  const maxParticipants = tournament.max_participants || 16
-  const progressPercentage = (currentParticipants / maxParticipants) * 100
+  const currentTeams = registeredTeams.length
+  const maxTeams = tournament.max_teams || 8
+  const progressPercentage = (currentTeams / maxTeams) * 100
 
-  const userInPool = playerPool.find((p) => p.user_id === user?.id)
-  const userInParticipants = participants.find((p) => p.user_id === user?.id)
-  const isUserJoined = userInPool || userInParticipants
-  const isFull = currentParticipants >= maxParticipants
-  const canJoin =
-    !isUserJoined && !isFull && (tournament.status === "active" || tournament.status === "registration_open")
+  const userTeam = registeredTeams.find((t) => t.captain_id === user?.id)
+  const isUserRegistered = !!userTeam
+  const isFull = currentTeams >= maxTeams
+  const canRegister =
+    !isUserRegistered &&
+    !isFull &&
+    (tournament.status === "active" ||
+      tournament.status === "registration_open" ||
+      tournament.status === "pending" ||
+      tournament.status === "draft")
+
+  console.log("[v0] Join button state:", {
+    isUserRegistered,
+    isFull,
+    tournamentStatus: tournament.status,
+    canRegister,
+    showTeamForm,
+    currentTeams,
+    maxTeams,
+  })
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -302,6 +333,10 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               <div className="flex items-center gap-3">
                 <CardTitle className="text-2xl">{tournament.name}</CardTitle>
                 <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Shield className="h-3 w-3" />
+                  Team Tournament
+                </Badge>
               </div>
               <CardDescription className="text-base">{tournament.description}</CardDescription>
             </div>
@@ -319,19 +354,16 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               <Trophy className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Type</p>
-                <p className="font-medium">
-                  {tournament.tournament_type?.replace("_", " ").replace(/\b\w/g, (l: string) => l.toUpperCase()) ||
-                    "Tournament"}
-                </p>
+                <p className="font-medium">Team Tournament</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="text-sm text-muted-foreground">Players</p>
+                <p className="text-sm text-muted-foreground">Teams</p>
                 <p className="font-medium">
-                  {currentParticipants}/{maxParticipants}
+                  {currentTeams}/{maxTeams}
                 </p>
               </div>
             </div>
@@ -355,64 +387,119 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
             </div>
           </div>
 
-          {/* Join Tournament Section */}
+          {/* Team Registration Section */}
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Tournament Progress</span>
                 <span className="font-medium">
-                  {currentParticipants}/{maxParticipants}
+                  {currentTeams}/{maxTeams} teams
                 </span>
               </div>
               <Progress value={progressPercentage} className="h-3" />
             </div>
 
-            {/* Join Button */}
-            {canJoin && (
+            {canRegister && (
               <Button
-                onClick={joinTournament}
-                disabled={joining}
+                onClick={() => {
+                  console.log("[v0] Register button clicked")
+                  setShowTeamForm(true)
+                }}
                 className="w-full bg-green-600 hover:bg-green-700"
                 size="lg"
+                disabled={showTeamForm}
               >
                 <UserPlus className="h-4 w-4 mr-2" />
-                {joining
-                  ? "Joining..."
-                  : `Join Tournament${tournament.entry_fee > 0 ? ` ($${tournament.entry_fee})` : ""}`}
+                {showTeamForm
+                  ? "Team Registration Form Open"
+                  : `Register Team${tournament.entry_fee > 0 ? ` ($${tournament.entry_fee})` : ""}`}
               </Button>
             )}
 
+            {!canRegister && (
+              <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
+                Debug: isUserRegistered={isUserRegistered.toString()}, isFull={isFull.toString()}, status=
+                {tournament.status}
+              </div>
+            )}
+
+            {/* Team Registration Form */}
+            {showTeamForm && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Register Your Team</CardTitle>
+                  <CardDescription>Create and register a team for this tournament</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="teamName">Team Name</Label>
+                    <Input
+                      id="teamName"
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      placeholder="Enter your team name"
+                      maxLength={50}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="teamDescription">Team Description (Optional)</Label>
+                    <Textarea
+                      id="teamDescription"
+                      value={teamDescription}
+                      onChange={(e) => setTeamDescription(e.target.value)}
+                      placeholder="Describe your team..."
+                      maxLength={200}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => {
+                        console.log("[v0] Register team button clicked")
+                        registerTeam()
+                      }}
+                      disabled={joining || !teamName.trim()}
+                      className="flex-1"
+                    >
+                      {joining ? "Registering..." : "Register Team"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        console.log("[v0] Cancel button clicked")
+                        setShowTeamForm(false)
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Status Messages */}
-            {isUserJoined && (
+            {isUserRegistered && (
               <Alert>
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>
-                  You're registered for this tournament!
-                  {isDraftTournament && " Wait for captains to draft you to their teams."}
+                  Your team "{userTeam?.team_name}" is registered for this tournament!
                 </AlertDescription>
               </Alert>
             )}
 
-            {isFull && !isUserJoined && (
+            {isFull && !isUserRegistered && (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>This tournament is full. Check back later for new tournaments!</AlertDescription>
               </Alert>
             )}
 
-            {!canJoin && !isUserJoined && !isFull && (
+            {!canRegister && !isUserRegistered && !isFull && (
               <Alert>
                 <Clock className="h-4 w-4" />
                 <AlertDescription>
                   Registration is closed. Tournament is {getStatusText(tournament.status).toLowerCase()}.
                 </AlertDescription>
-              </Alert>
-            )}
-
-            {!isAuthenticated && (
-              <Alert>
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>You can join as a guest player or sign in for full features.</AlertDescription>
               </Alert>
             )}
           </div>
@@ -423,7 +510,7 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="players">Players ({currentParticipants})</TabsTrigger>
+          <TabsTrigger value="teams">Teams ({currentTeams})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -436,16 +523,14 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
                 <div>
                   <h4 className="font-medium mb-2">Tournament Type</h4>
                   <p className="text-sm text-muted-foreground">
-                    {isDraftTournament
-                      ? "Draft-based tournament with captain selection and team formation"
-                      : "Direct participation tournament"}
+                    Team-based tournament where premade teams compete against each other
                   </p>
                 </div>
                 <div>
                   <h4 className="font-medium mb-2">Entry Requirements</h4>
                   <p className="text-sm text-muted-foreground">
-                    {tournament.entry_fee > 0 ? `$${tournament.entry_fee} entry fee` : "Free to join"}
-                    {isDraftTournament && " • Minimum 1000 ELO rating"}
+                    {tournament.entry_fee > 0 ? `$${tournament.entry_fee} entry fee per team` : "Free to join"}•
+                    Register as team captain
                   </p>
                 </div>
               </div>
@@ -453,7 +538,7 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
               {tournament.entry_fee > 0 && (
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-sm">
-                    <strong>Entry Fee:</strong> ${tournament.entry_fee}
+                    <strong>Entry Fee:</strong> ${tournament.entry_fee} per team
                   </p>
                 </div>
               )}
@@ -461,57 +546,43 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
           </Card>
         </TabsContent>
 
-        <TabsContent value="players" className="space-y-4">
+        <TabsContent value="teams" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>{isDraftTournament ? "Player Pool" : "Registered Players"}</span>
-                <Badge variant="secondary">{currentParticipants} players</Badge>
+                <span>Registered Teams</span>
+                <Badge variant="secondary">{currentTeams} teams</Badge>
               </CardTitle>
-              <CardDescription>
-                {isDraftTournament
-                  ? "Players sorted by ELO rating. Highest ELO players will be selected as captains."
-                  : "Tournament participants in order of registration."}
-              </CardDescription>
+              <CardDescription>Teams registered for this tournament in order of registration.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {(isDraftTournament ? playerPool : participants)
-                  .sort((a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200))
-                  .map((player, index) => (
-                    <div key={player.user_id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs">
-                            {(player.users?.username || "?").charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{player.users?.username || "Unknown Player"}</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Star className="h-3 w-3" />
-                            {player.users?.elo_rating || 1200} ELO
-                          </div>
+                {registeredTeams.map((team, index) => (
+                  <div key={team.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">{team.team_name.charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium">{team.team_name}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Crown className="h-3 w-3" />
+                          Captain: {team.captain.username} ({team.captain.elo_rating} ELO)
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {isDraftTournament && index < 2 && (
-                          <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                            <Crown className="h-3 w-3" />
-                            Captain
-                          </Badge>
-                        )}
-                        {player.user_id === user?.id && (
-                          <Badge variant="outline" className="text-xs">
-                            You
-                          </Badge>
-                        )}
-                      </div>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2">
+                      {team.captain_id === user?.id && (
+                        <Badge variant="outline" className="text-xs">
+                          Your Team
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
 
-                {/* Empty slots */}
-                {Array.from({ length: maxParticipants - currentParticipants }).map((_, index) => (
+                {/* Empty team slots */}
+                {Array.from({ length: maxTeams - currentTeams }).map((_, index) => (
                   <div
                     key={`empty-${index}`}
                     className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border-dashed border"
@@ -519,10 +590,10 @@ export function TournamentJoinInterface({ tournamentId, tournament: initialTourn
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback>
-                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <Shield className="h-4 w-4 text-muted-foreground" />
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-muted-foreground">Waiting for player...</span>
+                      <span className="text-muted-foreground">Waiting for team...</span>
                     </div>
                   </div>
                 ))}

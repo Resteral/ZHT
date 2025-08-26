@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
 :root {
   /* Updated to sophisticated emerald-based color scheme for fantasy sports platform */
   --background: #f8fafc;
@@ -40,6 +38,7 @@
   --sidebar-ring: #059669;
 }
 
+:root.dark,
 .dark {
   /* Enhanced dark mode with emerald accents and better contrast */
   --background: #0f172a;
@@ -76,7 +75,6 @@
   --sidebar-ring: #10b981;
 }
 
-/* Added custom gaming-inspired color variables for enhanced theming */
 :root {
   --gaming-primary: #10b981;
   --gaming-secondary: #059669;
