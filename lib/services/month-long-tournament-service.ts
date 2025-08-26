@@ -118,7 +118,7 @@ export const monthLongTournamentService = {
             new Date(tournamentData.start_date).getTime() + tournamentData.duration_days * 24 * 60 * 60 * 1000,
           ).toISOString(),
         created_by: actualUserId, // Use validated database user ID
-        status: "draft", // Use draft status instead of registration_open to match database constraint
+        status: "pending", // Use pending status instead of draft to match database constraint
         team_based: false,
         player_pool_settings: tournamentData.player_pool_settings || {
           // Use player_pool_settings from form
@@ -460,7 +460,7 @@ export const monthLongTournamentService = {
     const { data: tournaments } = await supabase
       .from("tournaments")
       .select("id, status")
-      .in("status", ["draft", "in_progress"])
+      .in("status", ["pending", "in_progress"])
 
     if (!tournaments) return
 
