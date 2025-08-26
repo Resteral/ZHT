@@ -152,6 +152,12 @@ export function LobbyAlertSystem() {
           }
         }
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          console.log("[v0] Lobby check timed out after 15 seconds - this is normal for slow connections")
+          // Don't increment consecutive errors for timeouts
+          return
+        }
+
         console.error("[v0] Error checking lobbies:", error)
 
         setConsecutiveErrors((prev) => {

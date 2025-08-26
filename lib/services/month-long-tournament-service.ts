@@ -118,7 +118,7 @@ export const monthLongTournamentService = {
             new Date(tournamentData.start_date).getTime() + tournamentData.duration_days * 24 * 60 * 60 * 1000,
           ).toISOString(),
         created_by: actualUserId, // Use validated database user ID
-        status: "registration_open", // Use registration_open status to match tournament display logic
+        status: "draft", // Use draft status instead of registration_open to match database constraint
         team_based: false,
         player_pool_settings: tournamentData.player_pool_settings || {
           // Use player_pool_settings from form
@@ -347,7 +347,6 @@ export const monthLongTournamentService = {
         *,
         participant_count:tournament_participants(count)
       `)
-    // .gte("end_date", new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()) // At least 2 weeks duration
 
     if (status) {
       console.log("[v0] Filtering tournaments by status:", status)
@@ -461,7 +460,7 @@ export const monthLongTournamentService = {
     const { data: tournaments } = await supabase
       .from("tournaments")
       .select("id, status")
-      .in("status", ["registration_open", "in_progress"])
+      .in("status", ["draft", "in_progress"])
 
     if (!tournaments) return
 

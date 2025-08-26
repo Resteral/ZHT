@@ -50,9 +50,9 @@ export default function CreateTournamentPage() {
             : "Snake Draft"
     } Tournament`,
     tournament_type: "month_long_draft",
-    max_participants: 32, // Pool size - this is now the participant limit
-    start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16), // 1 hour from now
-    end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16), // 30 days from now
+    max_participants: 32,
+    start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16),
+    end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
     game: "zealot_hockey",
     settings: {
       draft_mode: (tournamentType === "snake_draft"
@@ -62,8 +62,8 @@ export default function CreateTournamentPage() {
           : tournamentType === "auction"
             ? "auction_draft"
             : "snake_draft") as "auction_draft" | "snake_draft" | "linear_draft",
-      num_teams: 8, // Number of teams
-      players_per_team: 4, // Players on each team
+      num_teams: 8,
+      players_per_team: 4,
       auto_start: true,
       create_lobbies_on_finish: true,
       bracket_type: "single_elimination" as
@@ -99,28 +99,7 @@ export default function CreateTournamentPage() {
     )
   }
 
-  if (!user) {
-    return (
-      <div className="container mx-auto py-6 max-w-2xl">
-        <div className="flex items-center justify-center py-12">
-          <Card className="w-full max-w-md">
-            <CardHeader className="text-center">
-              <CardTitle>Sign In Required</CardTitle>
-              <CardDescription>You need to be signed in to create tournaments</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button asChild className="w-full">
-                <Link href="/auth/signin?redirect=/tournaments/create">Sign In to Create Tournament</Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full bg-transparent">
-                <Link href="/tournaments">Back to Tournaments</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
+  const showSignInPrompt = !user
 
   return (
     <div className="container mx-auto py-6 max-w-2xl">
@@ -151,6 +130,24 @@ export default function CreateTournamentPage() {
         </div>
       )}
 
+      {showSignInPrompt && (
+        <Card className="mb-6 border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Sign in to track your tournaments</p>
+                <p className="text-sm text-muted-foreground">
+                  You can create tournaments without signing in, but you won't be able to manage them later
+                </p>
+              </div>
+              <Button asChild size="sm">
+                <Link href="/auth/signin?redirect=/tournaments/create">Sign In</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -162,108 +159,86 @@ export default function CreateTournamentPage() {
 
         <CardContent>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault()
               setLoading(true)
 
-              const handleTournamentCreation = async () => {
-                try {
-                  console.log("[v0] Starting tournament creation")
-                  console.log("[v0] Tournament data:", formData)
-                  console.log("[v0] Authenticated user:", user.id)
+              try {
+                console.log("[v0] Starting simplified tournament creation")
+                console.log("[v0] Tournament data:", formData)
 
-                  const supabase = createClient()
+                const supabase = createClient()
 
-                  if (!user || !user.id) {
-                    throw new Error("Authentication required. Please sign in and try again.")
-                  }
+                let creatorId = user?.id
 
-                  console.log("[v0] Checking if user exists in database...")
-                  let { data: dbUser, error: userFetchError } = await supabase
+                if (!creatorId) {
+                  console.log("[v0] No authenticated user, using system user")
+                  creatorId = "00000000-0000-0000-0000-000000000000"
+
+                  const { error: systemUserError } = await supabase
                     .from("users")
-                    .select("id, username")
-                    .eq("id", user.id)
+                    .upsert({
+                      id: creatorId,
+                      username: "System",
+                      email: "system@example.com",
+                      display_name: "System User",
+                      elo_rating: 1200,
+                    })
+                    .select()
                     .single()
 
-                  if (userFetchError) {
-                    console.log("[v0] User fetch error:", userFetchError)
+                  if (systemUserError) {
+                    console.log("[v0] System user creation note:", systemUserError.message)
                   }
+                } else {
+                  const userEmail = user.email
+                  const userName = userEmail?.split("@")[0] || "User"
 
-                  if (!dbUser) {
-                    console.log("[v0] User not found in database, creating new user...")
-                    const userEmail = user.email
-                    const userName = userEmail?.split("@")[0] || "User"
+                  const { error: userError } = await supabase
+                    .from("users")
+                    .upsert({
+                      id: user.id,
+                      username: userName,
+                      email: userEmail || "",
+                      display_name: user.user_metadata?.display_name || userName,
+                      elo_rating: 1200,
+                    })
+                    .select()
+                    .single()
 
-                    const { data: newUser, error: createError } = await supabase
-                      .from("users")
-                      .insert({
-                        id: user.id,
-                        username: userName,
-                        email: userEmail || "",
-                        display_name: user.user_metadata?.display_name || userName,
-                        elo_rating: 1200,
-                      })
-                      .select()
-                      .single()
-
-                    if (createError) {
-                      console.error("[v0] Error creating user:", createError)
-                      throw new Error(`Failed to create user: ${createError.message}`)
-                    }
-
-                    if (!newUser) {
-                      throw new Error("Failed to create user: No user data returned")
-                    }
-
-                    dbUser = newUser
-                    console.log("[v0] Created new user in database:", newUser.username)
-                  } else {
-                    console.log("[v0] User found in database:", dbUser.username)
+                  if (userError) {
+                    console.log("[v0] User creation note:", userError.message)
                   }
+                }
 
-                  if (!dbUser || !dbUser.id) {
-                    throw new Error("User validation failed: Unable to confirm user exists in database")
-                  }
+                const startDateTime = new Date(formData.start_date).toISOString()
+                const endDateTime = new Date(formData.end_date).toISOString()
 
-                  console.log("[v0] User validation successful, proceeding with tournament creation")
+                const tournamentData = {
+                  name: formData.name,
+                  description: `${formData.settings.num_teams} teams, ${formData.settings.players_per_team} players each`,
+                  tournament_type: formData.settings.draft_mode,
+                  max_participants: formData.max_participants,
+                  entry_fee: 0,
+                  start_date: startDateTime,
+                  end_date: endDateTime,
+                  game: formData.game,
+                  player_pool_settings: formData.settings,
+                  created_by: creatorId,
+                }
 
-                  const startDateTime = new Date(formData.start_date).toISOString()
-                  const endDateTime = new Date(formData.end_date).toISOString()
-                  const durationDays = Math.ceil(
-                    (new Date(formData.end_date).getTime() - new Date(formData.start_date).getTime()) /
-                      (1000 * 60 * 60 * 24),
-                  )
+                console.log("[v0] Creating tournament with simplified data:", tournamentData)
 
-                  const tournamentData = {
-                    name: formData.name,
-                    description: `${formData.settings.num_teams} teams, ${formData.settings.players_per_team} players each`,
-                    tournament_type: formData.settings.draft_mode,
-                    duration_days: durationDays,
-                    max_participants: formData.max_participants,
-                    entry_fee: 0,
-                    start_date: startDateTime,
-                    end_date: endDateTime,
-                    game: formData.game,
-                    player_pool_settings: formData.settings,
-                    created_by: dbUser.id,
-                  }
+                const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
+                const tournament = await monthLongTournamentService.createMonthLongTournament(tournamentData, creatorId)
 
-                  console.log("[v0] Creating tournament with data:", tournamentData)
+                console.log("[v0] Tournament created successfully:", tournament)
 
-                  const { monthLongTournamentService } = await import("@/lib/services/month-long-tournament-service")
-                  const tournament = await monthLongTournamentService.createMonthLongTournament(
-                    tournamentData,
-                    dbUser.id,
-                  )
-
-                  console.log("[v0] Tournament created successfully:", tournament)
-
+                if (user?.id) {
                   try {
-                    console.log("[v0] Adding tournament creator to lobby as first player")
-
                     const { error: participantError } = await supabase.from("tournament_participants").insert({
                       tournament_id: tournament.id,
-                      user_id: dbUser.id,
+                      user_id: user.id,
                       status: "registered",
                       joined_at: new Date().toISOString(),
                     })
@@ -276,28 +251,28 @@ export default function CreateTournamentPage() {
                   } catch (error) {
                     console.error("[v0] Error in host auto-join process:", error)
                   }
-
-                  router.push(`/tournaments/${tournament.id}/lobby`)
-
-                  toast({
-                    title: "Tournament created!",
-                    description: "You've been added as the first player in the lobby",
-                  })
-                } catch (error: any) {
-                  console.error("[v0] Error creating tournament - Full error object:", error)
-                  console.error("[v0] Error message:", error?.message)
-
-                  toast({
-                    title: "Failed to create tournament",
-                    description: error?.message || "Please try again",
-                    variant: "destructive",
-                  })
-                } finally {
-                  setLoading(false)
                 }
-              }
 
-              handleTournamentCreation()
+                router.push(`/tournaments/${tournament.id}/lobby`)
+
+                toast({
+                  title: "Tournament created!",
+                  description: user?.id
+                    ? "You've been added as the first player in the lobby"
+                    : "Tournament is ready for players to join",
+                })
+              } catch (error: any) {
+                console.error("[v0] Error creating tournament:", error)
+                console.error("[v0] Error message:", error?.message)
+
+                toast({
+                  title: "Failed to create tournament",
+                  description: error?.message || "Please try again",
+                  variant: "destructive",
+                })
+              } finally {
+                setLoading(false)
+              }
             }}
             className="space-y-6"
           >
