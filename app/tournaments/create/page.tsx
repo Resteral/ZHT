@@ -169,46 +169,45 @@ export default function CreateTournamentPage() {
 
                 const supabase = createClient()
 
-                let creatorId = user?.id
+                const creatorId = user?.id
 
                 if (!creatorId) {
-                  console.log("[v0] No authenticated user, using system user")
-                  creatorId = "00000000-0000-0000-0000-000000000000"
+                  throw new Error("Please sign in to create tournaments")
+                }
 
-                  const { error: systemUserError } = await supabase
-                    .from("users")
-                    .upsert({
-                      id: creatorId,
-                      username: "System",
-                      email: "system@example.com",
-                      display_name: "System User",
-                      elo_rating: 1200,
-                    })
-                    .select()
-                    .single()
+                // Ensure the authenticated user exists in the database
+                const userEmail = user.email
+                const userName = userEmail?.split("@")[0] || "User"
 
-                  if (systemUserError) {
-                    console.log("[v0] System user creation note:", systemUserError.message)
+                console.log("[v0] Ensuring user exists in database:", creatorId)
+
+                const { data: existingUser, error: checkError } = await supabase
+                  .from("users")
+                  .select("id")
+                  .eq("id", creatorId)
+                  .single()
+
+                if (checkError && checkError.code === "PGRST116") {
+                  // User doesn't exist, create them
+                  console.log("[v0] Creating new user record")
+                  const { error: createError } = await supabase.from("users").insert({
+                    id: creatorId,
+                    username: userName,
+                    email: userEmail || "",
+                    display_name: user.user_metadata?.display_name || userName,
+                    elo_rating: 1200,
+                  })
+
+                  if (createError) {
+                    console.error("[v0] Failed to create user:", createError)
+                    throw new Error("Failed to create user record. Please try again.")
                   }
+                  console.log("[v0] User created successfully")
+                } else if (checkError) {
+                  console.error("[v0] Error checking user:", checkError)
+                  throw new Error("Failed to validate user. Please try again.")
                 } else {
-                  const userEmail = user.email
-                  const userName = userEmail?.split("@")[0] || "User"
-
-                  const { error: userError } = await supabase
-                    .from("users")
-                    .upsert({
-                      id: user.id,
-                      username: userName,
-                      email: userEmail || "",
-                      display_name: user.user_metadata?.display_name || userName,
-                      elo_rating: 1200,
-                    })
-                    .select()
-                    .single()
-
-                  if (userError) {
-                    console.log("[v0] User creation note:", userError.message)
-                  }
+                  console.log("[v0] User already exists in database")
                 }
 
                 const startDateTime = new Date(formData.start_date).toISOString()
@@ -237,32 +236,28 @@ export default function CreateTournamentPage() {
 
                 console.log("[v0] Tournament created successfully:", tournament)
 
-                if (user?.id) {
-                  try {
-                    const { error: participantError } = await supabase.from("tournament_participants").insert({
-                      tournament_id: tournament.id,
-                      user_id: user.id,
-                      status: "registered",
-                      joined_at: new Date().toISOString(),
-                    })
+                try {
+                  const { error: participantError } = await supabase.from("tournament_participants").insert({
+                    tournament_id: tournament.id,
+                    user_id: creatorId,
+                    status: "registered",
+                    joined_at: new Date().toISOString(),
+                  })
 
-                    if (participantError) {
-                      console.error("[v0] Error adding creator to tournament:", participantError)
-                    } else {
-                      console.log("[v0] Successfully added tournament creator as first player")
-                    }
-                  } catch (error) {
-                    console.error("[v0] Error in host auto-join process:", error)
+                  if (participantError) {
+                    console.error("[v0] Error adding creator to tournament:", participantError)
+                  } else {
+                    console.log("[v0] Successfully added tournament creator as first player")
                   }
+                } catch (error) {
+                  console.error("[v0] Error in host auto-join process:", error)
                 }
 
                 router.push(`/tournaments/${tournament.id}/lobby`)
 
                 toast({
                   title: "Tournament created!",
-                  description: user?.id
-                    ? "You've been added as the first player in the lobby"
-                    : "Tournament is ready for players to join",
+                  description: "You've been added as the first player in the lobby",
                 })
               } catch (error: any) {
                 console.error("[v0] Error creating tournament:", error)

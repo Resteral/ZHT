@@ -110,7 +110,6 @@ export const tournamentService = {
         bracket_type: tournamentData.player_pool_settings?.bracket_type || "single_elimination",
         ...tournamentData.player_pool_settings,
       },
-      created_by: userId || "00000000-0000-0000-0000-000000000000", // Use system user as fallback
     }
 
     console.log("[v0] Tournament data to create:", tournamentToCreate)
