@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Trophy, Users, Zap, Target, Crown, Gamepad2 } from "lucide-react"
+import { Trophy, Zap, Target, Gamepad2 } from "lucide-react"
 
 interface GameMode {
   id: string
@@ -34,27 +34,9 @@ const gameModes: GameMode[] = [
     name: "Tournaments",
     description: "Join player pools and compete in organized tournaments",
     icon: <Trophy className="w-6 h-6" />,
-    route: "/tournaments/snake-draft",
+    route: "/tournaments",
     color: "from-purple-400 to-pink-500",
     participants: "Team Drafts",
-  },
-  {
-    id: "casual-lobby",
-    name: "Casual Lobby",
-    description: "Quick matches with friends or random players",
-    icon: <Users className="w-6 h-6" />,
-    route: "/lobbies?filter=casual",
-    color: "from-blue-400 to-cyan-500",
-    participants: "2v2 to 6v6",
-  },
-  {
-    id: "team-auction",
-    name: "Team Auction",
-    description: "Bid on teams and compete in auction-style tournaments",
-    icon: <Crown className="w-6 h-6" />,
-    route: "/tournaments/team-auction",
-    color: "from-green-400 to-emerald-500",
-    participants: "Auction Draft",
   },
 ]
 
@@ -67,10 +49,10 @@ export function InteractiveHockeyNet() {
     setSelectedMode(mode.id)
     setIsAnimating(true)
 
-    // Animate the puck going into the net
+    // Enhanced puck animation sequence
     setTimeout(() => {
       router.push(mode.route)
-    }, 1500)
+    }, 2000)
   }
 
   return (
@@ -129,20 +111,38 @@ export function InteractiveHockeyNet() {
           {/* Animated Puck */}
           <AnimatePresence>
             {isAnimating && (
-              <motion.circle
-                cx={200}
-                cy={180}
-                r={8}
-                fill="#1f2937"
-                initial={{ cx: 200, cy: 180, scale: 1 }}
-                animate={{
-                  cx: 200,
-                  cy: 90,
-                  scale: [1, 1.2, 0.8, 0],
-                }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1.5, ease: "easeInOut" }}
-              />
+              <>
+                {/* Puck with trail effect */}
+                <motion.circle
+                  cx={200}
+                  cy={180}
+                  r={8}
+                  fill="#1f2937"
+                  initial={{ cx: 200, cy: 180, scale: 1 }}
+                  animate={{
+                    cx: 200,
+                    cy: 90,
+                    scale: [1, 1.3, 1.1, 0.8, 0],
+                  }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 2, ease: "easeInOut" }}
+                />
+                {/* Puck trail */}
+                <motion.circle
+                  cx={200}
+                  cy={180}
+                  r={4}
+                  fill="#374151"
+                  opacity={0.6}
+                  initial={{ cx: 200, cy: 180 }}
+                  animate={{
+                    cx: 200,
+                    cy: 120,
+                    opacity: [0.6, 0.3, 0],
+                  }}
+                  transition={{ duration: 1.5, ease: "easeOut", delay: 0.2 }}
+                />
+              </>
             )}
           </AnimatePresence>
 

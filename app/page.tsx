@@ -31,6 +31,7 @@ import { formatDateEST } from "@/lib/utils/timezone"
 import { InteractiveHockeyNet } from "@/components/interactive-hockey-net"
 import { useAuth } from "@/lib/auth-context"
 import { UserInitializer } from "@/components/auth/user-initializer"
+import { motion } from "framer-motion"
 
 interface LiveGame {
   id: string
@@ -833,10 +834,52 @@ export default function Dashboard() {
             ELO Rankings
           </Badge>
 
+          {/* Add direct creation buttons with hockey puck animations */}
           <div className="pt-8">
             <InteractiveHockeyNet />
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="relative overflow-hidden">
+              <Link href="/lobbies" className="block">
+                <div className="bg-gradient-to-br from-blue-600 to-cyan-700 hover:from-blue-700 hover:to-cyan-800 text-white p-8 rounded-xl transition-all duration-300 cursor-pointer shadow-lg">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="p-3 bg-white/20 rounded-full">
+                      <Users className="h-8 w-8" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold">Quick Lobby</h3>
+                      <p className="text-blue-100">Join or create ELO draft lobbies</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-blue-200">
+                    <Target className="h-4 w-4" />
+                    <span>1v1 to 6v6 matches</span>
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="relative overflow-hidden">
+              <Link href="/tournaments/create" className="block">
+                <div className="bg-gradient-to-br from-purple-600 to-pink-700 hover:from-purple-700 hover:to-pink-800 text-white p-8 rounded-xl transition-all duration-300 cursor-pointer shadow-lg">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="p-3 bg-white/20 rounded-full">
+                      <Trophy className="h-8 w-8" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold">Quick Tournament</h3>
+                      <p className="text-purple-100">Create competitive tournaments</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-purple-200">
+                    <Crown className="h-4 w-4" />
+                    <span>Draft tournaments & brackets</span>
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          </div>
           {/*
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link href="/tournaments/create?type=snake_draft" className="w-full">

@@ -29,7 +29,6 @@ export default function CreateTournamentPage() {
             : "Snake Draft"
     } Tournament`,
     tournament_type: "month_long_draft",
-    max_participants: 32,
     start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16),
     end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
     game: "zealot_hockey",
@@ -55,14 +54,11 @@ export default function CreateTournamentPage() {
         | "swiss_system",
       allow_solo_players: true,
       allow_premade_teams: false,
-      max_pool_size: 50,
     },
   })
 
-  const playersNeeded = formData.settings.num_teams * formData.settings.players_per_team
-  const excessPlayers = formData.max_participants - playersNeeded
-  const hasConflict = playersNeeded > formData.max_participants
-  const isValid = !hasConflict
+  const maxParticipants = formData.settings.num_teams * formData.settings.players_per_team
+  const isValid = true // Remove redundant validation
 
   const startDate = new Date(formData.start_date)
   const endDate = new Date(formData.end_date)
@@ -126,7 +122,7 @@ export default function CreateTournamentPage() {
                   name: formData.name,
                   description: `${formData.settings.num_teams} teams, ${formData.settings.players_per_team} players each`,
                   tournament_type: "draft",
-                  max_participants: formData.max_participants,
+                  max_participants: maxParticipants,
                   team_based: formData.team_based,
                   max_teams: formData.max_teams,
                   entry_fee: 0,
@@ -254,13 +250,6 @@ export default function CreateTournamentPage() {
                         <span className="text-xs text-muted-foreground ml-2">Individual registration</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="teams">
-                      <div className="flex items-center gap-2">
-                        <Trophy className="h-4 w-4" />
-                        Premade Teams Only
-                        <span className="text-xs text-muted-foreground ml-2">Team registration</span>
-                      </div>
-                    </SelectItem>
                     <SelectItem value="hybrid">
                       <div className="flex items-center gap-2">
                         <Settings className="h-4 w-4" />
@@ -371,29 +360,6 @@ export default function CreateTournamentPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Tournament Participant Limit</Label>
-                <Select
-                  value={formData.max_participants.toString()}
-                  onValueChange={(value) => setFormData({ ...formData, max_participants: Number.parseInt(value) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[16, 24, 32, 48, 64, 96, 128].map((num) => (
-                      <SelectItem key={num} value={num.toString()}>
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          {num} Players Maximum
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">Maximum number of players that can join this tournament</p>
-              </div>
-
-              <div className="space-y-2">
                 <Label>Number of Teams</Label>
                 <Select
                   value={formData.settings.num_teams.toString()}
@@ -474,7 +440,7 @@ export default function CreateTournamentPage() {
               </div>
             </div>
 
-            <Card className={`${hasConflict || !isDateValid ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}>
+            <Card className={`${!isDateValid ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}>
               <CardContent className="pt-6">
                 <div className="space-y-2">
                   <h4 className="font-medium flex items-center gap-2">
@@ -495,7 +461,7 @@ export default function CreateTournamentPage() {
                       <strong>{formData.settings.draft_mode.replace("_", " ").toUpperCase()}</strong> tournament format
                     </p>
                     <p>
-                      <strong>{formData.max_participants}</strong> players maximum can join
+                      <strong>{maxParticipants}</strong> players maximum can join
                     </p>
                     <p>
                       <strong>{formData.settings.num_teams}</strong> teams with{" "}
@@ -521,34 +487,17 @@ export default function CreateTournamentPage() {
                         ⚠️ <strong>DATE ERROR:</strong> Please fix the tournament dates
                       </div>
                     )}
-
-                    {hasConflict ? (
-                      <div className="text-destructive font-medium">
-                        ⚠️ <strong>CONFLICT:</strong> Need {playersNeeded} players but only {formData.max_participants}{" "}
-                        maximum allowed
-                      </div>
-                    ) : excessPlayers > 0 ? (
-                      <p className="text-muted-foreground">
-                        Up to <strong>{excessPlayers}</strong> excess players will be removed after draft
-                      </p>
-                    ) : (
-                      <p className="text-green-600 font-medium">
-                        ✓ Perfect match: All {formData.max_participants} players will be drafted
-                      </p>
-                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Button type="submit" disabled={loading || !isValid || !isDateValid} className="w-full" size="lg">
+            <Button type="submit" disabled={loading || !isDateValid} className="w-full" size="lg">
               {loading
                 ? "Creating Tournament..."
                 : !isDateValid
                   ? "Fix Tournament Dates First"
-                  : hasConflict
-                    ? "Fix Configuration First"
-                    : "Create Tournament & Go to Lobby"}
+                  : "Create Tournament & Go to Lobby"}
             </Button>
           </form>
         </CardContent>
