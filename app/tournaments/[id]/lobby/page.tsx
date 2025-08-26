@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
-import { Users, Trophy, Crown, Zap, Timer } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Users, Trophy, Crown, Zap, Timer, Target, Calendar, Brackets, Play } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { tournamentService } from "@/lib/services/tournament-service"
 
@@ -45,6 +46,9 @@ export default function TournamentLobbyPage() {
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [bracket, setBracket] = useState<any[]>([])
+  const [draftInfo, setDraftInfo] = useState<any>(null)
+  const [tournamentStarted, setTournamentStarted] = useState(false)
 
   const supabase = createClient()
 
@@ -52,7 +56,7 @@ export default function TournamentLobbyPage() {
     const fetchData = async () => {
       try {
         console.log("[v0] Fetching tournament data for ID:", tournamentId)
-        setError(null) // Clear any previous errors
+        setError(null)
 
         const {
           data: { user },
@@ -80,6 +84,8 @@ export default function TournamentLobbyPage() {
         console.log("[v0] Tournament loaded successfully:", tournamentData.name)
         setTournament(tournamentData)
 
+        setTournamentStarted(tournamentData.status === "in_progress" || tournamentData.status === "drafting")
+
         const { data: participantsData, error: participantsError } = await supabase
           .from("tournament_participants")
           .select(`
@@ -103,6 +109,10 @@ export default function TournamentLobbyPage() {
 
           console.log("[v0] Loaded", playersData.length, "tournament participants")
           setPlayers(playersData)
+        }
+
+        if (tournamentData.status === "in_progress" || tournamentData.status === "drafting") {
+          await loadBracketAndDraftInfo(tournamentId)
         }
 
         setRetryCount(0)
@@ -138,33 +148,70 @@ export default function TournamentLobbyPage() {
     }
   }, [tournamentId, retryCount])
 
-  useEffect(() => {
-    const updateTimer = () => {
-      if (!tournament?.start_date) return
+  const loadBracketAndDraftInfo = async (tournamentId: string) => {
+    try {
+      const { data: draftData } = await supabase
+        .from("captain_drafts")
+        .select(`
+          id,
+          status,
+          current_round,
+          max_rounds,
+          captain1_id,
+          captain2_id,
+          tournament_owner,
+          created_at,
+          captain_draft_participants (
+            user_id,
+            team,
+            is_captain,
+            users (username, elo_rating)
+          )
+        `)
+        .eq("match_id", tournamentId)
+        .single()
 
-      const startTime = new Date(tournament.start_date).getTime()
-      const now = new Date().getTime()
-      const difference = startTime - now
-
-      if (difference > 0) {
-        const hours = Math.floor(difference / (1000 * 60 * 60))
-        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000)
-        setTimeUntilStart(`${hours}h ${minutes}m ${seconds}s`)
-      } else {
-        setTimeUntilStart("Starting now!")
-        if (tournament.status === "registration") {
-          console.log("[v0] Tournament timer reached zero, automatically starting draft...")
-          startDraft()
-        }
+      if (draftData) {
+        setDraftInfo(draftData)
       }
+
+      const numTeams = tournament?.player_pool_settings?.num_teams || 4
+      const bracketStructure = generateBracketStructure(numTeams)
+      setBracket(bracketStructure)
+    } catch (error) {
+      console.error("[v0] Error loading bracket/draft info:", error)
+    }
+  }
+
+  const generateBracketStructure = (numTeams: number) => {
+    const rounds = Math.ceil(Math.log2(numTeams))
+    const bracket = []
+
+    for (let round = 1; round <= rounds; round++) {
+      const matchesInRound = Math.pow(2, rounds - round)
+      const roundMatches = []
+
+      for (let match = 1; match <= matchesInRound; match++) {
+        roundMatches.push({
+          id: `round-${round}-match-${match}`,
+          round,
+          match,
+          team1: round === 1 ? `Team ${(match - 1) * 2 + 1}` : "TBD",
+          team2: round === 1 ? `Team ${(match - 1) * 2 + 2}` : "TBD",
+          winner: null,
+          status: "pending",
+        })
+      }
+
+      bracket.push({
+        round,
+        name: round === rounds ? "Final" : round === rounds - 1 ? "Semi-Final" : `Round ${round}`,
+        matches: roundMatches,
+      })
     }
 
-    const timer = setInterval(updateTimer, 1000)
-    updateTimer()
-
-    return () => clearInterval(timer)
-  }, [tournament])
+    return bracket
+  }
 
   const joinTournament = async () => {
     if (!currentUser || !tournament) return
@@ -199,6 +246,9 @@ export default function TournamentLobbyPage() {
 
       await supabase.from("tournaments").update({ status: "drafting" }).eq("id", tournamentId)
 
+      setTournamentStarted(true)
+      await loadBracketAndDraftInfo(tournamentId)
+
       console.log("[v0] Transitioning to draft page...")
       router.push(`/tournaments/${tournamentId}/draft`)
     } catch (error) {
@@ -206,57 +256,33 @@ export default function TournamentLobbyPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <div>Loading tournament lobby...</div>
-          {retryCount > 0 && (
-            <div className="text-sm text-muted-foreground">
-              Tournament was just created, loading... (attempt {retryCount + 1})
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!tournament?.start_date) return
 
-  if (error) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="text-center space-y-4">
-          <div className="text-destructive font-medium">Error loading tournament</div>
-          <div className="text-sm text-muted-foreground">{error}</div>
-          <Button
-            onClick={() => {
-              setLoading(true)
-              setError(null)
-              setRetryCount(0)
-              window.location.reload()
-            }}
-            variant="outline"
-          >
-            Try Again
-          </Button>
-        </div>
-      </div>
-    )
-  }
+      const startTime = new Date(tournament.start_date).getTime()
+      const now = new Date().getTime()
+      const difference = startTime - now
 
-  if (!tournament) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="text-center space-y-4">
-          <div>Tournament not found</div>
-          <div className="text-sm text-muted-foreground">The tournament may still be loading or doesn't exist.</div>
-          <Button onClick={() => router.push("/tournaments")} variant="outline">
-            Back to Tournaments
-          </Button>
-        </div>
-      </div>
-    )
-  }
+      if (difference > 0) {
+        const hours = Math.floor(difference / (1000 * 60 * 60))
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+        const seconds = Math.floor((difference % (1000 * 60)) / 1000)
+        setTimeUntilStart(`${hours}h ${minutes}m ${seconds}s`)
+      } else {
+        setTimeUntilStart("Starting now!")
+        if (tournament.status === "registration") {
+          console.log("[v0] Tournament timer reached zero, automatically starting draft...")
+          startDraft()
+        }
+      }
+    }
+
+    const timer = setInterval(updateTimer, 1000)
+    updateTimer()
+
+    return () => clearInterval(timer)
+  }, [tournament])
 
   const isUserInTournament = players.some((p) => p.id === currentUser?.id)
   const totalPlayersNeeded =
@@ -271,160 +297,322 @@ export default function TournamentLobbyPage() {
             <h1 className="text-3xl font-bold">{tournament.name}</h1>
             <p className="text-muted-foreground">{tournament.description}</p>
           </div>
-          <Badge variant="secondary" className="text-lg px-4 py-2">
-            <Timer className="h-4 w-4 mr-2" />
-            {timeUntilStart}
-          </Badge>
+          <div className="flex items-center gap-4">
+            <Badge variant={tournamentStarted ? "default" : "secondary"} className="text-lg px-4 py-2">
+              {tournamentStarted ? (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  {tournament.status === "drafting" ? "Drafting" : "In Progress"}
+                </>
+              ) : (
+                <>
+                  <Timer className="h-4 w-4 mr-2" />
+                  {timeUntilStart}
+                </>
+              )}
+            </Badge>
+          </div>
         </div>
 
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Players in Pool</span>
+                <span className="text-sm font-medium">
+                  {tournamentStarted ? "Tournament Progress" : "Players in Pool"}
+                </span>
                 <span className="text-sm text-muted-foreground">
-                  {players.length} / {totalPlayersNeeded} needed
+                  {tournamentStarted
+                    ? `${tournament.player_pool_settings.num_teams} teams formed`
+                    : `${players.length} / ${totalPlayersNeeded} needed`}
                 </span>
               </div>
-              <Progress value={progressPercentage} className="h-3" />
+              <Progress value={tournamentStarted ? 100 : progressPercentage} className="h-3" />
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
                   {tournament.player_pool_settings.num_teams} teams × {tournament.player_pool_settings.players_per_team}{" "}
                   players each
                 </span>
-                <span className="font-medium">{Math.max(0, totalPlayersNeeded - players.length)} more needed</span>
+                <span className="font-medium">
+                  {tournamentStarted
+                    ? "Tournament Active"
+                    : `${Math.max(0, totalPlayersNeeded - players.length)} more needed`}
+                </span>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Player Pool
-                <Badge variant="outline">{players.length} players</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {players.map((player, index) => (
-                  <div
-                    key={player.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border ${
-                      index < tournament.player_pool_settings.num_teams
-                        ? "border-yellow-200 bg-yellow-50"
-                        : "border-border"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback>{player.username.substring(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{player.username}</span>
-                          {index < tournament.player_pool_settings.num_teams && (
-                            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                              <Crown className="h-3 w-3 mr-1" />
-                              Captain
-                            </Badge>
-                          )}
+      <Tabs defaultValue="pool" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="pool" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Player Pool
+          </TabsTrigger>
+          <TabsTrigger value="draft" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Draft Info
+          </TabsTrigger>
+          <TabsTrigger value="bracket" className="flex items-center gap-2">
+            <Brackets className="h-4 w-4" />
+            Tournament Bracket
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pool" className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Player Pool
+                    <Badge variant="outline">{players.length} players</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {players.map((player, index) => (
+                      <div
+                        key={player.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${
+                          index < tournament.player_pool_settings.num_teams
+                            ? "border-yellow-200 bg-yellow-50"
+                            : "border-border"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarFallback>{player.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{player.username}</span>
+                              {index < tournament.player_pool_settings.num_teams && (
+                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                                  <Crown className="h-3 w-3 mr-1" />
+                                  Captain
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground">ELO: {player.elo_rating}</div>
+                          </div>
                         </div>
-                        <div className="text-sm text-muted-foreground">ELO: {player.elo_rating}</div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium">#{index + 1}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {index < tournament.player_pool_settings.num_teams ? "Captain" : "Player"}
+                          </div>
+                        </div>
                       </div>
+                    ))}
+
+                    {players.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No players in the pool yet. Be the first to join!
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5" />
+                    Tournament Info
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Format:</span>
+                      <span className="font-medium">{tournament.player_pool_settings.bracket_type}</span>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-medium">#{index + 1}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {index < tournament.player_pool_settings.num_teams ? "Captain" : "Player"}
-                      </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Teams:</span>
+                      <span className="font-medium">{tournament.player_pool_settings.num_teams}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Players per team:</span>
+                      <span className="font-medium">{tournament.player_pool_settings.players_per_team}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Start time:</span>
+                      <span className="font-medium">{new Date(tournament.start_date).toLocaleString()}</span>
                     </div>
                   </div>
-                ))}
 
-                {players.length === 0 && (
+                  {!isUserInTournament && currentUser && (
+                    <Button onClick={joinTournament} disabled={joining} className="w-full" size="lg">
+                      {joining ? (
+                        "Joining..."
+                      ) : (
+                        <>
+                          <Zap className="h-4 w-4 mr-2" />
+                          Join Tournament Pool
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  {isUserInTournament && (
+                    <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="text-green-800 font-medium">✅ You're in the pool!</div>
+                      <div className="text-sm text-green-600 mt-1">Wait for the tournament to start</div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-yellow-200 bg-yellow-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-yellow-800">
+                    <Crown className="h-5 w-5" />
+                    Captain Selection
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm text-yellow-700">
+                    <p className="mb-2">
+                      The <strong>{tournament.player_pool_settings.num_teams} highest ELO players</strong> will be
+                      selected as team captains.
+                    </p>
+                    <p>Captains will draft teams, then score live bracket games after the tournament.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="draft" className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Draft Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {draftInfo ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-700">{draftInfo.current_round}</div>
+                        <div className="text-sm text-blue-600">Current Round</div>
+                      </div>
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <div className="text-2xl font-bold text-green-700">{draftInfo.max_rounds}</div>
+                        <div className="text-sm text-green-600">Total Rounds</div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Draft Progress</span>
+                        <span>
+                          {draftInfo.current_round}/{draftInfo.max_rounds} rounds
+                        </span>
+                      </div>
+                      <Progress value={(draftInfo.current_round / draftInfo.max_rounds) * 100} className="h-2" />
+                    </div>
+                    <Badge variant={draftInfo.status === "completed" ? "default" : "secondary"}>
+                      {draftInfo.status === "completed" ? "Draft Complete" : "Draft In Progress"}
+                    </Badge>
+                  </div>
+                ) : (
                   <div className="text-center py-8 text-muted-foreground">
-                    No players in the pool yet. Be the first to join!
+                    {tournamentStarted ? "Loading draft information..." : "Draft will begin when tournament starts"}
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
 
-        <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Tournament Schedule
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <span className="font-medium">Registration</span>
+                    <Badge variant="outline">Complete</Badge>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <span className="font-medium">Draft Phase</span>
+                    <Badge variant={tournamentStarted ? "default" : "secondary"}>
+                      {tournamentStarted ? "Active" : "Pending"}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <span className="font-medium">Tournament Start</span>
+                    <span className="text-sm text-muted-foreground">
+                      {new Date(tournament.start_date).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="bracket" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5" />
-                Tournament Info
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Format:</span>
-                  <span className="font-medium">{tournament.player_pool_settings.bracket_type}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Teams:</span>
-                  <span className="font-medium">{tournament.player_pool_settings.num_teams}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Players per team:</span>
-                  <span className="font-medium">{tournament.player_pool_settings.players_per_team}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Start time:</span>
-                  <span className="font-medium">{new Date(tournament.start_date).toLocaleString()}</span>
-                </div>
-              </div>
-
-              {!isUserInTournament && currentUser && (
-                <Button onClick={joinTournament} disabled={joining} className="w-full" size="lg">
-                  {joining ? (
-                    "Joining..."
-                  ) : (
-                    <>
-                      <Zap className="h-4 w-4 mr-2" />
-                      Join Tournament Pool
-                    </>
-                  )}
-                </Button>
-              )}
-
-              {isUserInTournament && (
-                <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
-                  <div className="text-green-800 font-medium">✅ You're in the pool!</div>
-                  <div className="text-sm text-green-600 mt-1">Wait for the tournament to start</div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-yellow-200 bg-yellow-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-yellow-800">
-                <Crown className="h-5 w-5" />
-                Captain Selection
+                <Brackets className="h-5 w-5" />
+                Tournament Bracket
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-sm text-yellow-700">
-                <p className="mb-2">
-                  The <strong>{tournament.player_pool_settings.num_teams} highest ELO players</strong> will be selected
-                  as team captains.
-                </p>
-                <p>Captains will draft teams, then score live bracket games after the tournament.</p>
-              </div>
+              {bracket.length > 0 ? (
+                <div className="space-y-6">
+                  {bracket.map((round) => (
+                    <div key={round.round} className="space-y-3">
+                      <h3 className="font-semibold text-lg">{round.name}</h3>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {round.matches.map((match) => (
+                          <div key={match.id} className="p-4 border rounded-lg bg-muted/50">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">Match {match.match}</span>
+                              <Badge variant="outline">{match.status}</Badge>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center p-2 bg-background rounded">
+                                <span>{match.team1}</span>
+                                <span className="text-muted-foreground">vs</span>
+                                <span>{match.team2}</span>
+                              </div>
+                              {match.winner && (
+                                <div className="text-center text-sm font-medium text-green-600">
+                                  Winner: {match.winner}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  {tournamentStarted
+                    ? "Loading tournament bracket..."
+                    : "Bracket will be generated when tournament starts"}
+                </div>
+              )}
             </CardContent>
           </Card>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

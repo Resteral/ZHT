@@ -97,7 +97,7 @@ export const tournamentService = {
       max_participants: tournamentData.max_participants,
       entry_fee: tournamentData.entry_fee || 0,
       prize_pool: tournamentData.prize_pool || 0,
-      status: "pending", // Use "pending" status to avoid constraint violations
+      status: "active", // Use "active" status instead of "pending"
       start_date: tournamentData.start_date,
       end_date: tournamentData.end_date,
       team_based: true,
