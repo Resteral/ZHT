@@ -10,13 +10,11 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ArrowLeft, Trophy, Users, Calendar, DollarSign } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { TournamentSignupSystem } from "@/components/tournaments/tournament-signup-system"
+import { UnifiedTournamentJoin } from "@/components/tournaments/unified-tournament-join"
 import { PlayerPoolManagement } from "@/components/tournaments/player-pool-management"
-import { CaptainSelectionInterface } from "@/components/tournaments/captain-selection-interface"
 import { DraftInitiationSystem } from "@/components/tournaments/draft-initiation-system"
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { EloStyleTournament } from "@/components/tournaments/elo-style-tournament"
-import { TournamentJoinInterface } from "@/components/tournaments/tournament-join-interface"
 
 interface TournamentPageProps {
   params: {
@@ -94,7 +92,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         })
 
         if (data.status === "registration") {
-          setActiveTab("signup")
+          setActiveTab("join")
         } else if (data.status === "team_building") {
           setActiveTab("pools")
         } else if (data.status === "draft" || data.status === "drafting") {
@@ -234,12 +232,10 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="join">Join Tournament</TabsTrigger>
-          <TabsTrigger value="signup">Signup</TabsTrigger>
           <TabsTrigger value="pools">Player Pools</TabsTrigger>
-          <TabsTrigger value="captains">Captains</TabsTrigger>
           <TabsTrigger value="draft">Draft</TabsTrigger>
           <TabsTrigger value="bracket">Live Bracket</TabsTrigger>
         </TabsList>
@@ -295,6 +291,14 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                           style={{ width: `${(tournament.participant_count! / tournament.max_teams) * 100}%` }}
                         />
                       </div>
+                      {(tournament.status === "registration" || tournament.status === "active") && (
+                        <div className="pt-4">
+                          <Button onClick={() => setActiveTab("join")} className="w-full" size="lg">
+                            <Users className="h-4 w-4 mr-2" />
+                            Join Tournament
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -304,19 +308,11 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         </TabsContent>
 
         <TabsContent value="join" className="space-y-6">
-          <TournamentJoinInterface tournamentId={tournament.id} tournament={tournament} />
-        </TabsContent>
-
-        <TabsContent value="signup" className="space-y-6">
-          <TournamentSignupSystem tournament={tournament} />
+          <UnifiedTournamentJoin tournamentId={tournament.id} tournament={tournament} />
         </TabsContent>
 
         <TabsContent value="pools" className="space-y-6">
           <PlayerPoolManagement tournamentId={tournament.id} />
-        </TabsContent>
-
-        <TabsContent value="captains" className="space-y-6">
-          <CaptainSelectionInterface tournamentId={tournament.id} />
         </TabsContent>
 
         <TabsContent value="draft" className="space-y-6">
