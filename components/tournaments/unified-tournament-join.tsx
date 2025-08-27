@@ -23,6 +23,8 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
+import { UserSyncService } from "@/lib/services/user-sync-service"
+import { TournamentBettingInterface } from "./tournament-betting-interface"
 
 interface UnifiedTournamentJoinProps {
   tournamentId: string
@@ -125,130 +127,138 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
       if (isAuthenticated && user) {
         console.log("[v0] Validating authenticated user:", user.id)
 
-        // First, try to find existing user by auth ID
-        const { data: existingUser, error: existingUserError } = await supabase
+        const syncResult = await UserSyncService.syncAuthUser(
+          user.id,
+          user.username || `User_${user.id.substring(0, 8)}`,
+        )
+
+        if (!syncResult.success) {
+          console.error("[v0] User sync failed:", syncResult.error)
+          toast.error(`Failed to sync user: ${syncResult.error}`)
+          return
+        }
+
+        userId = syncResult.userId
+        console.log("[v0] User sync successful:", syncResult.username, "Using database ID:", userId)
+
+        console.log("[v0] Verifying user exists in database:", userId)
+        const { data: existingUser, error: userCheckError } = await supabase
           .from("users")
           .select("id, username, elo_rating, balance")
-          .eq("id", user.id)
+          .eq("id", userId)
           .single()
 
-        if (existingUser && !existingUserError) {
-          finalUser = existingUser
-          console.log("[v0] Found existing user:", existingUser.username)
-        } else {
-          // User doesn't exist, create with auth ID
-          console.log("[v0] Creating new user record with auth ID")
+        if (userCheckError || !existingUser) {
+          console.error("[v0] User not found in database, creating new record:", userCheckError)
 
-          const { data: createdUser, error: createError } = await supabase
+          // Create the user record with the correct ID
+          const { data: newUser, error: createError } = await supabase
             .from("users")
             .insert({
-              id: user.id,
-              username: user.username || `User_${user.id.substring(0, 8)}`,
-              email: user.email || null,
+              id: userId,
+              username: user.username || `User_${userId.substring(0, 8)}`,
+              email: user.email || `${userId}@temp.com`,
               elo_rating: 1200,
+              balance: 0,
               total_games: 0,
               wins: 0,
               losses: 0,
-              balance: 0,
               created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
             })
-            .select("id, username, elo_rating, balance")
+            .select()
             .single()
 
           if (createError) {
-            console.error("[v0] Error creating user:", createError)
-            toast.error(`Failed to create user record: ${createError.message}`)
+            console.error("[v0] Failed to create user record:", createError)
+            toast.error(`Failed to create user account: ${createError.message}`)
             return
           }
 
-          finalUser = createdUser
-          console.log("[v0] Created new user:", createdUser.username)
-
-          await supabase.from("user_wallets").insert({
-            user_id: user.id,
-            balance: 25, // Starting bonus
-            total_deposited: 0,
-            total_withdrawn: 0,
-            total_wagered: 0,
-            total_winnings: 0,
-            created_at: new Date().toISOString(),
-          })
-
-          console.log("[v0] Created user wallet with starting balance")
+          finalUser = newUser
+          console.log("[v0] Created new user record:", finalUser.username)
+        } else {
+          finalUser = existingUser
+          console.log("[v0] User verified in database:", finalUser.username)
         }
 
-        userId = finalUser.id
+        const isValidUser = await UserSyncService.validateUserSync(userId)
+        if (!isValidUser) {
+          console.error("[v0] User validation failed for database ID:", userId)
+          toast.error("User validation failed. Please try again.")
+          return
+        }
+
+        console.log("[v0] User validation successful for database ID:", userId)
       } else {
         console.log("[v0] Creating anonymous user")
         const anonymousId = crypto.randomUUID()
         const anonymousUsername = `Guest_${Math.random().toString(36).substring(2, 8)}`
 
-        const { data: createdAnonymousUser, error: userError } = await supabase
+        const { data: anonymousUser, error: anonymousError } = await supabase
           .from("users")
           .insert({
             id: anonymousId,
             username: anonymousUsername,
+            email: `${anonymousId}@temp.com`,
             elo_rating: 1200,
+            balance: 25, // Starting bonus for anonymous users
             total_games: 0,
             wins: 0,
             losses: 0,
-            balance: 0,
             created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
-          .select("id, username, elo_rating")
+          .select()
           .single()
 
-        if (userError) {
-          console.error("[v0] Error creating anonymous user:", userError)
-          toast.error("Failed to join tournament")
+        if (anonymousError) {
+          console.error("[v0] Failed to create anonymous user:", anonymousError)
+          toast.error("Failed to create guest account")
           return
         }
 
-        finalUser = createdAnonymousUser
         userId = anonymousId
-        console.log("[v0] Created anonymous user:", createdAnonymousUser.username)
+        finalUser = anonymousUser
+        console.log("[v0] Created anonymous user:", finalUser.username)
       }
 
-      const { data: userVerification, error: verifyError } = await supabase
-        .from("users")
-        .select("id, username, elo_rating")
-        .eq("id", userId)
-        .single()
-
-      if (!userVerification || verifyError) {
-        console.error("[v0] User verification failed:", verifyError)
-        toast.error("User validation failed. Please try again.")
-        return
-      }
-
-      console.log("[v0] User verification successful:", userVerification.username)
-
-      // Check if already joined
       const existingParticipant = participants.find((p) => p.user_id === userId)
       if (existingParticipant) {
         toast.error("You're already registered for this tournament!")
         return
       }
 
-      // Check capacity
       const maxParticipants = tournament.max_participants || 16
       if (participants.length >= maxParticipants) {
         toast.error("Tournament is full!")
         return
       }
 
-      console.log("[v0] Joining tournament with verified user ID:", userId)
+      console.log("[v0] Joining tournament with validated database user ID:", userId)
 
+      const participantData = {
+        tournament_id: tournamentId,
+        user_id: userId,
+        joined_at: new Date().toISOString(),
+        status: "registered",
+        seed: participants.length + 1,
+        team_name: `Team ${participants.length + 1}`,
+      }
+
+      const playerPoolData = {
+        tournament_id: tournamentId,
+        user_id: userId,
+        draft_position: participants.length + 1,
+        status: "available",
+        captain_type: participants.length < 2 ? "captain" : "player",
+        created_at: new Date().toISOString(),
+      }
+
+      console.log("[v0] Adding player to tournament participants...")
       const { data: joinData, error: joinError } = await supabase
         .from("tournament_participants")
-        .insert({
-          tournament_id: tournamentId,
-          user_id: userId,
-          joined_at: new Date().toISOString(),
-          status: "registered",
-          seed: participants.length + 1,
-          team_name: `Team ${participants.length + 1}`,
-        })
+        .insert(participantData)
         .select()
 
       if (joinError) {
@@ -257,27 +267,26 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
         return
       }
 
-      const { error: poolError } = await supabase.from("tournament_player_pool").insert({
-        tournament_id: tournamentId,
-        user_id: userId,
-        draft_position: participants.length + 1,
-        status: "available",
-        captain_type: participants.length < 2 ? "captain" : "player",
-        created_at: new Date().toISOString(),
-      })
+      console.log("[v0] Successfully registered for tournament, now adding to player pool...")
+      const { data: poolData, error: poolError } = await supabase
+        .from("tournament_player_pool")
+        .insert(playerPoolData)
+        .select()
 
       if (poolError) {
-        console.warn("[v0] Error adding to player pool:", poolError)
-        // Don't fail the join if pool addition fails
-      } else {
-        console.log("[v0] Added player to tournament pool")
+        console.error("[v0] Error adding to player pool:", poolError)
+        console.log("[v0] Removing from tournament participants due to player pool failure...")
+        await supabase.from("tournament_participants").delete().eq("tournament_id", tournamentId).eq("user_id", userId)
+
+        toast.error(`Failed to join player pool: ${poolError.message}`)
+        return
       }
 
-      console.log("[v0] Successfully joined tournament:", joinData)
+      console.log("[v0] Successfully added to player pool:", poolData)
+      console.log("[v0] Player successfully registered for tournament and added to player pool")
 
-      if (userId && isAuthenticated) {
+      if (userId && isAuthenticated && finalUser) {
         try {
-          // Check for existing reward to prevent duplicates
           const { data: existingReward } = await supabase
             .from("financial_transactions")
             .select("id")
@@ -287,21 +296,22 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
             .single()
 
           if (!existingReward) {
-            // Add reward to user balance
+            const currentBalance = finalUser.balance || 0
+            const rewardAmount = 25
+
             const { error: balanceError } = await supabase
               .from("users")
               .update({
-                balance: (finalUser?.balance || 0) + 25,
+                balance: currentBalance + rewardAmount,
               })
               .eq("id", userId)
 
             if (!balanceError) {
-              // Update wallet balance
               await supabase.from("user_wallets").upsert(
                 {
                   user_id: userId,
-                  balance: (finalUser?.balance || 0) + 25,
-                  total_deposited: 25,
+                  balance: currentBalance + rewardAmount,
+                  total_deposited: rewardAmount,
                   updated_at: new Date().toISOString(),
                 },
                 {
@@ -309,10 +319,9 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
                 },
               )
 
-              // Record transaction
               await supabase.from("financial_transactions").insert({
                 user_id: userId,
-                amount: 25,
+                amount: rewardAmount,
                 transaction_type: "tournament_participation",
                 description: `Tournament join reward - ${tournament.name}`,
                 external_transaction_id: `tournament_join_${tournamentId}`,
@@ -548,9 +557,10 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="players">Players ({currentParticipants})</TabsTrigger>
+          <TabsTrigger value="betting">Betting</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -645,6 +655,14 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="betting" className="space-y-4">
+          <TournamentBettingInterface
+            tournamentId={tournamentId}
+            tournamentName={tournament.name}
+            participants={participants}
+          />
         </TabsContent>
       </Tabs>
     </div>

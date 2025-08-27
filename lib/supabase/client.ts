@@ -7,6 +7,8 @@ export const isSupabaseConfigured =
   typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === "string" &&
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length > 0
 
+export { createBrowserClient } from "@supabase/ssr"
+
 // Singleton instance to prevent multiple GoTrueClient instances
 let supabaseInstance: any = null
 

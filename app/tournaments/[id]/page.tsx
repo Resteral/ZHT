@@ -15,6 +15,7 @@ import { PlayerPoolManagement } from "@/components/tournaments/player-pool-manag
 import { DraftInitiationSystem } from "@/components/tournaments/draft-initiation-system"
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { EloStyleTournament } from "@/components/tournaments/elo-style-tournament"
+import { TournamentBettingInterface } from "@/components/tournaments/tournament-betting-interface"
 
 interface TournamentPageProps {
   params: {
@@ -232,12 +233,13 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="join">Join Tournament</TabsTrigger>
           <TabsTrigger value="pools">Player Pools</TabsTrigger>
           <TabsTrigger value="draft">Draft</TabsTrigger>
           <TabsTrigger value="bracket">Live Bracket</TabsTrigger>
+          <TabsTrigger value="betting">Betting</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -321,6 +323,14 @@ export default function TournamentPage({ params }: TournamentPageProps) {
 
         <TabsContent value="bracket" className="space-y-6">
           <RoundRobinBracket tournamentId={tournament.id} />
+        </TabsContent>
+
+        <TabsContent value="betting" className="space-y-6">
+          <TournamentBettingInterface
+            tournamentId={tournament.id}
+            tournamentName={tournament.name}
+            participants={[]} // Will be loaded by the betting interface component
+          />
         </TabsContent>
       </Tabs>
     </div>
