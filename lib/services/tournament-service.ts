@@ -102,12 +102,13 @@ export const tournamentService = {
       end_date: tournamentData.end_date,
       team_based: true,
       player_pool_settings: {
+        max_teams: tournamentData.player_pool_settings?.num_teams || 8,
         draft_mode: tournamentData.player_pool_settings?.draft_mode || "snake_draft",
-        num_teams: tournamentData.player_pool_settings?.num_teams || 8,
         players_per_team: tournamentData.player_pool_settings?.players_per_team || 4,
         auto_start: tournamentData.player_pool_settings?.auto_start || true,
         create_lobbies_on_finish: tournamentData.player_pool_settings?.create_lobbies_on_finish || true,
         bracket_type: tournamentData.player_pool_settings?.bracket_type || "single_elimination",
+        auction_budget: tournamentData.player_pool_settings?.auction_budget || 500,
         ...tournamentData.player_pool_settings,
       },
     }
@@ -243,7 +244,7 @@ export const tournamentService = {
         throw new Error("Failed to get tournament participants")
       }
 
-      const numTeams = tournament.player_pool_settings?.num_teams || 4
+      const numTeams = tournament.player_pool_settings?.max_teams || 4
       const playersPerTeam = tournament.player_pool_settings?.players_per_team || 4
       const lobbiesCreated = []
 
