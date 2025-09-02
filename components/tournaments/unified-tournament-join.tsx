@@ -328,7 +328,7 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
         user_id: userId,
         draft_position: participants.length + 1,
         status: "available",
-        captain_type: participants.length < 2 ? "captain" : "player",
+        captain_type: participants.length < 2 ? "high_elo" : "low_elo",
         created_at: new Date().toISOString(),
       }
 
