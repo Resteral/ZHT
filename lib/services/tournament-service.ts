@@ -93,11 +93,11 @@ export const tournamentService = {
       name: tournamentData.name,
       description: tournamentData.description,
       game: tournamentData.game || "hockey",
-      tournament_type: "draft", // Always use "draft" for all draft modes
+      tournament_type: "draft",
       max_participants: tournamentData.max_participants,
       entry_fee: tournamentData.entry_fee || 0,
       prize_pool: tournamentData.prize_pool || 0,
-      status: "active", // Use "active" status instead of "pending"
+      status: "registration", // Use "registration" status instead of "active" to prevent instant starting
       start_date: tournamentData.start_date,
       end_date: tournamentData.end_date,
       team_based: true,
@@ -105,7 +105,7 @@ export const tournamentService = {
         max_teams: tournamentData.player_pool_settings?.num_teams || 8,
         draft_mode: tournamentData.player_pool_settings?.draft_mode || "snake_draft",
         players_per_team: tournamentData.player_pool_settings?.players_per_team || 4,
-        auto_start: tournamentData.player_pool_settings?.auto_start || true,
+        auto_start: false, // Disable auto start to prevent instant tournament starting
         create_lobbies_on_finish: tournamentData.player_pool_settings?.create_lobbies_on_finish || true,
         bracket_type: tournamentData.player_pool_settings?.bracket_type || "single_elimination",
         auction_budget: tournamentData.player_pool_settings?.auction_budget || 500,
@@ -128,92 +128,7 @@ export const tournamentService = {
     }
 
     console.log("[v0] Regular tournament created successfully:", data)
-
-    const { data: verifyData, error: verifyError } = await supabase
-      .from("tournaments")
-      .select("*")
-      .eq("id", data.id)
-      .single()
-
-    if (verifyError || !verifyData) {
-      console.error("[v0] Tournament verification failed:", verifyError)
-      throw new Error("Tournament was not saved properly to database")
-    }
-
-    console.log("[v0] Tournament verified and ready:", verifyData.name)
     return data
-  },
-
-  async joinTournament(tournamentId: string, teamName?: string, userId?: string) {
-    console.log("[v0] Joining tournament with no restrictions:", tournamentId)
-
-    let actualUserId = userId
-    if (!userId) {
-      const { data: systemUser } = await supabase.from("users").select("id").eq("username", "System").single()
-      if (systemUser) {
-        actualUserId = systemUser.id
-      } else {
-        console.log("[v0] No system user found, allowing anonymous tournament participation")
-        actualUserId = null
-      }
-    }
-
-    if (actualUserId) {
-      const { data: userData } = await supabase.from("users").select("id, account_id").eq("id", actualUserId).single()
-      if (userData) {
-        actualUserId = userData.id
-      }
-    }
-
-    const { data: participants } = await supabase
-      .from("tournament_participants")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-
-    const seed = (participants?.length || 0) + 1
-
-    if (actualUserId) {
-      const { data, error } = await supabase
-        .from("tournament_participants")
-        .insert({
-          tournament_id: tournamentId,
-          user_id: actualUserId,
-          team_name: teamName || `Team ${seed}`,
-          seed: seed,
-          status: "registered",
-        })
-        .select()
-        .single()
-
-      if (error && !error.message.includes("duplicate")) {
-        throw error
-      }
-
-      try {
-        const { error: balanceError } = await supabase
-          .from("users")
-          .update({
-            balance: supabase.raw("balance + ?", [25]),
-          })
-          .eq("id", actualUserId)
-
-        if (balanceError) {
-          console.error("Error updating user balance:", balanceError)
-        }
-      } catch (rewardError) {
-        console.error("Error processing tournament participation reward:", rewardError)
-      }
-
-      return data || { success: true, message: "Already joined" }
-    } else {
-      return {
-        tournament_id: tournamentId,
-        team_name: teamName || `Team ${seed}`,
-        seed: seed,
-        status: "registered",
-        anonymous: true,
-      }
-    }
   },
 
   async createLobbiesFromTournament(tournamentId: string) {

@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Users, Calendar, DollarSign, UserPlus } from "lucide-react"
+import { Trophy, Users, Calendar, DollarSign } from "lucide-react"
 import { TournamentBracket } from "./tournament-bracket"
 import { TournamentParticipants } from "./tournament-participants"
 import { TournamentTeams } from "./tournament-teams"
 import { tournamentService } from "@/lib/services/tournament-service"
+import { UnifiedTournamentJoin } from "./unified-tournament-join"
 
 interface TournamentDetailsProps {
   tournamentId: string
@@ -31,15 +31,6 @@ export function TournamentDetails({ tournamentId }: TournamentDetailsProps) {
       console.error("Error loading tournament:", error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleJoinTournament = async () => {
-    try {
-      await tournamentService.joinTournament(tournamentId)
-      loadTournament() // Refresh data
-    } catch (error) {
-      console.error("Error joining tournament:", error)
     }
   }
 
@@ -80,12 +71,7 @@ export function TournamentDetails({ tournamentId }: TournamentDetailsProps) {
               <CardDescription className="text-base">{tournament.description}</CardDescription>
             </div>
 
-            {tournament.status === "registration" && (
-              <Button onClick={handleJoinTournament}>
-                <UserPlus className="h-4 w-4 mr-2" />
-                Join Tournament
-              </Button>
-            )}
+            <UnifiedTournamentJoin tournamentId={tournamentId} />
           </div>
         </CardHeader>
 
@@ -135,13 +121,6 @@ export function TournamentDetails({ tournamentId }: TournamentDetailsProps) {
               </p>
             </div>
           )}
-
-          {/* Participation Reward Info */}
-          <div className="mt-4 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
-            <p className="text-sm text-green-700 dark:text-green-300">
-              <strong>💰 Participation Reward:</strong> Earn $25 instantly when you join this tournament!
-            </p>
-          </div>
         </CardContent>
       </Card>
 

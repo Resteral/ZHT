@@ -12,9 +12,7 @@ import { ArrowLeft, Trophy, Users, Calendar, DollarSign } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { UnifiedTournamentJoin } from "@/components/tournaments/unified-tournament-join"
 import { PlayerPoolManagement } from "@/components/tournaments/player-pool-management"
-import { DraftInitiationSystem } from "@/components/tournaments/draft-initiation-system"
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
-import { EloStyleTournament } from "@/components/tournaments/elo-style-tournament"
 import { TournamentBettingInterface } from "@/components/tournaments/tournament-betting-interface"
 
 interface TournamentPageProps {
@@ -48,7 +46,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
-  const [user, setUser] = useState<any | null>(null) // Assuming user state is needed for isOrganizer check
+  const [user, setUser] = useState<any | null>(null)
 
   useEffect(() => {
     if (!isValidUUID(params.id)) {
@@ -57,7 +55,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
     }
 
     fetchTournament()
-    fetchUser() // Assuming fetchUser function is needed to get user data
+    fetchUser()
   }, [params.id, router])
 
   const fetchTournament = async () => {
@@ -86,20 +84,14 @@ export default function TournamentPage({ params }: TournamentPageProps) {
 
         setTournament({
           ...data,
-          sport: data.game || "fantasy_football", // Map game to sport field
-          league_mode: data.tournament_type || "tournament", // Map tournament_type to league_mode
+          sport: data.game || "fantasy_football",
+          league_mode: data.tournament_type || "tournament",
           max_teams: data.max_participants || data.max_teams || 0,
           participant_count: participantData?.length || 0,
         })
 
         if (data.status === "registration") {
           setActiveTab("join")
-        } else if (data.status === "team_building") {
-          setActiveTab("pools")
-        } else if (data.status === "draft" || data.status === "drafting") {
-          setActiveTab("draft")
-        } else if (data.status === "active" || data.status === "in_progress") {
-          setActiveTab("bracket")
         }
       }
     } catch (error) {
@@ -111,8 +103,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
   }
 
   const fetchUser = async () => {
-    // Assuming this function fetches user data
-    const user = { id: "some_user_id" } // Replace with actual user data fetching logic
+    const user = { id: "some_user_id" }
     setUser(user)
   }
 
@@ -233,80 +224,72 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="join">Join Tournament</TabsTrigger>
           <TabsTrigger value="pools">Player Pools</TabsTrigger>
-          <TabsTrigger value="draft">Draft</TabsTrigger>
           <TabsTrigger value="bracket">Live Bracket</TabsTrigger>
           <TabsTrigger value="betting">Betting</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {tournament.league_mode === "snake_draft" ? (
-            <EloStyleTournament tournamentId={tournament.id} tournament={tournament} />
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>Tournament Overview</CardTitle>
-                <CardDescription>Tournament details and current status</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-4">
-                    <h4 className="font-semibold">Tournament Information</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Status:</span>
-                        <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Game:</span>
-                        <span>{tournament.sport.replace("_", " ")}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Max Teams:</span>
-                        <span>{tournament.max_teams}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Entry Fee:</span>
-                        <span>${tournament.entry_fee}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Prize Pool:</span>
-                        <span className="font-semibold text-green-600">${tournament.prize_pool.toLocaleString()}</span>
-                      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Tournament Overview</CardTitle>
+              <CardDescription>Tournament details and current status</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Tournament Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Status:</span>
+                      <Badge className={getStatusColor(tournament.status)}>{getStatusText(tournament.status)}</Badge>
                     </div>
-                  </div>
-                  <div className="space-y-4">
-                    <h4 className="font-semibold">Participation</h4>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Registered:</span>
-                        <span>
-                          {tournament.participant_count}/{tournament.max_teams}
-                        </span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className="bg-primary h-2 rounded-full transition-all"
-                          style={{ width: `${(tournament.participant_count! / tournament.max_teams) * 100}%` }}
-                        />
-                      </div>
-                      {(tournament.status === "registration" || tournament.status === "active") && (
-                        <div className="pt-4">
-                          <Button onClick={() => setActiveTab("join")} className="w-full" size="lg">
-                            <Users className="h-4 w-4 mr-2" />
-                            Join Tournament
-                          </Button>
-                        </div>
-                      )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Game:</span>
+                      <span>{tournament.sport.replace("_", " ")}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Max Teams:</span>
+                      <span>{tournament.max_teams}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Entry Fee:</span>
+                      <span>${tournament.entry_fee}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Prize Pool:</span>
+                      <span className="font-semibold text-green-600">${tournament.prize_pool.toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Participation</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Registered:</span>
+                      <span>
+                        {tournament.participant_count}/{tournament.max_teams}
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all"
+                        style={{ width: `${(tournament.participant_count! / tournament.max_teams) * 100}%` }}
+                      />
+                    </div>
+                    {(tournament.status === "registration" || tournament.status === "active") && (
+                      <div className="pt-4">
+                        <UnifiedTournamentJoin tournamentId={tournament.id} tournament={tournament} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="join" className="space-y-6">
@@ -317,20 +300,12 @@ export default function TournamentPage({ params }: TournamentPageProps) {
           <PlayerPoolManagement tournamentId={tournament.id} />
         </TabsContent>
 
-        <TabsContent value="draft" className="space-y-6">
-          <DraftInitiationSystem tournamentId={tournament.id} />
-        </TabsContent>
-
         <TabsContent value="bracket" className="space-y-6">
           <RoundRobinBracket tournamentId={tournament.id} />
         </TabsContent>
 
         <TabsContent value="betting" className="space-y-6">
-          <TournamentBettingInterface
-            tournamentId={tournament.id}
-            tournamentName={tournament.name}
-            participants={[]} // Will be loaded by the betting interface component
-          />
+          <TournamentBettingInterface tournamentId={tournament.id} tournamentName={tournament.name} participants={[]} />
         </TabsContent>
       </Tabs>
     </div>

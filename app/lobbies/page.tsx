@@ -238,7 +238,7 @@ export default function LobbiesPage() {
         <p className="text-muted-foreground">Join ELO draft lobbies, active games, and competitive tournaments</p>
       </div>
 
-      <div className="mb-8 grid md:grid-cols-2 gap-6">
+      <div className="mb-8 grid md:grid-cols-1 gap-6">
         <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -249,19 +249,6 @@ export default function LobbiesPage() {
           </CardHeader>
           <CardContent>
             <UnifiedDraftSelector buttonText="Create Draft Lobby" buttonSize="lg" className="w-full" mode="create" />
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-r from-secondary/10 to-primary/10 border-secondary/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Play className="h-5 w-5" />
-              Browse All Formats
-            </CardTitle>
-            <CardDescription>View all ELO draft formats and join existing lobbies</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <UnifiedDraftSelector buttonText="Browse Draft Formats" buttonSize="lg" className="w-full" mode="both" />
           </CardContent>
         </Card>
       </div>

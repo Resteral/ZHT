@@ -120,67 +120,79 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
     try {
       console.log("[v0] Joining tournament via unified system:", tournamentId)
 
-      let userId = user?.id
+      let userId = null
       let finalUser = null
 
       if (isAuthenticated && user) {
-        console.log("[v0] Validating authenticated user:", user.id)
+        console.log("[v0] Processing authenticated user:", user.id)
 
-        const { data: upsertedUser, error: upsertError } = await supabase
+        const { data: existingUserById, error: fetchByIdError } = await supabase
           .from("users")
-          .insert({
-            id: user.id,
-            username: user.username || `User_${user.id.substring(0, 8)}`,
-            email: user.email || `${user.id}@temp.com`,
-            elo_rating: 1200,
-            balance: 0,
-            total_games: 0,
-            wins: 0,
-            losses: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select()
+          .select("*")
+          .eq("id", user.id)
           .single()
 
-        if (upsertError && upsertError.code !== "23505") {
-          // 23505 is unique constraint violation
-          console.error("[v0] Failed to create user record:", upsertError)
-
-          // Try to fetch existing user if insert failed
-          const { data: existingUser, error: fetchError } = await supabase
+        if (existingUserById && !fetchByIdError) {
+          // User exists with auth ID
+          finalUser = existingUserById
+          userId = user.id
+          console.log("[v0] Found existing user by ID:", finalUser.username)
+        } else {
+          const { data: existingUserByUsername, error: fetchByUsernameError } = await supabase
             .from("users")
             .select("*")
-            .eq("id", user.id)
+            .or(`username.eq.${user.username || user.email?.split("@")[0]},email.eq.${user.email}`)
             .single()
 
-          if (fetchError || !existingUser) {
-            toast.error(`Failed to sync user account: ${upsertError.message}`)
-            return
+          if (existingUserByUsername && !fetchByUsernameError) {
+            // User exists but with different ID - use existing record
+            finalUser = existingUserByUsername
+            userId = existingUserByUsername.id
+            console.log("[v0] Found existing user by username/email:", finalUser.username)
+          } else {
+            const newUserData = {
+              id: user.id,
+              username: user.username || user.email?.split("@")[0] || `User_${user.id.substring(0, 8)}`,
+              email: user.email || `${user.id}@temp.com`,
+              elo_rating: 1200,
+              balance: 25, // Starting bonus
+              total_games: 0,
+              wins: 0,
+              losses: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }
+
+            const { data: newUser, error: createError } = await supabase
+              .from("users")
+              .insert(newUserData)
+              .select()
+              .single()
+
+            if (createError) {
+              console.error("[v0] Failed to create user:", createError)
+              toast.error(`Failed to create user account: ${createError.message}`)
+              return
+            }
+
+            finalUser = newUser
+            userId = user.id
+            console.log("[v0] Created new user:", finalUser.username)
           }
-
-          finalUser = existingUser
-        } else {
-          finalUser = upsertedUser
         }
-
-        userId = user.id
-        console.log("[v0] User record confirmed:", finalUser.username)
 
         await supabase.from("user_wallets").upsert(
           {
             user_id: userId,
-            balance: finalUser.balance || 0,
-            total_deposited: 0,
+            balance: finalUser.balance || 25,
+            total_deposited: finalUser.balance || 25,
             total_withdrawn: 0,
             total_wagered: 0,
             total_winnings: 0,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
-          {
-            onConflict: "user_id",
-          },
+          { onConflict: "user_id" },
         )
       } else {
         console.log("[v0] Creating anonymous user")
@@ -194,7 +206,7 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
             username: anonymousUsername,
             email: `${anonymousId}@temp.com`,
             elo_rating: 1200,
-            balance: 25, // Starting bonus for anonymous users
+            balance: 25,
             total_games: 0,
             wins: 0,
             losses: 0,
@@ -214,6 +226,7 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
         finalUser = anonymousUser
         console.log("[v0] Created anonymous user:", finalUser.username)
 
+        // Create wallet for anonymous user
         await supabase.from("user_wallets").insert({
           user_id: userId,
           balance: 25,
@@ -224,6 +237,56 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
+      }
+
+      if (!userId || !finalUser) {
+        toast.error("Failed to validate user account")
+        return
+      }
+
+      const { data: validatedUser, error: validationError } = await supabase
+        .from("users")
+        .select("id, username, balance")
+        .eq("id", userId)
+        .single()
+
+      if (validationError || !validatedUser) {
+        console.error("[v0] User validation failed:", validationError)
+
+        if (isAuthenticated && user) {
+          console.log("[v0] Attempting to create missing user record")
+          const { data: createdUser, error: createError } = await supabase
+            .from("users")
+            .upsert({
+              id: userId,
+              username: user.username || user.email?.split("@")[0] || `User_${userId.substring(0, 8)}`,
+              email: user.email || `${userId}@temp.com`,
+              elo_rating: 1200,
+              balance: 25,
+              total_games: 0,
+              wins: 0,
+              losses: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select()
+            .single()
+
+          if (createError || !createdUser) {
+            console.error("[v0] Failed to create user record:", createError)
+            toast.error("Failed to create user account")
+            return
+          }
+
+          finalUser = createdUser
+          console.log("[v0] Successfully created user record:", finalUser.username)
+        } else {
+          toast.error("User account validation failed")
+          return
+        }
+      } else {
+        console.log("[v0] User validated successfully:", validatedUser.username)
+        finalUser = validatedUser
       }
 
       const existingParticipant = participants.find((p) => p.user_id === userId)

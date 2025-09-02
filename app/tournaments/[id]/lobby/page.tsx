@@ -31,6 +31,7 @@ interface Tournament {
     bracket_type: string
   }
   status: string
+  created_by: string
 }
 
 export default function TournamentLobbyPage() {
@@ -244,12 +245,71 @@ export default function TournamentLobbyPage() {
       console.log("[v0] Selected players:", selectedPlayers.length)
       console.log("[v0] Removing excess players:", excessPlayers.length)
 
+      // Update tournament status to drafting
       await supabase.from("tournaments").update({ status: "drafting" }).eq("id", tournamentId)
+
+      // Create captain draft record for the tournament
+      const { data: captainDraft, error: draftError } = await supabase
+        .from("captain_drafts")
+        .insert({
+          match_id: tournamentId,
+          captain1_id: captains[0]?.id, // Highest ELO captain
+          captain2_id: captains[1]?.id || captains[0]?.id, // Second highest or same if only one team
+          format: tournament.player_pool_settings.bracket_type || "tournament",
+          max_rounds: Math.ceil(selectedPlayers.length / numCaptains),
+          current_round: 1,
+          current_pick: 1,
+          current_captain: captains[0]?.id,
+          status: "drafting",
+          tournament_owner: captains[0]?.id,
+          tournament_mode: true,
+          elo_difference: captains.length > 1 ? captains[0].elo_rating - captains[1].elo_rating : 0,
+          created_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (draftError) throw draftError
+
+      // Add all selected players to the draft system
+      const draftParticipants = selectedPlayers.map((player, index) => ({
+        draft_id: captainDraft.id,
+        user_id: player.id,
+        is_captain: index < numCaptains,
+        team: null, // Will be assigned during draft
+        elo_rating: player.elo_rating,
+      }))
+
+      const { error: participantsError } = await supabase.from("captain_draft_participants").insert(draftParticipants)
+
+      if (participantsError) throw participantsError
+
+      // Update tournament participants status to indicate they're in draft
+      await supabase
+        .from("tournament_participants")
+        .update({ status: "drafting" })
+        .eq("tournament_id", tournamentId)
+        .in(
+          "user_id",
+          selectedPlayers.map((p) => p.id),
+        )
+
+      // Remove excess players from tournament if any
+      if (excessPlayers.length > 0) {
+        await supabase
+          .from("tournament_participants")
+          .update({ status: "removed_excess" })
+          .eq("tournament_id", tournamentId)
+          .in(
+            "user_id",
+            excessPlayers.map((p) => p.id),
+          )
+      }
 
       setTournamentStarted(true)
       await loadBracketAndDraftInfo(tournamentId)
 
-      console.log("[v0] Transitioning to draft page...")
+      console.log("[v0] All players moved to draft system, transitioning to draft page...")
       router.push(`/tournaments/${tournamentId}/draft`)
     } catch (error) {
       console.error("[v0] Error starting draft:", error)
@@ -446,7 +506,7 @@ export default function TournamentLobbyPage() {
                     </div>
                   </div>
 
-                  {!isUserInTournament && currentUser && (
+                  {!isUserInTournament && currentUser && !tournamentStarted && (
                     <Button onClick={joinTournament} disabled={joining} className="w-full" size="lg">
                       {joining ? (
                         "Joining..."
@@ -459,10 +519,39 @@ export default function TournamentLobbyPage() {
                     </Button>
                   )}
 
-                  {isUserInTournament && (
+                  {isUserInTournament && !tournamentStarted && (
                     <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
                       <div className="text-green-800 font-medium">✅ You're in the pool!</div>
                       <div className="text-sm text-green-600 mt-1">Wait for the tournament to start</div>
+                    </div>
+                  )}
+
+                  {currentUser &&
+                    tournament.created_by === currentUser.id &&
+                    !tournamentStarted &&
+                    players.length >= tournament.player_pool_settings.num_teams && (
+                      <Button onClick={startDraft} className="w-full" size="lg" variant="default">
+                        <Target className="h-4 w-4 mr-2" />
+                        Start Draft System ({players.length} players ready)
+                      </Button>
+                    )}
+
+                  {tournamentStarted && (
+                    <div className="space-y-3">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="text-blue-800 font-medium">🎯 Draft System Active</div>
+                        <div className="text-sm text-blue-600 mt-1">
+                          All players have been moved to the draft system
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => router.push(`/tournaments/${tournamentId}/draft`)}
+                        className="w-full"
+                        size="lg"
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        Enter Draft Room
+                      </Button>
                     </div>
                   )}
                 </CardContent>

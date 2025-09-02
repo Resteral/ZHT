@@ -128,6 +128,100 @@ export default function LeaguesPage() {
     fetchData()
   }, [])
 
+  useEffect(() => {
+    if (!user) return
+
+    const monitorTournamentDrafts = async () => {
+      try {
+        // Check for tournaments where user is registered and draft is starting
+        const { data: userTournaments } = await supabase
+          .from("tournament_player_pool")
+          .select(`
+            tournament_id,
+            tournaments(
+              id,
+              name,
+              status,
+              tournament_type,
+              start_date
+            )
+          `)
+          .eq("user_id", user.id)
+          .in("tournaments.status", ["draft_active", "draft_starting"])
+
+        if (userTournaments && userTournaments.length > 0) {
+          for (const entry of userTournaments) {
+            const tournament = entry.tournaments
+            if (tournament && tournament.status === "draft_active") {
+              // Show notification and redirect to draft
+              const shouldRedirect = window.confirm(
+                `The draft for "${tournament.name}" is now active! Would you like to join the draft room?`,
+              )
+
+              if (shouldRedirect) {
+                router.push(`/tournaments/${tournament.id}/draft`)
+                return
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[v0] Error monitoring tournament drafts:", error)
+      }
+    }
+
+    // Monitor tournament status changes every 30 seconds
+    const draftMonitorInterval = setInterval(monitorTournamentDrafts, 30000)
+
+    // Initial check
+    monitorTournamentDrafts()
+
+    return () => clearInterval(draftMonitorInterval)
+  }, [user, router])
+
+  useEffect(() => {
+    if (!user) return
+
+    const tournamentSubscription = supabase
+      .channel("tournament-status-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "tournaments",
+          filter: `status=eq.draft_active`,
+        },
+        async (payload) => {
+          console.log("[v0] Tournament draft started:", payload.new)
+
+          // Check if user is registered for this tournament
+          const { data: userRegistration } = await supabase
+            .from("tournament_player_pool")
+            .select("id")
+            .eq("tournament_id", payload.new.id)
+            .eq("user_id", user.id)
+            .single()
+
+          if (userRegistration) {
+            // Show notification and redirect
+            const shouldRedirect = window.confirm(
+              `The draft for "${payload.new.name}" has started! Join the draft room now?`,
+            )
+
+            if (shouldRedirect) {
+              router.push(`/tournaments/${payload.new.id}/draft`)
+            }
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(tournamentSubscription)
+    }
+  }, [user, router])
+
   const getDivisionFromElo = (elo: number): "premier" | "championship" | "league_one" | "league_two" => {
     if (elo >= 1800) return "premier"
     if (elo >= 1600) return "championship"
@@ -301,6 +395,8 @@ export default function LeaguesPage() {
 
       await loadLeaguePlayers(leagueId)
       console.log("[v0] User joined Elo League successfully")
+
+      alert("Successfully joined the ELO League! You'll be automatically notified when tournament drafts begin.")
     } catch (error) {
       console.error("[v0] Error joining Elo League:", error)
       alert("Failed to join Elo League. Please try again.")
@@ -723,6 +819,13 @@ export default function LeaguesPage() {
                         <Button variant="outline" onClick={() => router.push(`/tournaments/${league.id}`)}>
                           View Season
                         </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => router.push(`/tournaments/${league.id}/draft`)}
+                          className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                        >
+                          Draft Room
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -830,6 +933,13 @@ export default function LeaguesPage() {
                           )}
                           <Button variant="outline" onClick={() => router.push(`/tournaments/${league.id}`)}>
                             View Season
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => router.push(`/tournaments/${league.id}/draft`)}
+                            className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                          >
+                            Draft Room
                           </Button>
                         </div>
                       </CardContent>

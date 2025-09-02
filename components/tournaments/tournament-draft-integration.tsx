@@ -88,7 +88,7 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
     setStarting(true)
     try {
-      console.log("[v0] Starting tournament draft with conflict validation")
+      console.log("[v0] Starting tournament draft with enhanced player pool integration")
 
       // Check if any participants are already in active drafts
       const participantIds = participants.map((p) => p.user_id)
@@ -117,7 +117,7 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
       }
 
       const { data: poolValidation, error: poolError } = await supabase
-        .from("tournament_player_pool")
+        .from("tournament_participants")
         .select("user_id, status")
         .eq("tournament_id", tournamentId)
         .in("user_id", participantIds)
@@ -128,7 +128,7 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
         return
       }
 
-      const unavailablePlayers = poolValidation?.filter((p) => p.status !== "available") || []
+      const unavailablePlayers = poolValidation?.filter((p) => p.status !== "registered") || []
       if (unavailablePlayers.length > 0) {
         toast.error("Some players are no longer available for draft")
         return
@@ -177,18 +177,29 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
       if (draftError) throw draftError
 
+      // Update all tournament participants to drafting status
       const { error: poolUpdateError } = await supabase
-        .from("tournament_player_pool")
+        .from("tournament_participants")
+        .update({
+          status: "drafting",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("tournament_id", tournamentId)
+        .in("user_id", participantIds)
+
+      if (poolUpdateError) {
+        console.error("[v0] Error updating player pool status:", poolUpdateError)
+      }
+
+      // Mark captains specifically
+      await supabase
+        .from("tournament_participants")
         .update({
           status: "captain",
           updated_at: new Date().toISOString(),
         })
         .eq("tournament_id", tournamentId)
         .in("user_id", [highestElo.user_id, lowestElo.user_id])
-
-      if (poolUpdateError) {
-        console.error("[v0] Error updating captain status:", poolUpdateError)
-      }
 
       const draftParticipants = participants.map((p) => ({
         draft_id: captainDraft.id,
@@ -212,8 +223,8 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
       if (statusError) throw statusError
 
-      console.log("[v0] Tournament draft created successfully with conflict prevention:", captainDraft.id)
-      toast.success("Tournament draft started! Redirecting to draft room...")
+      console.log("[v0] Tournament draft created successfully - all players moved to draft system:", captainDraft.id)
+      toast.success("Tournament draft started! All players moved to draft system...")
 
       if (onDraftStarted) {
         onDraftStarted(captainDraft.id)
