@@ -15,10 +15,10 @@ import { SoloQueuePool } from "@/components/leagues/solo-queue-pool"
 import { EloTeamManager } from "@/components/leagues/elo-team-manager"
 import { PlayerBiddingSystem } from "@/components/leagues/player-bidding-system"
 import { Leaderboards } from "@/components/leagues/leaderboards"
-import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Calendar, Crown, Target, Star, BarChart3, TrendingUp } from "lucide-react"
+import { Crown, Target, Star, BarChart3, TrendingUp } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { SeasonalTournamentDashboard } from "@/components/tournaments/seasonal-tournament-dashboard"
 
 interface WagerMatch {
   id: string
@@ -721,117 +721,15 @@ export default function LeaguesPage() {
         </TabsContent>
 
         <TabsContent value="elo-league" className="space-y-6">
-          <div className="space-y-6 mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <Medal className="h-6 w-6 text-yellow-600" />
-                  Current Season
-                </h2>
-                <Button asChild>
-                  <Link href="/tournaments">
-                    <Plus className="h-4 w-4 mr-2" />
-                    View Tournaments
-                  </Link>
-                </Button>
-              </div>
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Trophy className="h-8 w-8 text-yellow-500" />
+              <h2 className="text-3xl font-bold">ELO League</h2>
             </div>
-
-            {eloLeagues.length === 0 ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Medal className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No active Elo League season</p>
-                    <p className="text-sm">New seasons start monthly</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-6">
-                {eloLeagues.map((league) => (
-                  <Card
-                    key={league.id}
-                    className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 hover:shadow-lg transition-shadow"
-                  >
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-yellow-500/20 rounded-full">
-                            <Medal className="h-6 w-6 text-yellow-600" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-lg">{league.name}</CardTitle>
-                            <p className="text-sm text-muted-foreground">{league.season}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Badge
-                            variant={league.registration_open ? "secondary" : "outline"}
-                            className={league.registration_open ? "bg-green-100 text-green-700" : ""}
-                          >
-                            {league.registration_open ? "Registration Open" : "Season Active"}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            ${league.prize_pool} Prize Pool
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardHeader>
-
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            {league.player_pool_size}/{league.max_participants} players
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                          <span>Min {league.elo_cutoff_low} ELO</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>{league.current_month}</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Season progress</span>
-                          <span>
-                            {league.player_pool_size}/{league.max_participants}
-                          </span>
-                        </div>
-                        <Progress value={(league.player_pool_size / league.max_participants) * 100} className="h-2" />
-                      </div>
-
-                      <div className="flex gap-2">
-                        {league.registration_open && (
-                          <Button
-                            onClick={() => joinEloLeague(league.id)}
-                            className="flex-1 bg-yellow-600 hover:bg-yellow-700"
-                          >
-                            Join Season
-                          </Button>
-                        )}
-                        <Button variant="outline" onClick={() => router.push(`/tournaments/${league.id}`)}>
-                          View Season
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => router.push(`/tournaments/${league.id}/draft`)}
-                          className="text-purple-600 border-purple-200 hover:bg-purple-50"
-                        >
-                          Draft Room
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Join the competitive ELO league system with seasonal tournaments, divisions, and monthly rankings. Compete
+              across all lobby formats to climb the leaderboards.
+            </p>
           </div>
 
           <Tabs defaultValue="current-season" className="space-y-4">
@@ -844,109 +742,8 @@ export default function LeaguesPage() {
               <TabsTrigger value="leaderboards">Leaderboards</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="current-season" className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <Medal className="h-6 w-6 text-yellow-600" />
-                  Current Season
-                </h2>
-              </div>
-
-              {eloLeagues.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Medal className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>No active Elo League season</p>
-                      <p className="text-sm">New seasons start monthly</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-6">
-                  {eloLeagues.map((league) => (
-                    <Card
-                      key={league.id}
-                      className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 hover:shadow-lg transition-shadow"
-                    >
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-yellow-500/20 rounded-full">
-                              <Medal className="h-6 w-6 text-yellow-600" />
-                            </div>
-                            <div>
-                              <CardTitle className="text-lg">{league.name}</CardTitle>
-                              <p className="text-sm text-muted-foreground">{league.season}</p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <Badge
-                              variant={league.registration_open ? "secondary" : "outline"}
-                              className={league.registration_open ? "bg-green-100 text-green-700" : ""}
-                            >
-                              {league.registration_open ? "Registration Open" : "Season Active"}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              ${league.prize_pool} Prize Pool
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span>
-                              {league.player_pool_size}/{league.max_participants} players
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                            <span>Min {league.elo_cutoff_low} ELO</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span>{league.current_month}</span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Season progress</span>
-                            <span>
-                              {league.player_pool_size}/{league.max_participants}
-                            </span>
-                          </div>
-                          <Progress value={(league.player_pool_size / league.max_participants) * 100} className="h-2" />
-                        </div>
-
-                        <div className="flex gap-2">
-                          {league.registration_open && (
-                            <Button
-                              onClick={() => joinEloLeague(league.id)}
-                              className="flex-1 bg-yellow-600 hover:bg-yellow-700"
-                            >
-                              Join Season
-                            </Button>
-                          )}
-                          <Button variant="outline" onClick={() => router.push(`/tournaments/${league.id}`)}>
-                            View Season
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={() => router.push(`/tournaments/${league.id}/draft`)}
-                            className="text-purple-600 border-purple-200 hover:bg-purple-50"
-                          >
-                            Draft Room
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
+            <TabsContent value="current-season">
+              <SeasonalTournamentDashboard />
             </TabsContent>
 
             <TabsContent value="divisions" className="space-y-6">
