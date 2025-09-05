@@ -76,7 +76,7 @@ export default function CreateTournamentPage() {
   const updateDurationDefaults = (durationType: "short" | "long") => {
     const now = new Date()
     if (durationType === "short") {
-      // Short tournaments: 1-7 days, smaller pools, live brackets
+      // Tournaments: 1-7 days, smaller pools, live brackets
       setFormData((prev) => ({
         ...prev,
         duration_type: durationType,
@@ -276,7 +276,7 @@ export default function CreateTournamentPage() {
                           <Zap className="h-5 w-5 text-blue-600" />
                         </div>
                         <div className="flex-1">
-                          <h5 className="font-medium text-blue-900 dark:text-blue-100">Short Tournament</h5>
+                          <h5 className="font-medium text-blue-900 dark:text-blue-100">Tournament</h5>
                           <p className="text-sm text-blue-700 dark:text-blue-300">
                             1-7 days • Live brackets • Quick competition
                           </p>
@@ -295,7 +295,7 @@ export default function CreateTournamentPage() {
                           <BarChart3 className="h-5 w-5 text-green-600" />
                         </div>
                         <div className="flex-1">
-                          <h5 className="font-medium text-green-900 dark:text-green-100">Long League</h5>
+                          <h5 className="font-medium text-green-900 dark:text-green-100">League</h5>
                           <p className="text-sm text-green-700 dark:text-green-300">
                             30+ days • Manual scheduling • Extended play
                           </p>
@@ -307,8 +307,8 @@ export default function CreateTournamentPage() {
 
                 <div className="text-sm text-muted-foreground">
                   {formData.duration_type === "short"
-                    ? "Short tournaments feature live brackets and quick elimination-style play, perfect for weekend competitions."
-                    : "Long leagues use manual game scheduling by the creator and focus on leaderboard rankings over weeks or months, ideal for seasonal play."}
+                    ? "Tournaments feature live brackets and quick elimination-style play, perfect for weekend competitions."
+                    : "Leagues use manual game scheduling by the creator and focus on leaderboard rankings over weeks or months, ideal for seasonal play."}
                 </div>
               </div>
 
@@ -322,7 +322,7 @@ export default function CreateTournamentPage() {
                   <div className="space-y-2">
                     <Label htmlFor="start_date" className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
-                      Start Date & Time
+                      Draft Start Time
                     </Label>
                     <Input
                       id="start_date"
@@ -331,7 +331,7 @@ export default function CreateTournamentPage() {
                       onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                       className={!isStartDateValid ? "border-destructive" : ""}
                     />
-                    <p className="text-xs text-muted-foreground">When tournament begins</p>
+                    <p className="text-xs text-muted-foreground">When draft begins, games start immediately after</p>
                     {!isStartDateValid && <p className="text-xs text-destructive">Start date must be in the future</p>}
                   </div>
 
@@ -352,8 +352,8 @@ export default function CreateTournamentPage() {
                     {!isDurationValid && (
                       <p className="text-xs text-destructive">
                         {formData.duration_type === "short"
-                          ? "Short tournaments must be 7 days or less"
-                          : "Long leagues must be 30 days or more"}
+                          ? "Tournaments must be 7 days or less"
+                          : "Leagues must be 30 days or more"}
                       </p>
                     )}
                   </div>
@@ -361,8 +361,8 @@ export default function CreateTournamentPage() {
 
                 <div className="text-sm text-muted-foreground">
                   Duration: {durationDays} days •
-                  {formData.duration_type === "short" && durationDays <= 7 && " ✓ Valid for short tournament"}
-                  {formData.duration_type === "long" && durationDays >= 30 && " ✓ Valid for long league"}
+                  {formData.duration_type === "short" && durationDays <= 7 && " ✓ Valid for tournament"}
+                  {formData.duration_type === "long" && durationDays >= 30 && " ✓ Valid for league"}
                   {!isDurationValid && " ⚠️ Duration doesn't match selected type"}
                 </div>
               </div>
@@ -484,7 +484,9 @@ export default function CreateTournamentPage() {
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-muted-foreground">How team captains will be selected</p>
+                  <p className="text-sm text-muted-foreground">
+                    How team captains will be selected for all tournaments
+                  </p>
                 </div>
               )}
 
@@ -758,9 +760,7 @@ export default function CreateTournamentPage() {
                     </p>
                     <p>
                       <strong>Type:</strong>{" "}
-                      {formData.duration_type === "short"
-                        ? "Short Tournament (Live Brackets)"
-                        : "Long League (Manual Scheduling)"}
+                      {formData.duration_type === "short" ? "Tournament (Live Brackets)" : "League (Manual Scheduling)"}
                     </p>
                     <p>
                       <strong>Duration:</strong> {durationDays} days
@@ -774,18 +774,16 @@ export default function CreateTournamentPage() {
                     <p>
                       <strong>Draft Style:</strong> {formData.settings.draft_mode.replace("_", " ").toUpperCase()}
                     </p>
-                    {formData.duration_type === "long" && (
-                      <p>
-                        <strong>Captain Selection:</strong>{" "}
-                        {formData.settings.captain_selection_method.replace("_", " ").toUpperCase()}
-                      </p>
-                    )}
+                    <p>
+                      <strong>Captain Selection:</strong>{" "}
+                      {formData.settings.captain_selection_method.replace("_", " ").toUpperCase()}
+                    </p>
                     <p>
                       <strong>Organization:</strong>{" "}
                       {formData.settings.player_organization.replace("_", " ").toUpperCase()}
                     </p>
                     <p>
-                      <strong>Starts:</strong> {new Date(formData.start_date).toLocaleString()}
+                      <strong>Draft Starts:</strong> {new Date(formData.start_date).toLocaleString()}
                     </p>
                     <p>
                       <strong>Ends:</strong> {new Date(formData.end_date).toLocaleString()}
@@ -825,8 +823,8 @@ export default function CreateTournamentPage() {
                       <div className="text-destructive font-medium">
                         ⚠️ <strong>DURATION ERROR:</strong>{" "}
                         {formData.duration_type === "short"
-                          ? "Short tournaments must be 7 days or less"
-                          : "Long leagues must be 30 days or more"}
+                          ? "Tournaments must be 7 days or less"
+                          : "Leagues must be 30 days or more"}
                       </div>
                     )}
 

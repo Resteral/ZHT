@@ -102,6 +102,7 @@ export function TournamentDetails({ tournamentId }: TournamentDetailsProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Draft Start Time</p>
                 <p className="font-medium">{new Date(tournament.start_date).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">Games start after draft</p>
                 {tournament.status === "registration" && (
                   <p className="text-xs text-blue-600 mt-1">
                     {(() => {
@@ -114,13 +115,13 @@ export function TournamentDetails({ tournamentId }: TournamentDetailsProps) {
                         const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
 
                         if (hours < 24) {
-                          return `Starts in ${hours}h ${minutes}m`
+                          return `Draft starts in ${hours}h ${minutes}m`
                         } else {
                           const days = Math.floor(hours / 24)
-                          return `Starts in ${days}d ${hours % 24}h`
+                          return `Draft starts in ${days}d ${hours % 24}h`
                         }
                       } else {
-                        return "Starting now!"
+                        return "Draft starting now!"
                       }
                     })()}
                   </p>

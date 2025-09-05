@@ -282,11 +282,9 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                         )}
                       </div>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tournament Duration:</span>
-                      <span>
-                        {tournament.league_mode === "league" ? "Long League (30+ days)" : "Short Tournament (1-7 days)"}
-                      </span>
+                      <span>{tournament.league_mode === "league" ? "League (30+ days)" : "Tournament (1-7 days)"}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Max Teams:</span>
@@ -327,27 +325,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                           Draft starts: {new Date(tournament.created_at).toLocaleString()}
                         </div>
                         <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                          {(() => {
-                            const startTime = new Date(tournament.created_at).getTime()
-                            const now = new Date().getTime()
-                            const difference = startTime - now
-
-                            if (difference > 0) {
-                              const days = Math.floor(difference / (1000 * 60 * 60 * 24))
-                              const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-                              const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
-
-                              if (days > 0) {
-                                return `Time remaining: ${days} days, ${hours} hours, ${minutes} minutes`
-                              } else if (hours > 0) {
-                                return `Time remaining: ${hours} hours, ${minutes} minutes`
-                              } else {
-                                return `Time remaining: ${minutes} minutes`
-                              }
-                            } else {
-                              return "Draft starting now!"
-                            }
-                          })()}
+                          Games begin immediately after draft completion
                         </div>
                       </div>
                     )}
