@@ -1,4 +1,4 @@
-import { createClient } from "supabase-js" // Assuming Supabase client is imported from this module
+import { createClient } from "@supabase/supabase-js" // Fixed incorrect import from "supabase-js" to "@supabase/supabase-js"
 
 export interface TournamentClosureReason {
   reason: "insufficient_players" | "draft_date_passed" | "manual_closure"
