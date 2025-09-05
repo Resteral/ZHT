@@ -5,7 +5,7 @@ export interface CaptainSelectionResult {
     id: string
     username: string
     elo_rating: number
-    captain_type: "high_elo" | "low_elo"
+    captain_type: "high_elo" | "low_elo" | "random"
   }[]
   success: boolean
   message: string
@@ -249,6 +249,124 @@ class CaptainSelectionService {
   }
 
   /**
+   * Randomly select captains from the player pool
+   */
+  async selectCaptainsRandomly(tournamentId: string): Promise<CaptainSelectionResult> {
+    try {
+      console.log("[v0] Starting random captain selection for tournament:", tournamentId)
+
+      // Get all available players in the tournament pool
+      const { data: poolPlayers, error: poolError } = await this.supabase
+        .from("tournament_player_pool")
+        .select(`
+          user_id,
+          status,
+          users(username, elo_rating)
+        `)
+        .eq("tournament_id", tournamentId)
+        .eq("status", "available")
+        .order("created_at", { ascending: true })
+
+      if (poolError) {
+        console.error("[v0] Error fetching player pool:", poolError)
+        throw poolError
+      }
+
+      if (!poolPlayers || poolPlayers.length < 2) {
+        return {
+          captains: [],
+          success: false,
+          message: "Need at least 2 players in the pool to select captains",
+        }
+      }
+
+      // Process players
+      const processedPlayers = poolPlayers.map((entry: any) => ({
+        user_id: entry.user_id,
+        username: entry.users?.username || "Unknown",
+        elo_rating: entry.users?.elo_rating || 1200,
+        status: entry.status,
+      }))
+
+      const shuffledPlayers = [...processedPlayers].sort(() => Math.random() - 0.5)
+      const captain1 = shuffledPlayers[0]
+      const captain2 = shuffledPlayers[1]
+
+      // Assign captain types based on ELO for consistency
+      const [highEloCaptain, lowEloCaptain] = [captain1, captain2].sort((a, b) => b.elo_rating - a.elo_rating)
+
+      // Update database to mark selected players as captains
+      const captainUpdates = [
+        {
+          tournament_id: tournamentId,
+          user_id: highEloCaptain.user_id,
+          status: "captain",
+          captain_type: "high_elo",
+          updated_at: new Date().toISOString(),
+        },
+        {
+          tournament_id: tournamentId,
+          user_id: lowEloCaptain.user_id,
+          status: "captain",
+          captain_type: "low_elo",
+          updated_at: new Date().toISOString(),
+        },
+      ]
+
+      // Update the tournament_player_pool table
+      for (const update of captainUpdates) {
+        const { error: updateError } = await this.supabase
+          .from("tournament_player_pool")
+          .update({
+            status: update.status,
+            captain_type: update.captain_type,
+            updated_at: update.updated_at,
+          })
+          .eq("tournament_id", update.tournament_id)
+          .eq("user_id", update.user_id)
+
+        if (updateError) {
+          console.error("[v0] Error updating captain status:", updateError)
+          throw updateError
+        }
+      }
+
+      const selectedCaptains = [
+        {
+          id: highEloCaptain.user_id,
+          username: highEloCaptain.username,
+          elo_rating: highEloCaptain.elo_rating,
+          captain_type: "high_elo" as const,
+        },
+        {
+          id: lowEloCaptain.user_id,
+          username: lowEloCaptain.username,
+          elo_rating: lowEloCaptain.elo_rating,
+          captain_type: "low_elo" as const,
+        },
+      ]
+
+      console.log("[v0] Successfully selected random captains:", selectedCaptains)
+
+      // Log captain selection activity
+      await this.logCaptainSelection(tournamentId, selectedCaptains, "random")
+
+      return {
+        captains: selectedCaptains,
+        success: true,
+        message: `Successfully selected ${selectedCaptains.length} captains randomly`,
+      }
+    } catch (error) {
+      console.error("[v0] Error in random captain selection:", error)
+      return {
+        captains: [],
+        success: false,
+        message: `Failed to select captains: ${error instanceof Error ? error.message : "Unknown error"}`,
+      }
+    }
+  }
+
+  /**
    * Get current captains for a tournament
    */
   async getCurrentCaptains(tournamentId: string) {
@@ -356,7 +474,11 @@ class CaptainSelectionService {
   /**
    * Log captain selection activity for audit trail
    */
-  private async logCaptainSelection(tournamentId: string, captains: any[], selectionType: "automatic" | "manual") {
+  private async logCaptainSelection(
+    tournamentId: string,
+    captains: any[],
+    selectionType: "automatic" | "manual" | "random",
+  ) {
     try {
       const logEntry = {
         tournament_id: tournamentId,

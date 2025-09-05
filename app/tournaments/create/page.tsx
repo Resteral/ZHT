@@ -36,7 +36,6 @@ export default function CreateTournamentPage() {
     end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
     game: "zealot_hockey",
     settings: {
-      // Bracket tournament settings
       bracket_type: "single_elimination" as
         | "single_elimination"
         | "double_elimination"
@@ -51,6 +50,8 @@ export default function CreateTournamentPage() {
           : tournamentType === "auction"
             ? "auction_draft"
             : "snake_draft") as "auction_draft" | "snake_draft" | "linear_draft",
+
+      captain_selection_method: "creator_choice" as "creator_choice" | "highest_elo" | "random",
 
       // Player organization modes
       player_organization: "solo_draft" as "premade_teams" | "solo_draft" | "hybrid",
@@ -90,7 +91,6 @@ export default function CreateTournamentPage() {
         },
       }))
     } else {
-      // Long tournaments: 30+ days, larger pools, leaderboard focus
       setFormData((prev) => ({
         ...prev,
         duration_type: durationType,
@@ -98,10 +98,11 @@ export default function CreateTournamentPage() {
         end_date: new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16), // 45 days
         settings: {
           ...prev.settings,
-          bracket_type: "round_robin",
+          // Remove bracket_type for long leagues - they use manual scheduling
           num_teams: 16,
           max_teams: 16,
           games_per_team: 20,
+          captain_selection_method: "creator_choice",
         },
       }))
     }
@@ -141,7 +142,11 @@ export default function CreateTournamentPage() {
         </Button>
         <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight">Create Tournament</h1>
-          <p className="text-muted-foreground">Configure bracket type, draft style, and team organization</p>
+          <p className="text-muted-foreground">
+            Configure{" "}
+            {formData.duration_type === "short" ? "bracket type, draft style" : "draft style, captain selection"}, and
+            team organization
+          </p>
         </div>
       </div>
 
@@ -165,7 +170,11 @@ export default function CreateTournamentPage() {
             <Users className="h-5 w-5" />
             Tournament Configuration
           </CardTitle>
-          <CardDescription>Set up bracket format, draft style, and team organization</CardDescription>
+          <CardDescription>
+            {formData.duration_type === "short"
+              ? "Set up bracket format, draft style, and team organization"
+              : "Set up draft style, captain selection, and manual scheduling"}
+          </CardDescription>
         </CardHeader>
 
         <CardContent>
@@ -183,7 +192,10 @@ export default function CreateTournamentPage() {
 
                 const tournamentData = {
                   name: formData.name,
-                  description: `${formData.settings.bracket_type.replace("_", " ")} tournament with ${formData.settings.draft_mode.replace("_", " ")} drafting`,
+                  description:
+                    formData.duration_type === "short"
+                      ? `${formData.settings.bracket_type.replace("_", " ")} tournament with ${formData.settings.draft_mode.replace("_", " ")} drafting`
+                      : `League with ${formData.settings.draft_mode.replace("_", " ")} drafting and manual scheduling`,
                   tournament_type: formData.duration_type === "long" ? "league" : "draft",
                   max_participants: formData.max_participants,
                   max_teams: isTeamBased ? formData.settings.max_teams : formData.settings.num_teams,
@@ -196,7 +208,7 @@ export default function CreateTournamentPage() {
                     ...formData.settings,
                     duration_type: formData.duration_type,
                     draft_mode: formData.settings.draft_mode,
-                    bracket_type: formData.settings.bracket_type,
+                    ...(formData.duration_type === "short" && { bracket_type: formData.settings.bracket_type }),
                     player_organization: formData.settings.player_organization,
                   },
                 }
@@ -285,7 +297,7 @@ export default function CreateTournamentPage() {
                         <div className="flex-1">
                           <h5 className="font-medium text-green-900 dark:text-green-100">Long League</h5>
                           <p className="text-sm text-green-700 dark:text-green-300">
-                            30+ days • Leaderboards • Extended play
+                            30+ days • Manual scheduling • Extended play
                           </p>
                         </div>
                       </div>
@@ -296,7 +308,7 @@ export default function CreateTournamentPage() {
                 <div className="text-sm text-muted-foreground">
                   {formData.duration_type === "short"
                     ? "Short tournaments feature live brackets and quick elimination-style play, perfect for weekend competitions."
-                    : "Long leagues focus on leaderboard rankings and extended competition over weeks or months, ideal for seasonal play."}
+                    : "Long leagues use manual game scheduling by the creator and focus on leaderboard rankings over weeks or months, ideal for seasonal play."}
                 </div>
               </div>
 
@@ -355,49 +367,51 @@ export default function CreateTournamentPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Bracket Format</Label>
-                <Select
-                  value={formData.settings.bracket_type}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      settings: { ...formData.settings, bracket_type: value as any },
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="single_elimination">
-                      <div className="flex items-center gap-2">
-                        ⚡ Single Elimination
-                        <span className="text-xs text-muted-foreground ml-2">One loss eliminates</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="double_elimination">
-                      <div className="flex items-center gap-2">
-                        🔄 Double Elimination
-                        <span className="text-xs text-muted-foreground ml-2">Two losses eliminate</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="round_robin">
-                      <div className="flex items-center gap-2">
-                        🔄 Round Robin
-                        <span className="text-xs text-muted-foreground ml-2">Everyone plays everyone</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="swiss_system">
-                      <div className="flex items-center gap-2">
-                        🏔️ Swiss System
-                        <span className="text-xs text-muted-foreground ml-2">Paired by performance</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">How teams compete in the tournament</p>
-              </div>
+              {formData.duration_type === "short" && (
+                <div className="space-y-2">
+                  <Label>Bracket Format</Label>
+                  <Select
+                    value={formData.settings.bracket_type}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        settings: { ...formData.settings, bracket_type: value as any },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single_elimination">
+                        <div className="flex items-center gap-2">
+                          ⚡ Single Elimination
+                          <span className="text-xs text-muted-foreground ml-2">One loss eliminates</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="double_elimination">
+                        <div className="flex items-center gap-2">
+                          🔄 Double Elimination
+                          <span className="text-xs text-muted-foreground ml-2">Two losses eliminate</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="round_robin">
+                        <div className="flex items-center gap-2">
+                          🔄 Round Robin
+                          <span className="text-xs text-muted-foreground ml-2">Everyone plays everyone</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="swiss_system">
+                        <div className="flex items-center gap-2">
+                          🏔️ Swiss System
+                          <span className="text-xs text-muted-foreground ml-2">Paired by performance</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">How teams compete in the tournament</p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Draft Style</Label>
@@ -420,12 +434,6 @@ export default function CreateTournamentPage() {
                         <span className="text-xs text-muted-foreground ml-2">Alternating pick order</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="linear_draft">
-                      <div className="flex items-center gap-2">
-                        📊 Linear Draft
-                        <span className="text-xs text-muted-foreground ml-2">Same pick order each round</span>
-                      </div>
-                    </SelectItem>
                     <SelectItem value="auction_draft">
                       <div className="flex items-center gap-2">
                         🏛️ Auction Draft
@@ -436,6 +444,49 @@ export default function CreateTournamentPage() {
                 </Select>
                 <p className="text-sm text-muted-foreground">How players are selected for teams</p>
               </div>
+
+              {formData.duration_type === "long" && (
+                <div className="space-y-2">
+                  <Label>Captain Selection Method</Label>
+                  <Select
+                    value={formData.settings.captain_selection_method}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        settings: { ...formData.settings, captain_selection_method: value as any },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="creator_choice">
+                        <div className="flex items-center gap-2">
+                          <Crown className="h-4 w-4" />
+                          Creator Choice
+                          <span className="text-xs text-muted-foreground ml-2">Tournament creator selects</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="highest_elo">
+                        <div className="flex items-center gap-2">
+                          <Trophy className="h-4 w-4" />
+                          Highest ELO
+                          <span className="text-xs text-muted-foreground ml-2">Top rated players</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="random">
+                        <div className="flex items-center gap-2">
+                          <Target className="h-4 w-4" />
+                          Random Selection
+                          <span className="text-xs text-muted-foreground ml-2">Randomly chosen</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">How team captains will be selected</p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Player Organization</Label>
@@ -709,17 +760,26 @@ export default function CreateTournamentPage() {
                       <strong>Type:</strong>{" "}
                       {formData.duration_type === "short"
                         ? "Short Tournament (Live Brackets)"
-                        : "Long League (Leaderboards)"}
+                        : "Long League (Manual Scheduling)"}
                     </p>
                     <p>
                       <strong>Duration:</strong> {durationDays} days
                     </p>
-                    <p>
-                      <strong>Format:</strong> {formData.settings.bracket_type.replace("_", " ").toUpperCase()} bracket
-                    </p>
+                    {formData.duration_type === "short" && (
+                      <p>
+                        <strong>Format:</strong> {formData.settings.bracket_type.replace("_", " ").toUpperCase()}{" "}
+                        bracket
+                      </p>
+                    )}
                     <p>
                       <strong>Draft Style:</strong> {formData.settings.draft_mode.replace("_", " ").toUpperCase()}
                     </p>
+                    {formData.duration_type === "long" && (
+                      <p>
+                        <strong>Captain Selection:</strong>{" "}
+                        {formData.settings.captain_selection_method.replace("_", " ").toUpperCase()}
+                      </p>
+                    )}
                     <p>
                       <strong>Organization:</strong>{" "}
                       {formData.settings.player_organization.replace("_", " ").toUpperCase()}

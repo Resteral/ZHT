@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Crown, Users, Star, Zap, RefreshCw, Target, History, Info } from "lucide-react"
+import { Crown, Users, Star, Zap, RefreshCw, Target, History, Info, Shuffle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { captainSelectionService, type CaptainSelectionResult } from "@/lib/services/captain-selection-service"
@@ -204,6 +204,32 @@ export function CaptainSelectionInterface({
     }
   }
 
+  const handleRandomSelection = async () => {
+    if (!isOrganizer && !isTournamentCreator && user && tournament?.created_by !== user.id) return
+
+    setProcessing(true)
+    try {
+      console.log("[v0] Starting random captain selection")
+
+      const result: CaptainSelectionResult = await captainSelectionService.selectCaptainsRandomly(tournamentId)
+
+      if (result.success) {
+        toast.success(result.message)
+        await loadCurrentCaptains()
+        await loadAvailablePlayers()
+        await loadSelectionHistory()
+        onCaptainsSelected?.(result.captains)
+      } else {
+        toast.error(result.message)
+      }
+    } catch (error) {
+      console.error("[v0] Error in random captain selection:", error)
+      toast.error("Failed to select captains randomly")
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   const refreshData = async () => {
     setLoading(true)
     try {
@@ -321,12 +347,12 @@ export function CaptainSelectionInterface({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Card className="p-4">
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <Zap className="h-5 w-5 text-blue-500" />
-                          <h4 className="font-medium">Automatic Selection</h4>
+                          <h4 className="font-medium">Highest ELO</h4>
                         </div>
                         <p className="text-sm text-muted-foreground">
                           Automatically selects highest and lowest ELO players as captains for balanced teams.
@@ -346,7 +372,7 @@ export function CaptainSelectionInterface({
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <Users className="h-5 w-5 text-green-500" />
-                          <h4 className="font-medium">Manual Selection</h4>
+                          <h4 className="font-medium">Creator Choice</h4>
                         </div>
                         <p className="text-sm text-muted-foreground">
                           Manually choose exactly 2 players to be team captains. Select players below.
@@ -359,6 +385,27 @@ export function CaptainSelectionInterface({
                         >
                           <Users className="h-4 w-4 mr-2" />
                           {processing ? "Selecting..." : `Select ${selectedPlayers.length}/2 Captains`}
+                        </Button>
+                      </div>
+                    </Card>
+
+                    <Card className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Shuffle className="h-5 w-5 text-purple-500" />
+                          <h4 className="font-medium">Random Selection</h4>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Randomly selects 2 players from the pool as captains for unpredictable matchups.
+                        </p>
+                        <Button
+                          onClick={handleRandomSelection}
+                          disabled={!canSelect || processing || currentCaptains.length > 0}
+                          className="w-full"
+                          variant="secondary"
+                        >
+                          <Shuffle className="h-4 w-4 mr-2" />
+                          {processing ? "Selecting..." : "Random Captains"}
                         </Button>
                       </div>
                     </Card>
@@ -545,8 +592,10 @@ export function CaptainSelectionInterface({
                     <div className="flex items-center gap-2">
                       {entry.selection_type === "automatic" ? (
                         <Zap className="h-4 w-4 text-blue-500" />
-                      ) : (
+                      ) : entry.selection_type === "manual" ? (
                         <Users className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Shuffle className="h-4 w-4 text-purple-500" />
                       )}
                       <Badge variant="outline" className="text-xs">
                         {entry.selection_type}
@@ -554,7 +603,11 @@ export function CaptainSelectionInterface({
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium">
-                        {entry.selection_type === "automatic" ? "Automatic Selection" : "Manual Selection"}
+                        {entry.selection_type === "automatic"
+                          ? "Automatic Selection"
+                          : entry.selection_type === "manual"
+                            ? "Manual Selection"
+                            : "Random Selection"}
                       </p>
                       <p className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</p>
                       <div className="mt-2 space-y-1">
