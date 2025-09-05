@@ -34,6 +34,7 @@ interface Tournament {
   commissioner_id: string
   league_mode: string
   participant_count?: number
+  start_date?: string
 }
 
 function isValidUUID(str: string): boolean {
@@ -254,11 +255,15 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Draft Start:</span>
                       <div className="text-right">
-                        <div className="font-medium">{new Date(tournament.created_at).toLocaleString()}</div>
-                        {tournament.status === "registration" && (
+                        <div className="font-medium">
+                          {tournament.start_date
+                            ? new Date(tournament.start_date).toLocaleString()
+                            : new Date(tournament.created_at).toLocaleString()}
+                        </div>
+                        {tournament.status === "registration" && tournament.start_date && (
                           <div className="text-xs text-blue-600 mt-1">
                             {(() => {
-                              const startTime = new Date(tournament.created_at).getTime()
+                              const startTime = new Date(tournament.start_date).getTime()
                               const now = new Date().getTime()
                               const difference = startTime - now
 
@@ -322,7 +327,10 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                           <span className="font-medium text-blue-900 dark:text-blue-100">Registration Open</span>
                         </div>
                         <div className="text-sm text-blue-700 dark:text-blue-300">
-                          Draft starts: {new Date(tournament.created_at).toLocaleString()}
+                          Draft starts:{" "}
+                          {tournament.start_date
+                            ? new Date(tournament.start_date).toLocaleString()
+                            : new Date(tournament.created_at).toLocaleString()}
                         </div>
                         <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                           Games begin immediately after draft completion
