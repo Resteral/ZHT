@@ -8,7 +8,7 @@ export interface TournamentClosureReason {
 }
 
 class TournamentAutoClosureService {
-  private supabase = createClient()
+  private supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
   async checkAndCloseExpiredTournaments(): Promise<void> {
     console.log("[v0] Checking for tournaments that need automatic closure...")
