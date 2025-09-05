@@ -174,7 +174,7 @@ export default function Draft5v5Page() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">5v5 ELO Draft</h1>
-        <p className="text-muted-foreground">Compete in 5v5 team battles. FREE entry + $10 reward per player!</p>
+        <p className="text-foreground/80">Compete in 5v5 team battles. FREE entry + $10 reward per player!</p>
       </div>
 
       {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
@@ -250,7 +250,7 @@ export default function Draft5v5Page() {
                           {lobby.match_participants?.slice(0, 5).map((participant, index) => (
                             <div key={index} className="flex justify-between text-xs">
                               <span>{participant.users?.username || "Unknown"}</span>
-                              <span className="text-muted-foreground">{participant.users?.elo_rating || 1200} ELO</span>
+                              <span className="text-foreground/70">{participant.users?.elo_rating || 1200} ELO</span>
                             </div>
                           ))}
                           {currentParticipants > 5 && (

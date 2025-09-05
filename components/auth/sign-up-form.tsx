@@ -48,7 +48,7 @@ export default function SignUpForm() {
     <div className="w-full max-w-md space-y-8">
       <div className="space-y-2 text-center">
         <h1 className="text-4xl font-semibold tracking-tight text-white">Join the League</h1>
-        <p className="text-lg text-gray-400">Start with $25 • Earn $100 per ELO game</p>
+        <p className="text-lg text-slate-300">Start with $25 • Earn $100 per ELO game</p>
       </div>
 
       <form action={formAction} className="space-y-6">
@@ -102,7 +102,7 @@ export default function SignUpForm() {
 
         <SubmitButton />
 
-        <div className="text-center text-gray-400">
+        <div className="text-center text-slate-300">
           Already have an account?{" "}
           <Link href="/auth/login" className="text-white hover:underline">
             Sign in here

@@ -243,7 +243,7 @@ export default function PlayersPage() {
                       <div className="font-semibold">
                         <ProfileNameLink userId={player.id} username={player.username} pageSource="players-page" />
                       </div>
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-foreground/80">
                         {player.total_games} games • {player.win_rate}% win rate
                         {player.total_winnings > 0 && <> • ${player.total_winnings.toFixed(2)} winnings</>}
                       </div>
@@ -254,7 +254,7 @@ export default function PlayersPage() {
                       {player.wins}W-{player.losses}L
                     </Badge>
                     {player.total_winnings > 0 && (
-                      <Badge variant="outline" className="text-green-600 border-green-600">
+                      <Badge variant="outline" className="text-green-300 border-green-300">
                         ${player.total_winnings.toFixed(0)}
                       </Badge>
                     )}
@@ -317,13 +317,13 @@ export default function PlayersPage() {
                         <div className="font-semibold">
                           <ProfileNameLink userId={player.id} username={player.username} pageSource="players-page" />
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-sm text-foreground/80">
                           ${player.total_wagered.toFixed(2)} wagered • {player.elo_rating} ELO
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <Badge variant="outline" className="text-green-600 border-green-600">
+                      <Badge variant="outline" className="text-green-300 border-green-300">
                         ${player.total_winnings.toFixed(2)} won
                       </Badge>
                       <div className="text-right">

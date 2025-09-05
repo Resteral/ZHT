@@ -192,7 +192,7 @@ export function Navigation() {
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{user.username}</p>
                     <p className="text-xs leading-none text-muted-foreground">ID: {user.account_id}</p>
-                    <p className="text-xs leading-none text-muted-foreground">ELO: {user.elo_rating}</p>
+                    <p className="text-xs leading-none text-foreground/80">ELO: {user.elo_rating}</p>
                     {isSuperAdmin && <p className="text-xs leading-none text-red-600 font-medium">Super Admin</p>}
                   </div>
                 </DropdownMenuLabel>

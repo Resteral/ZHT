@@ -816,15 +816,13 @@ export default function Dashboard() {
 
           {isAuthenticated && user && (
             <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-6">
-              <p className="text-green-600 dark:text-green-400">
+              <p className="text-green-200 dark:text-green-300">
                 ✅ Welcome back, <strong>{user.username}</strong>! ELO: {user.elo_rating} | Balance: ${user.balance}
               </p>
             </div>
           )}
 
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-            TUG E-Sport Lobbies
-          </h1>
+          <h1 className="text-4xl font-bold text-foreground">TUG E-Sport Lobbies</h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Compete in ELO-ranked e-sport lobbies, earn rewards, and climb the leaderboards
           </p>
