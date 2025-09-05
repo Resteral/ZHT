@@ -61,6 +61,23 @@ export function TournamentDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{activeTournaments.length}</div>
+            {activeTournaments.length > 0 && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Next draft: {(() => {
+                  const nextDraft = activeTournaments
+                    .filter((t) => new Date(t.start_date) > new Date())
+                    .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())[0]
+
+                  if (nextDraft) {
+                    const hours = Math.floor(
+                      (new Date(nextDraft.start_date).getTime() - new Date().getTime()) / (1000 * 60 * 60),
+                    )
+                    return hours > 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`
+                  }
+                  return "None scheduled"
+                })()}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -81,6 +98,20 @@ export function TournamentDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{upcomingTournaments.length}</div>
+            {upcomingTournaments.length > 0 && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Next starts: {(() => {
+                  const nextTournament = upcomingTournaments.sort(
+                    (a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime(),
+                  )[0]
+
+                  const hours = Math.floor(
+                    (new Date(nextTournament.start_date).getTime() - new Date().getTime()) / (1000 * 60 * 60),
+                  )
+                  return hours > 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`
+                })()}
+              </div>
+            )}
           </CardContent>
         </Card>
 

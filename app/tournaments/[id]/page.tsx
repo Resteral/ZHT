@@ -252,6 +252,43 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                       <span>{tournament.sport.replace("_", " ")}</span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Draft Start:</span>
+                      <div className="text-right">
+                        <div className="font-medium">{new Date(tournament.created_at).toLocaleString()}</div>
+                        {tournament.status === "registration" && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            {(() => {
+                              const startTime = new Date(tournament.created_at).getTime()
+                              const now = new Date().getTime()
+                              const difference = startTime - now
+
+                              if (difference > 0) {
+                                const days = Math.floor(difference / (1000 * 60 * 60 * 24))
+                                const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+                                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+
+                                if (days > 0) {
+                                  return `Starts in ${days}d ${hours}h ${minutes}m`
+                                } else if (hours > 0) {
+                                  return `Starts in ${hours}h ${minutes}m`
+                                } else {
+                                  return `Starts in ${minutes}m`
+                                }
+                              } else {
+                                return "Starting now!"
+                              }
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tournament Duration:</span>
+                      <span>
+                        {tournament.league_mode === "league" ? "Long League (30+ days)" : "Short Tournament (1-7 days)"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Max Teams:</span>
                       <span>{tournament.max_teams}</span>
                     </div>
@@ -280,6 +317,40 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                         style={{ width: `${(tournament.participant_count! / tournament.max_teams) * 100}%` }}
                       />
                     </div>
+                    {tournament.status === "registration" && (
+                      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Calendar className="h-4 w-4 text-blue-600" />
+                          <span className="font-medium text-blue-900 dark:text-blue-100">Registration Open</span>
+                        </div>
+                        <div className="text-sm text-blue-700 dark:text-blue-300">
+                          Draft starts: {new Date(tournament.created_at).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          {(() => {
+                            const startTime = new Date(tournament.created_at).getTime()
+                            const now = new Date().getTime()
+                            const difference = startTime - now
+
+                            if (difference > 0) {
+                              const days = Math.floor(difference / (1000 * 60 * 60 * 24))
+                              const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+                              const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+
+                              if (days > 0) {
+                                return `Time remaining: ${days} days, ${hours} hours, ${minutes} minutes`
+                              } else if (hours > 0) {
+                                return `Time remaining: ${hours} hours, ${minutes} minutes`
+                              } else {
+                                return `Time remaining: ${minutes} minutes`
+                              }
+                            } else {
+                              return "Draft starting now!"
+                            }
+                          })()}
+                        </div>
+                      </div>
+                    )}
                     {(tournament.status === "registration" || tournament.status === "active") && (
                       <div className="pt-4">
                         <UnifiedTournamentJoin tournamentId={tournament.id} tournament={tournament} />
