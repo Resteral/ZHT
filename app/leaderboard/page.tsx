@@ -298,7 +298,7 @@ export default function LeaderboardPage() {
                   <Crown className="h-5 w-5 text-purple-500" />
                   <div>
                     <div className="text-2xl font-bold">{eloPlayers.filter((p) => p.elo_rating >= 2200).length}</div>
-                    <div className="text-sm text-slate-200">Grandmaster+</div>
+                    <div className="text-sm text-slate-100">Grandmaster+</div>
                   </div>
                 </div>
               </CardContent>
@@ -311,7 +311,7 @@ export default function LeaderboardPage() {
                     <div className="text-2xl font-bold">
                       {eloPlayers.filter((p) => p.elo_rating >= 1800 && p.elo_rating < 2200).length}
                     </div>
-                    <div className="text-sm text-slate-200">Master/Diamond</div>
+                    <div className="text-sm text-slate-100">Master/Diamond</div>
                   </div>
                 </div>
               </CardContent>
@@ -324,7 +324,7 @@ export default function LeaderboardPage() {
                     <div className="text-2xl font-bold">
                       {eloPlayers.filter((p) => p.elo_rating >= 1400 && p.elo_rating < 1800).length}
                     </div>
-                    <div className="text-sm text-slate-200">Plat/Gold</div>
+                    <div className="text-sm text-slate-100">Plat/Gold</div>
                   </div>
                 </div>
               </CardContent>
@@ -339,7 +339,7 @@ export default function LeaderboardPage() {
                         ? Math.round(eloPlayers.reduce((sum, p) => sum + p.elo_rating, 0) / eloPlayers.length)
                         : 1200}
                     </div>
-                    <div className="text-sm text-slate-200">Average ELO</div>
+                    <div className="text-sm text-slate-100">Average ELO</div>
                   </div>
                 </div>
               </CardContent>
@@ -412,7 +412,7 @@ export default function LeaderboardPage() {
                               pageSource="leaderboard-elo"
                             />
                           </div>
-                          <div className="text-sm text-slate-200">
+                          <div className="text-sm text-slate-100">
                             {player.total_games} games • {player.wins}W-{player.losses}L •{" "}
                             {player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0}% win
                             rate
@@ -504,14 +504,14 @@ export default function LeaderboardPage() {
                               pageSource="leaderboard-earnings"
                             />
                           </div>
-                          <div className="text-sm text-slate-200">
+                          <div className="text-sm text-slate-100">
                             This month: +${player.monthly_earnings.toFixed(2)}
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-lg text-green-600">${player.total_earnings.toFixed(2)}</div>
-                        <div className="text-sm text-slate-200">Total earnings</div>
+                        <div className="text-sm text-slate-100">Total earnings</div>
                       </div>
                     </div>
                   ))}
@@ -565,7 +565,7 @@ export default function LeaderboardPage() {
                   <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
                       <div className="font-semibold">{tournament.tournament}</div>
-                      <div className="text-sm text-slate-200">
+                      <div className="text-sm text-slate-100">
                         Winner:{" "}
                         <ProfileNameLink
                           userId={`winner-${index}`}
@@ -578,7 +578,7 @@ export default function LeaderboardPage() {
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-lg text-purple-600">{tournament.prize}</div>
-                      <div className="text-sm text-slate-200">{tournament.date}</div>
+                      <div className="text-sm text-slate-100">{tournament.date}</div>
                     </div>
                   </div>
                 ))}
@@ -650,14 +650,14 @@ export default function LeaderboardPage() {
                             pageSource="leaderboard-betting"
                           />
                         </div>
-                        <div className="text-sm text-slate-200">{bettor.totalBets} total bets</div>
+                        <div className="text-sm text-slate-100">{bettor.totalBets} total bets</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <Badge variant="outline">{bettor.accuracy} accuracy</Badge>
                       <div className="text-right">
                         <div className="font-bold text-lg text-blue-600">{bettor.profit}</div>
-                        <div className="text-sm text-slate-200">Total profit</div>
+                        <div className="text-sm text-slate-100">Total profit</div>
                       </div>
                     </div>
                   </div>

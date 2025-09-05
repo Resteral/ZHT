@@ -816,7 +816,7 @@ export default function Dashboard() {
 
           {isAuthenticated && user && (
             <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-6">
-              <p className="text-green-200 dark:text-green-300">
+              <p className="text-green-100">
                 ✅ Welcome back, <strong>{user.username}</strong>! ELO: {user.elo_rating} | Balance: ${user.balance}
               </p>
             </div>

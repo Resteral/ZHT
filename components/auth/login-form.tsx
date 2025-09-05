@@ -53,7 +53,7 @@ export default function LoginForm() {
     <div className="w-full max-w-md space-y-8">
       <div className="space-y-2 text-center">
         <h1 className="text-4xl font-semibold tracking-tight text-white">Welcome back</h1>
-        <p className="text-lg text-slate-300">Sign in to continue playing</p>
+        <p className="text-lg text-slate-100">Sign in to continue playing</p>
       </div>
 
       <form action={formAction} className="space-y-6">
@@ -93,7 +93,7 @@ export default function LoginForm() {
 
         <SubmitButton />
 
-        <div className="text-center text-slate-300">
+        <div className="text-center text-slate-100">
           Don't have an account?{" "}
           <Link href="/auth/sign-up" className="text-white hover:underline">
             Sign up
