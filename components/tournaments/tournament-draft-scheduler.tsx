@@ -100,7 +100,25 @@ export function TournamentDraftScheduler({ tournamentId, onScheduled }: Tourname
   }
 
   const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString()
+    const date = new Date(dateString)
+    const now = new Date()
+    const difference = date.getTime() - now.getTime()
+
+    const formattedDate = date.toLocaleString()
+
+    if (difference > 0) {
+      const hours = Math.floor(difference / (1000 * 60 * 60))
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+
+      if (hours < 24) {
+        return `${formattedDate} (in ${hours}h ${minutes}m)`
+      } else {
+        const days = Math.floor(hours / 24)
+        return `${formattedDate} (in ${days}d ${hours % 24}h)`
+      }
+    }
+
+    return formattedDate
   }
 
   if (loading) {

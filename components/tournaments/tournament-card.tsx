@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Trophy, Users, Calendar, DollarSign, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 
 interface Tournament {
   id: string
@@ -25,6 +26,39 @@ interface TournamentCardProps {
 
 export function TournamentCard({ tournament }: TournamentCardProps) {
   const router = useRouter()
+
+  const [timeUntilStart, setTimeUntilStart] = useState<string>("")
+  const [isStartingSoon, setIsStartingSoon] = useState(false)
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const startTime = new Date(tournament.start_date).getTime()
+      const now = new Date().getTime()
+      const difference = startTime - now
+
+      if (difference > 0) {
+        const hours = Math.floor(difference / (1000 * 60 * 60))
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+
+        if (hours < 24) {
+          setTimeUntilStart(`Starts in ${hours}h ${minutes}m`)
+          setIsStartingSoon(hours < 2)
+        } else {
+          const days = Math.floor(hours / 24)
+          setTimeUntilStart(`Starts in ${days}d ${hours % 24}h`)
+          setIsStartingSoon(false)
+        }
+      } else {
+        setTimeUntilStart("Starting now!")
+        setIsStartingSoon(true)
+      }
+    }
+
+    updateTimer()
+    const timer = setInterval(updateTimer, 60000) // Update every minute
+
+    return () => clearInterval(timer)
+  }, [tournament.start_date])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -91,9 +125,16 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span>{new Date(tournament.start_date).toLocaleDateString()}</span>
+          <div className="col-span-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">{new Date(tournament.start_date).toLocaleString()}</span>
+            </div>
+            {tournament.status === "registration" && (
+              <div className={`text-sm font-medium ${isStartingSoon ? "text-orange-600" : "text-blue-600"}`}>
+                {timeUntilStart}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

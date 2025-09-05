@@ -112,10 +112,10 @@ export function AuctionDialog({ team, isOpen, onClose, userBalance, onBid }: Auc
 
           <Separator />
 
-          {/* Bidding Form */}
+          {/* Enhanced Bidding Form */}
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="bid-amount">Your Bid Amount</Label>
+              <Label htmlFor="bid-amount">Set Your Bid Price</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -126,21 +126,35 @@ export function AuctionDialog({ team, isOpen, onClose, userBalance, onBid }: Auc
                   min={team.minBid}
                   max={userBalance}
                   step="1"
-                  className="pl-10"
+                  className="pl-10 text-lg font-semibold"
                   placeholder={`Minimum $${team.minBid}`}
                 />
               </div>
-              {Number.parseFloat(bidAmount) < team.minBid && (
-                <p className="text-sm text-red-500">Bid must be at least ${team.minBid}</p>
-              )}
-              {Number.parseFloat(bidAmount) > userBalance && (
-                <p className="text-sm text-red-500">Insufficient balance</p>
-              )}
+
+              <div className="text-sm">
+                {Number.parseFloat(bidAmount) < team.minBid && bidAmount && (
+                  <p className="text-red-500">⚠️ Bid must be at least ${team.minBid}</p>
+                )}
+                {Number.parseFloat(bidAmount) > userBalance && (
+                  <p className="text-red-500">⚠️ Insufficient balance (${userBalance.toFixed(2)} available)</p>
+                )}
+                {Number.parseFloat(bidAmount) >= team.minBid &&
+                  Number.parseFloat(bidAmount) <= userBalance &&
+                  bidAmount && <p className="text-green-600">✅ Valid bid amount</p>}
+              </div>
             </div>
 
-            <div className="flex space-x-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button onClick={() => setBidAmount(team.minBid.toString())} variant="outline" size="sm">
                 Min Bid (${team.minBid})
+              </Button>
+              <Button
+                onClick={() => setBidAmount((team.minBid + 25).toString())}
+                variant="outline"
+                size="sm"
+                disabled={team.minBid + 25 > userBalance}
+              >
+                +$25
               </Button>
               <Button
                 onClick={() => setBidAmount((team.minBid + 50).toString())}
@@ -159,6 +173,16 @@ export function AuctionDialog({ team, isOpen, onClose, userBalance, onBid }: Auc
                 +$100
               </Button>
             </div>
+
+            <Button
+              onClick={() => setBidAmount(Math.min(userBalance, team.minBid + 200).toString())}
+              variant="outline"
+              size="sm"
+              className="w-full text-orange-600 border-orange-300"
+              disabled={team.minBid + 200 > userBalance}
+            >
+              Maximum Bid (${Math.min(userBalance, team.minBid + 200)})
+            </Button>
           </div>
 
           {/* Action Buttons */}

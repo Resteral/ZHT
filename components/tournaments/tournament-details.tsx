@@ -100,8 +100,31 @@ export function TournamentDetails({ tournamentId }: TournamentDetailsProps) {
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="text-sm text-muted-foreground">Start Date</p>
-                <p className="font-medium">{new Date(tournament.start_date).toLocaleDateString()}</p>
+                <p className="text-sm text-muted-foreground">Draft Start Time</p>
+                <p className="font-medium">{new Date(tournament.start_date).toLocaleString()}</p>
+                {tournament.status === "registration" && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    {(() => {
+                      const startTime = new Date(tournament.start_date).getTime()
+                      const now = new Date().getTime()
+                      const difference = startTime - now
+
+                      if (difference > 0) {
+                        const hours = Math.floor(difference / (1000 * 60 * 60))
+                        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60))
+
+                        if (hours < 24) {
+                          return `Starts in ${hours}h ${minutes}m`
+                        } else {
+                          const days = Math.floor(hours / 24)
+                          return `Starts in ${days}d ${hours % 24}h`
+                        }
+                      } else {
+                        return "Starting now!"
+                      }
+                    })()}
+                  </p>
+                )}
               </div>
             </div>
 

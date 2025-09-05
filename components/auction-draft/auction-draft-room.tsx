@@ -18,6 +18,7 @@ interface AuctionDraftRoomProps {
     id: string
     name: string
     roster: string[]
+    budget: number
   }
 }
 
@@ -497,23 +498,90 @@ export function AuctionDraftRoom({ league, userRole, userTeam }: AuctionDraftRoo
             </div>
           </div>
           {canBid && (
-            <div className="mt-4 p-3 bg-primary/10 rounded-lg">
-              <p className="text-primary font-medium mb-2">Place your bid for {userTeam?.name}!</p>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="Enter bid amount"
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  onClick={() => handlePlaceBid(Number(bidAmount))}
-                  disabled={!bidAmount || Number(bidAmount) <= currentBid}
-                >
-                  <Gavel className="h-4 w-4 mr-2" />
-                  Bid
-                </Button>
+            <div className="mt-4 p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-primary font-semibold">🏆 {userTeam?.name} - Set Your Price!</p>
+                <div className="text-sm text-muted-foreground">
+                  Budget: <span className="font-bold text-green-600">${userTeam?.budget || 1000}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Enter your bid amount"
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(e.target.value)}
+                    className="flex-1 text-lg font-semibold"
+                    min={currentBid + 1}
+                    max={userTeam?.budget || 1000}
+                  />
+                  <Button
+                    onClick={() => handlePlaceBid(Number(bidAmount))}
+                    disabled={!bidAmount || Number(bidAmount) <= currentBid}
+                    className="px-6"
+                  >
+                    <Gavel className="h-4 w-4 mr-2" />
+                    Bid ${bidAmount}
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => setBidAmount((currentBid + 10).toString())}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentBid + 10 > (userTeam?.budget || 1000)}
+                  >
+                    +$10
+                  </Button>
+                  <Button
+                    onClick={() => setBidAmount((currentBid + 25).toString())}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentBid + 25 > (userTeam?.budget || 1000)}
+                  >
+                    +$25
+                  </Button>
+                  <Button
+                    onClick={() => setBidAmount((currentBid + 50).toString())}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentBid + 50 > (userTeam?.budget || 1000)}
+                  >
+                    +$50
+                  </Button>
+                  <Button
+                    onClick={() => setBidAmount((currentBid + 100).toString())}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentBid + 100 > (userTeam?.budget || 1000)}
+                  >
+                    +$100
+                  </Button>
+                  <Button
+                    onClick={() => setBidAmount(Math.min(userTeam?.budget || 1000, currentBid + 200).toString())}
+                    variant="outline"
+                    size="sm"
+                    className="text-orange-600 border-orange-300"
+                    disabled={currentBid + 200 > (userTeam?.budget || 1000)}
+                  >
+                    Max Bid
+                  </Button>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  {Number(bidAmount) <= currentBid && bidAmount && (
+                    <span className="text-red-500">⚠️ Bid must be higher than ${currentBid}</span>
+                  )}
+                  {Number(bidAmount) > (userTeam?.budget || 1000) && (
+                    <span className="text-red-500">⚠️ Insufficient budget (${userTeam?.budget || 1000} available)</span>
+                  )}
+                  {Number(bidAmount) > currentBid && Number(bidAmount) <= (userTeam?.budget || 1000) && (
+                    <span className="text-green-600">✅ Valid bid amount</span>
+                  )}
+                </div>
               </div>
             </div>
           )}

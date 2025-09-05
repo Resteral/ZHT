@@ -410,35 +410,120 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
       {/* Auction Bidding Modal */}
       {draftSettings?.draft_type === "auction" && selectedPlayer && isUserTurn() && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="max-w-md w-full mx-4">
+          <Card className="max-w-lg w-full mx-4">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Gavel className="h-5 w-5" />
-                Bid on {selectedPlayer.username}
+                Set Price for {selectedPlayer.username}
               </CardTitle>
+              <CardDescription>
+                Current bid: ${draftState?.auction_state?.current_bid || 1} • Your budget: $
+                {getCurrentTeam()?.budget_remaining || 0}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="text-center">
+              <div className="text-center p-3 bg-muted/50 rounded-lg">
                 <div className="text-2xl font-bold text-green-500">${draftState?.auction_state?.current_bid || 1}</div>
-                <div className="text-sm text-muted-foreground">Current Bid</div>
+                <div className="text-sm text-muted-foreground">Current Highest Bid</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  ELO: {selectedPlayer.elo_rating} • CSV Score: {selectedPlayer.total_score}
+                </div>
               </div>
+
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Enter your bid amount"
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(e.target.value)}
+                    className="flex-1 text-lg font-semibold"
+                    min={(draftState?.auction_state?.current_bid || 0) + 1}
+                    max={getCurrentTeam()?.budget_remaining || 0}
+                  />
+                  <Button
+                    onClick={handlePlaceBid}
+                    disabled={!bidAmount || Number(bidAmount) <= (draftState?.auction_state?.current_bid || 0)}
+                    className="px-6"
+                  >
+                    Bid ${bidAmount}
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                  <Button
+                    onClick={() => setBidAmount(((draftState?.auction_state?.current_bid || 0) + 10).toString())}
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      (draftState?.auction_state?.current_bid || 0) + 10 > (getCurrentTeam()?.budget_remaining || 0)
+                    }
+                  >
+                    +$10
+                  </Button>
+                  <Button
+                    onClick={() => setBidAmount(((draftState?.auction_state?.current_bid || 0) + 25).toString())}
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      (draftState?.auction_state?.current_bid || 0) + 25 > (getCurrentTeam()?.budget_remaining || 0)
+                    }
+                  >
+                    +$25
+                  </Button>
+                  <Button
+                    onClick={() => setBidAmount(((draftState?.auction_state?.current_bid || 0) + 50).toString())}
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      (draftState?.auction_state?.current_bid || 0) + 50 > (getCurrentTeam()?.budget_remaining || 0)
+                    }
+                  >
+                    +$50
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      setBidAmount(
+                        Math.min(
+                          getCurrentTeam()?.budget_remaining || 0,
+                          (draftState?.auction_state?.current_bid || 0) + 100,
+                        ).toString(),
+                      )
+                    }
+                    variant="outline"
+                    size="sm"
+                    className="text-orange-600"
+                    disabled={
+                      (draftState?.auction_state?.current_bid || 0) + 100 > (getCurrentTeam()?.budget_remaining || 0)
+                    }
+                  >
+                    Max
+                  </Button>
+                </div>
+
+                <div className="text-xs">
+                  {Number(bidAmount) <= (draftState?.auction_state?.current_bid || 0) && bidAmount && (
+                    <span className="text-red-500">
+                      ⚠️ Must bid higher than ${draftState?.auction_state?.current_bid || 0}
+                    </span>
+                  )}
+                  {Number(bidAmount) > (getCurrentTeam()?.budget_remaining || 0) && (
+                    <span className="text-red-500">
+                      ⚠️ Exceeds budget (${getCurrentTeam()?.budget_remaining || 0} available)
+                    </span>
+                  )}
+                  {Number(bidAmount) > (draftState?.auction_state?.current_bid || 0) &&
+                    Number(bidAmount) <= (getCurrentTeam()?.budget_remaining || 0) && (
+                      <span className="text-green-600">✅ Valid bid</span>
+                    )}
+                </div>
+              </div>
+
               <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="Enter bid amount"
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(e.target.value)}
-                />
-                <Button
-                  onClick={handlePlaceBid}
-                  disabled={!bidAmount || Number(bidAmount) <= (draftState?.auction_state?.current_bid || 0)}
-                >
-                  Bid
+                <Button variant="outline" onClick={() => setSelectedPlayer(null)} className="flex-1">
+                  Cancel
                 </Button>
               </div>
-              <Button variant="outline" onClick={() => setSelectedPlayer(null)} className="w-full">
-                Cancel
-              </Button>
             </CardContent>
           </Card>
         </div>
