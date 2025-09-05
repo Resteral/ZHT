@@ -9,6 +9,7 @@ import { Trophy, Users, Clock, DollarSign, Crown, Gamepad2, Target, Zap, Play } 
 import { createBrowserClient } from "@supabase/ssr"
 import Link from "next/link"
 import { UnifiedDraftSelector } from "@/components/draft/unified-draft-selector"
+import { SeasonalTournamentDashboard } from "@/components/tournaments/seasonal-tournament-dashboard"
 
 interface Lobby {
   id: string
@@ -254,12 +255,32 @@ export default function LobbiesPage() {
       </div>
 
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="all">All Live ({allContent.length})</TabsTrigger>
+          <TabsTrigger value="elo-league">ELO League</TabsTrigger>
           <TabsTrigger value="active">Active Games ({activeGames.length})</TabsTrigger>
           <TabsTrigger value="lobbies">Lobbies ({lobbies.length})</TabsTrigger>
           <TabsTrigger value="tournaments">Tournaments ({tournaments.length})</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="elo-league" className="mt-6">
+          <div className="space-y-6">
+            <Card className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5" />
+                  ELO League - Seasonal Competition
+                </CardTitle>
+                <CardDescription>
+                  Compete in the 3-month ELO league with divisions, rankings, and prize pools
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SeasonalTournamentDashboard />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         <TabsContent value="all" className="mt-6">
           {allContent.length === 0 ? (

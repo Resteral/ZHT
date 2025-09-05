@@ -32,21 +32,27 @@ export function SeasonalTournamentDashboard() {
     try {
       setLoading(true)
 
+      console.log("[v0] Loading seasonal tournament data...")
+
       // Load current season
       const season = await seasonalTournamentService.getCurrentSeason()
+      console.log("[v0] Current season:", season)
       setCurrentSeason(season)
 
       if (season && user) {
+        console.log("[v0] Loading user stats and leaderboard...")
         // Load user stats
         const stats = await seasonalTournamentService.getUserSeasonalStats(season.id, user.id)
+        console.log("[v0] User stats:", stats)
         setUserStats(stats)
 
         // Load leaderboard
         const board = await seasonalTournamentService.getSeasonalLeaderboard(season.id, undefined, 50)
+        console.log("[v0] Leaderboard:", board)
         setLeaderboard(board)
       }
     } catch (error) {
-      console.error("Error loading seasonal data:", error)
+      console.error("[v0] Error loading seasonal data:", error)
       toast.error("Failed to load seasonal tournament data")
     } finally {
       setLoading(false)

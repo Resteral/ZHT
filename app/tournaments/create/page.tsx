@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, Users, Trophy, Settings, Calendar, Clock, Target, Crown } from "lucide-react"
+import { ArrowLeft, Users, Trophy, Settings, Calendar, Clock, Target, Crown, Zap, BarChart3 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 
 export default function CreateTournamentPage() {
@@ -29,6 +29,7 @@ export default function CreateTournamentPage() {
             ? "Auction Draft"
             : "Snake Draft"
     } Tournament`,
+    duration_type: "short" as "short" | "long",
     tournament_type: "draft",
     max_participants: 32,
     start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16),
@@ -70,6 +71,39 @@ export default function CreateTournamentPage() {
     },
   })
 
+  const updateDurationDefaults = (durationType: "short" | "long") => {
+    const now = new Date()
+    if (durationType === "short") {
+      // Short tournaments: 1-7 days, smaller pools, live brackets
+      setFormData((prev) => ({
+        ...prev,
+        duration_type: durationType,
+        max_participants: 32,
+        end_date: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16), // 3 days
+        settings: {
+          ...prev.settings,
+          bracket_type: "single_elimination",
+          num_teams: 8,
+          max_teams: 8,
+        },
+      }))
+    } else {
+      // Long tournaments: 30+ days, larger pools, leaderboard focus
+      setFormData((prev) => ({
+        ...prev,
+        duration_type: durationType,
+        max_participants: 128,
+        end_date: new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16), // 45 days
+        settings: {
+          ...prev.settings,
+          bracket_type: "round_robin",
+          num_teams: 16,
+          max_teams: 16,
+        },
+      }))
+    }
+  }
+
   const playersNeeded =
     formData.settings.player_organization === "premade_teams"
       ? formData.settings.max_teams * formData.settings.players_per_team
@@ -77,7 +111,10 @@ export default function CreateTournamentPage() {
 
   const isTeamBased =
     formData.settings.player_organization === "premade_teams" || formData.settings.player_organization === "hybrid"
-  const hasConflict = playersNeeded > formData.max_participants
+
+  // Only flag as conflict if max_participants is LESS than what's needed for teams
+  // This allows draft tournaments to have more players in the pool than just team slots
+  const hasConflict = formData.max_participants < playersNeeded
   const isValid = !hasConflict
 
   const startDate = new Date(formData.start_date)
@@ -86,6 +123,9 @@ export default function CreateTournamentPage() {
   const isStartDateValid = startDate > now
   const isEndDateValid = endDate > startDate
   const isDateValid = isStartDateValid && isEndDateValid
+
+  const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+  const isDurationValid = formData.duration_type === "short" ? durationDays <= 7 : durationDays >= 30
 
   return (
     <div className="container mx-auto py-6 max-w-2xl">
@@ -141,7 +181,7 @@ export default function CreateTournamentPage() {
                 const tournamentData = {
                   name: formData.name,
                   description: `${formData.settings.bracket_type.replace("_", " ")} tournament with ${formData.settings.draft_mode.replace("_", " ")} drafting`,
-                  tournament_type: formData.tournament_type,
+                  tournament_type: formData.duration_type === "long" ? "league" : "draft",
                   max_participants: formData.max_participants,
                   max_teams: isTeamBased ? formData.settings.max_teams : formData.settings.num_teams,
                   team_based: isTeamBased,
@@ -151,6 +191,7 @@ export default function CreateTournamentPage() {
                   game: formData.game,
                   player_pool_settings: {
                     ...formData.settings,
+                    duration_type: formData.duration_type,
                     draft_mode: formData.settings.draft_mode,
                     bracket_type: formData.settings.bracket_type,
                     player_organization: formData.settings.player_organization,
@@ -164,11 +205,15 @@ export default function CreateTournamentPage() {
 
                 console.log("[v0] Tournament created successfully:", tournament)
 
-                router.push(`/tournaments/${tournament.id}/lobby`)
+                if (formData.duration_type === "long") {
+                  router.push(`/leagues?tournament=${tournament.id}`)
+                } else {
+                  router.push(`/tournaments/${tournament.id}/lobby`)
+                }
 
                 toast({
                   title: "Tournament created!",
-                  description: "Tournament is now available for registration",
+                  description: `${formData.duration_type === "long" ? "League" : "Tournament"} is now available for registration`,
                 })
               } catch (error: any) {
                 console.error("[v0] Error creating tournament:", error)
@@ -197,6 +242,59 @@ export default function CreateTournamentPage() {
                   className="text-lg font-medium"
                 />
                 <p className="text-sm text-muted-foreground">Give your tournament a unique and memorable name</p>
+              </div>
+
+              <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Tournament Type & Duration
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card
+                    className={`cursor-pointer transition-all ${formData.duration_type === "short" ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"}`}
+                    onClick={() => updateDurationDefaults("short")}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500/20 rounded-full">
+                          <Zap className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h5 className="font-medium text-blue-900 dark:text-blue-100">Short Tournament</h5>
+                          <p className="text-sm text-blue-700 dark:text-blue-300">
+                            1-7 days • Live brackets • Quick competition
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card
+                    className={`cursor-pointer transition-all ${formData.duration_type === "long" ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"}`}
+                    onClick={() => updateDurationDefaults("long")}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-500/20 rounded-full">
+                          <BarChart3 className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h5 className="font-medium text-green-900 dark:text-green-100">Long League</h5>
+                          <p className="text-sm text-green-700 dark:text-green-300">
+                            30+ days • Leaderboards • Extended play
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  {formData.duration_type === "short"
+                    ? "Short tournaments feature live brackets and quick elimination-style play, perfect for weekend competitions."
+                    : "Long leagues focus on leaderboard rankings and extended competition over weeks or months, ideal for seasonal play."}
+                </div>
               </div>
 
               <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
@@ -232,11 +330,25 @@ export default function CreateTournamentPage() {
                       type="datetime-local"
                       value={formData.end_date}
                       onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      className={!isEndDateValid ? "border-destructive" : ""}
+                      className={!isEndDateValid || !isDurationValid ? "border-destructive" : ""}
                     />
                     <p className="text-xs text-muted-foreground">When tournament concludes</p>
                     {!isEndDateValid && <p className="text-xs text-destructive">End date must be after start date</p>}
+                    {!isDurationValid && (
+                      <p className="text-xs text-destructive">
+                        {formData.duration_type === "short"
+                          ? "Short tournaments must be 7 days or less"
+                          : "Long leagues must be 30 days or more"}
+                      </p>
+                    )}
                   </div>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  Duration: {durationDays} days •
+                  {formData.duration_type === "short" && durationDays <= 7 && " ✓ Valid for short tournament"}
+                  {formData.duration_type === "long" && durationDays >= 30 && " ✓ Valid for long league"}
+                  {!isDurationValid && " ⚠️ Duration doesn't match selected type"}
                 </div>
               </div>
 
@@ -545,7 +657,9 @@ export default function CreateTournamentPage() {
               )}
             </div>
 
-            <Card className={`${hasConflict || !isDateValid ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}>
+            <Card
+              className={`${hasConflict || !isDateValid || !isDurationValid ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}
+            >
               <CardContent className="pt-6">
                 <div className="space-y-2">
                   <h4 className="font-medium flex items-center gap-2">
@@ -555,6 +669,15 @@ export default function CreateTournamentPage() {
                   <div className="text-sm space-y-1">
                     <p>
                       <strong>Name:</strong> {formData.name}
+                    </p>
+                    <p>
+                      <strong>Type:</strong>{" "}
+                      {formData.duration_type === "short"
+                        ? "Short Tournament (Live Brackets)"
+                        : "Long League (Leaderboards)"}
+                    </p>
+                    <p>
+                      <strong>Duration:</strong> {durationDays} days
                     </p>
                     <p>
                       <strong>Format:</strong> {formData.settings.bracket_type.replace("_", " ").toUpperCase()} bracket
@@ -593,14 +716,24 @@ export default function CreateTournamentPage() {
                       </div>
                     )}
 
+                    {!isDurationValid && (
+                      <div className="text-destructive font-medium">
+                        ⚠️ <strong>DURATION ERROR:</strong>{" "}
+                        {formData.duration_type === "short"
+                          ? "Short tournaments must be 7 days or less"
+                          : "Long leagues must be 30 days or more"}
+                      </div>
+                    )}
+
                     {hasConflict ? (
                       <div className="text-destructive font-medium">
-                        ⚠️ <strong>CONFLICT:</strong> Need {playersNeeded} players but only {formData.max_participants}{" "}
-                        maximum allowed
+                        ⚠️ <strong>CONFLICT:</strong> Need {playersNeeded} players minimum but only{" "}
+                        {formData.max_participants} maximum allowed
                       </div>
                     ) : (
                       <p className="text-green-600 font-medium">
-                        ✓ Configuration valid: {playersNeeded} players needed, {formData.max_participants} maximum
+                        ✓ Configuration valid: {playersNeeded} players needed for teams, {formData.max_participants}{" "}
+                        maximum pool size
                       </p>
                     )}
                   </div>
@@ -608,14 +741,21 @@ export default function CreateTournamentPage() {
               </CardContent>
             </Card>
 
-            <Button type="submit" disabled={loading || !isValid || !isDateValid} className="w-full" size="lg">
+            <Button
+              type="submit"
+              disabled={loading || !isValid || !isDateValid || !isDurationValid}
+              className="w-full"
+              size="lg"
+            >
               {loading
                 ? "Creating Tournament..."
                 : !isDateValid
                   ? "Fix Tournament Dates First"
-                  : hasConflict
-                    ? "Fix Configuration First"
-                    : "Create Tournament & Go to Lobby"}
+                  : !isDurationValid
+                    ? "Fix Tournament Duration"
+                    : hasConflict
+                      ? "Increase Maximum Participants"
+                      : `Create ${formData.duration_type === "long" ? "League" : "Tournament"} & Go to ${formData.duration_type === "long" ? "Leagues" : "Lobby"}`}
             </Button>
           </form>
         </CardContent>

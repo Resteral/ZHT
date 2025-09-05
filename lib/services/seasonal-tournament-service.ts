@@ -3,21 +3,18 @@ import { createClient } from "@/lib/supabase/client"
 export interface SeasonalTournament {
   id: string
   name: string
-  season_number: number
+  description: string
+  tournament_type: string
   start_date: string
   end_date: string
   status: "upcoming" | "registration" | "active" | "completed" | "cancelled"
-  registration_start: string
-  registration_end: string
-  total_prize_pool: number
   max_participants: number
-  current_participants: number
-  elo_cutoff_minimum: number
-  season_type: "standard" | "championship" | "special"
-  division_settings: any
-  lobby_integration_settings: any
+  entry_fee: number
+  prize_pool: number
+  created_by: string
   created_at: string
   updated_at: string
+  player_pool_settings: any
 }
 
 export interface SeasonalParticipant {
@@ -82,15 +79,60 @@ class SeasonalTournamentService {
   async getCurrentSeason(): Promise<SeasonalTournament | null> {
     try {
       const { data, error } = await this.supabase
-        .from("seasonal_tournaments")
+        .from("tournaments")
         .select("*")
+        .eq("tournament_type", "seasonal_elo_league")
         .eq("status", "active")
         .single()
 
-      if (error && error.code !== "PGRST116") throw error
+      if (error && error.code !== "PGRST116") {
+        // If no active season found, try to create a new one
+        if (error.code === "PGRST116") {
+          return await this.createNewSeason()
+        }
+        throw error
+      }
       return data
     } catch (error) {
       console.error("Error fetching current season:", error)
+      return null
+    }
+  }
+
+  private async createNewSeason(): Promise<SeasonalTournament | null> {
+    try {
+      const now = new Date()
+      const endDate = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000) // 90 days from now
+
+      const { data, error } = await this.supabase
+        .from("tournaments")
+        .insert({
+          name: `ELO League Season ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+          description: "3-month competitive ELO league with division-based rankings and rewards",
+          tournament_type: "seasonal_elo_league",
+          start_date: now.toISOString(),
+          end_date: endDate.toISOString(),
+          status: "active",
+          max_participants: 10000,
+          entry_fee: 0,
+          prize_pool: 5000,
+          created_by: "00000000-0000-0000-0000-000000000000", // System user
+          player_pool_settings: {
+            divisions: {
+              premier: { min_elo: 1800, max_participants: 100 },
+              championship: { min_elo: 1600, max_participants: 500 },
+              league_one: { min_elo: 1400, max_participants: 1000 },
+              league_two: { min_elo: 0, max_participants: 8400 },
+            },
+          },
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error("Error creating new season:", error)
       return null
     }
   }
@@ -106,24 +148,14 @@ class SeasonalTournamentService {
 
       if (userError) throw userError
 
-      const currentDivision = this.getDivisionFromElo(user.elo_rating)
-
-      const { error } = await this.supabase.from("seasonal_tournament_participants").insert({
-        seasonal_tournament_id: seasonId,
+      const { error } = await this.supabase.from("tournament_participants").insert({
+        tournament_id: seasonId,
         user_id: userId,
-        username: user.username,
-        starting_elo: user.elo_rating,
-        current_elo: user.elo_rating,
-        peak_elo: user.elo_rating,
-        lowest_elo: user.elo_rating,
-        current_division: currentDivision,
-        highest_division_reached: currentDivision,
+        status: "active",
+        joined_at: new Date().toISOString(),
       })
 
       if (error && error.code !== "23505") throw error // Ignore duplicate key errors
-
-      // Update participant count
-      await this.supabase.rpc("increment_seasonal_participants", { season_id: seasonId })
 
       return true
     } catch (error) {
@@ -134,17 +166,16 @@ class SeasonalTournamentService {
 
   async getSeasonalLeaderboard(seasonId: string, division?: string, limit = 100): Promise<SeasonalLeaderboard[]> {
     try {
-      let query = this.supabase
-        .from("seasonal_tournament_participants")
-        .select("*")
-        .eq("seasonal_tournament_id", seasonId)
-        .order("seasonal_points", { ascending: false })
-        .order("current_elo", { ascending: false })
+      const query = this.supabase
+        .from("tournament_participants")
+        .select(`
+          *,
+          users!inner(username, elo_rating, wins, losses, total_games)
+        `)
+        .eq("tournament_id", seasonId)
+        .eq("status", "active")
+        .order("users.elo_rating", { ascending: false })
         .limit(limit)
-
-      if (division) {
-        query = query.eq("current_division", division)
-      }
 
       const { data, error } = await query
 
@@ -153,22 +184,22 @@ class SeasonalTournamentService {
       // Convert to leaderboard format with ranks
       return (data || []).map((participant, index) => ({
         id: participant.id,
-        seasonal_tournament_id: participant.seasonal_tournament_id,
+        seasonal_tournament_id: participant.tournament_id,
         user_id: participant.user_id,
-        username: participant.username,
-        division: participant.current_division,
+        username: participant.users.username,
+        division: this.getDivisionFromElo(participant.users.elo_rating),
         rank: index + 1,
-        elo_rating: participant.current_elo,
-        seasonal_points: participant.seasonal_points,
-        matches_played: participant.total_matches_played,
+        elo_rating: participant.users.elo_rating,
+        seasonal_points: participant.users.elo_rating, // Use ELO as seasonal points for now
+        matches_played: participant.users.total_games || 0,
         win_rate:
-          participant.total_matches_played > 0 ? (participant.total_wins / participant.total_matches_played) * 100 : 0,
-        elo_change_from_start: participant.current_elo - participant.starting_elo,
-        weekly_elo_change: 0, // Would be calculated from recent matches
-        streak_type: null, // Would be calculated from recent matches
-        current_streak: 0, // Would be calculated from recent matches
-        best_streak: 0, // Would be calculated from match history
-        updated_at: participant.last_activity,
+          participant.users.total_games > 0 ? (participant.users.wins / participant.users.total_games) * 100 : 0,
+        elo_change_from_start: 0, // Would need historical data
+        weekly_elo_change: 0,
+        streak_type: null,
+        current_streak: 0,
+        best_streak: 0,
+        updated_at: participant.joined_at,
       }))
     } catch (error) {
       console.error("Error fetching seasonal leaderboard:", error)
@@ -178,15 +209,71 @@ class SeasonalTournamentService {
 
   async getUserSeasonalStats(seasonId: string, userId: string): Promise<SeasonalParticipant | null> {
     try {
+      // Get user's current ELO
+      const { data: user, error: userError } = await this.supabase
+        .from("users")
+        .select("username, elo_rating")
+        .eq("id", userId)
+        .single()
+
+      if (userError) throw userError
+
+      const currentDivision = this.getDivisionFromElo(user.elo_rating)
+
+      const { error } = await this.supabase.from("tournament_participants").insert({
+        tournament_id: seasonId,
+        user_id: userId,
+        status: "active",
+        joined_at: new Date().toISOString(),
+      })
+
+      if (error && error.code !== "23505") throw error // Ignore duplicate key errors
+
+      return true
+    } catch (error) {
+      console.error("Error joining season:", error)
+      return false
+    }
+  }
+
+  async getUserSeasonalStats(seasonId: string, userId: string): Promise<SeasonalParticipant | null> {
+    try {
       const { data, error } = await this.supabase
-        .from("seasonal_tournament_participants")
-        .select("*")
-        .eq("seasonal_tournament_id", seasonId)
+        .from("tournament_participants")
+        .select(`
+          *,
+          users!inner(username, elo_rating, wins, losses, total_games)
+        `)
+        .eq("tournament_id", seasonId)
         .eq("user_id", userId)
         .single()
 
       if (error && error.code !== "PGRST116") throw error
-      return data
+
+      if (!data) return null
+
+      return {
+        id: data.id,
+        seasonal_tournament_id: data.tournament_id,
+        user_id: data.user_id,
+        username: data.users.username,
+        starting_elo: data.users.elo_rating, // Would need historical data for actual starting ELO
+        current_elo: data.users.elo_rating,
+        peak_elo: data.users.elo_rating,
+        lowest_elo: data.users.elo_rating,
+        total_matches_played: data.users.total_games || 0,
+        total_wins: data.users.wins || 0,
+        total_losses: data.users.losses || 0,
+        seasonal_points: data.users.elo_rating,
+        current_division: this.getDivisionFromElo(data.users.elo_rating),
+        highest_division_reached: this.getDivisionFromElo(data.users.elo_rating),
+        current_rank: null,
+        best_rank: null,
+        lobby_stats: {},
+        achievements: [],
+        joined_at: data.joined_at,
+        last_activity: data.joined_at,
+      }
     } catch (error) {
       console.error("Error fetching user seasonal stats:", error)
       return null
@@ -240,7 +327,7 @@ class SeasonalTournamentService {
           ]
 
           await this.supabase
-            .from("seasonal_tournament_participants")
+            .from("tournament_participants")
             .update({
               achievements: updatedAchievements,
               seasonal_points: participant.seasonal_points + achievement.reward_points,
@@ -295,9 +382,9 @@ class SeasonalTournamentService {
   async getSeasonalStats(seasonId: string) {
     try {
       const { data: participants, error } = await this.supabase
-        .from("seasonal_tournament_participants")
+        .from("tournament_participants")
         .select("*")
-        .eq("seasonal_tournament_id", seasonId)
+        .eq("tournament_id", seasonId)
 
       if (error) throw error
 

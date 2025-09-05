@@ -189,11 +189,11 @@ export function InteractiveHockeyNet() {
               <div className="flex items-start space-x-4">
                 <div className={`p-3 rounded-lg bg-gradient-to-r ${mode.color}`}>{mode.icon}</div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{mode.name}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{mode.description}</p>
+                  <h3 className="text-lg font-semibold text-foreground mb-1">{mode.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-2">{mode.description}</p>
                   <div className="flex items-center space-x-2">
-                    <Gamepad2 className="w-4 h-4 text-gray-400" />
-                    <span className="text-xs text-gray-500">{mode.participants}</span>
+                    <Gamepad2 className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">{mode.participants}</span>
                   </div>
                 </div>
               </div>
@@ -210,7 +210,7 @@ export function InteractiveHockeyNet() {
 
       {/* Instructions */}
       <motion.div
-        className="text-center text-gray-600"
+        className="text-center text-muted-foreground"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1, duration: 0.5 }}
@@ -234,7 +234,7 @@ export function InteractiveHockeyNet() {
                 transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
                 className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"
               />
-              <p className="text-sm text-gray-600">Entering the arena...</p>
+              <p className="text-sm text-muted-foreground">Entering the arena...</p>
             </div>
           </motion.div>
         )}

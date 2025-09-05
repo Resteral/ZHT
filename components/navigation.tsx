@@ -71,9 +71,7 @@ export function Navigation() {
             <div className="flex items-center space-x-4">
               <Link href="/" className="flex items-center space-x-2">
                 <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
-                <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  TugLobbies
-                </span>
+                <span className="text-xl font-bold text-foreground">TugLobbies</span>
               </Link>
             </div>
             <div className="text-sm text-muted-foreground">Loading...</div>
@@ -91,9 +89,7 @@ export function Navigation() {
             <div className="flex items-center space-x-4">
               <Link href="/" className="flex items-center space-x-2">
                 <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
-                <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  TugLobbies
-                </span>
+                <span className="text-xl font-bold text-foreground">TugLobbies</span>
               </Link>
             </div>
             <div className="flex items-center space-x-2">
@@ -118,9 +114,7 @@ export function Navigation() {
           <div className="flex items-center space-x-4">
             <Link href="/" className="flex items-center space-x-2">
               <Image src="/images/tug-logo.png" alt="TUG Logo" width={40} height={40} className="rounded-lg" />
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                TugLobbies
-              </span>
+              <span className="text-xl font-bold text-foreground">TugLobbies</span>
             </Link>
           </div>
 

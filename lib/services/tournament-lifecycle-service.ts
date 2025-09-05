@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
 import { tournamentProgressionService } from "./tournament-progression-service"
+import { tournamentAutoClosureService } from "./tournament-auto-closure-service"
 
 const supabase = createClient()
 
@@ -233,6 +234,8 @@ export const tournamentLifecycleService = {
 
   async runLifecycleMonitoring(): Promise<void> {
     console.log("[v0] Running tournament lifecycle monitoring")
+
+    await tournamentAutoClosureService.runAutomaticClosure()
 
     // Check for tournaments that need status progression
     const { data: tournaments } = await supabase
