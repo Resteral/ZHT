@@ -101,6 +101,7 @@ export const tournamentService = {
       start_date: tournamentData.start_date,
       end_date: tournamentData.end_date,
       team_based: true,
+      created_by: userId,
       player_pool_settings: {
         max_teams: tournamentData.player_pool_settings?.num_teams || 8,
         draft_mode: tournamentData.player_pool_settings?.draft_mode || "snake_draft",
@@ -128,6 +129,36 @@ export const tournamentService = {
     }
 
     console.log("[v0] Regular tournament created successfully:", data)
+
+    if (userId && data.id) {
+      try {
+        console.log("[v0] Adding tournament creator as participant:", userId)
+
+        const { data: participantData, error: participantError } = await supabase
+          .from("tournament_participants")
+          .insert({
+            tournament_id: data.id,
+            user_id: userId,
+            joined_at: new Date().toISOString(),
+            status: "registered",
+            is_creator: true, // Flag to identify the tournament creator
+          })
+          .select()
+          .single()
+
+        if (participantError) {
+          console.error("[v0] Error adding creator as participant:", participantError)
+          // Don't throw error here - tournament was created successfully
+          console.log("[v0] Tournament created but creator not added as participant")
+        } else {
+          console.log("[v0] Tournament creator successfully added as participant:", participantData)
+        }
+      } catch (participantError) {
+        console.error("[v0] Exception adding creator as participant:", participantError)
+        // Continue - tournament creation was successful
+      }
+    }
+
     return data
   },
 

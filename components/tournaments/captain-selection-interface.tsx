@@ -331,102 +331,99 @@ export function CaptainSelectionInterface({
 
         <TabsContent value="selection" className="space-y-4">
           {/* Selection Methods */}
-          {isOrganizer ||
-            isTournamentCreator ||
-            (user && tournament?.created_by === user.id && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5" />
-                    Selection Methods
-                  </CardTitle>
-                  <CardDescription>
-                    {isTournamentCreator || (user && tournament?.created_by === user.id)
-                      ? "As the tournament creator, choose how to select team captains."
-                      : "Choose how to select team captains for the tournament."}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="p-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Zap className="h-5 w-5 text-blue-500" />
-                          <h4 className="font-medium">Highest ELO</h4>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Automatically selects highest and lowest ELO players as captains for balanced teams.
-                        </p>
-                        <Button
-                          onClick={handleAutomaticSelection}
-                          disabled={!canSelect || processing || currentCaptains.length > 0}
-                          className="w-full"
-                        >
-                          <Zap className="h-4 w-4 mr-2" />
-                          {processing ? "Selecting..." : "Auto-Select Captains"}
-                        </Button>
+          {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Selection Methods
+                </CardTitle>
+                <CardDescription>
+                  Choose how to select team captains for this tournament. All methods are available for every
+                  tournament.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-5 w-5 text-blue-500" />
+                        <h4 className="font-medium">Highest ELO</h4>
                       </div>
-                    </Card>
-
-                    <Card className="p-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-5 w-5 text-green-500" />
-                          <h4 className="font-medium">Creator Choice</h4>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Manually choose exactly 2 players to be team captains. Select players below.
-                        </p>
-                        <Button
-                          onClick={handleManualSelection}
-                          disabled={selectedPlayers.length !== 2 || processing || currentCaptains.length > 0}
-                          className="w-full"
-                          variant="outline"
-                        >
-                          <Users className="h-4 w-4 mr-2" />
-                          {processing ? "Selecting..." : `Select ${selectedPlayers.length}/2 Captains`}
-                        </Button>
-                      </div>
-                    </Card>
-
-                    <Card className="p-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Shuffle className="h-5 w-5 text-purple-500" />
-                          <h4 className="font-medium">Random Selection</h4>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Randomly selects 2 players from the pool as captains for unpredictable matchups.
-                        </p>
-                        <Button
-                          onClick={handleRandomSelection}
-                          disabled={!canSelect || processing || currentCaptains.length > 0}
-                          className="w-full"
-                          variant="secondary"
-                        >
-                          <Shuffle className="h-4 w-4 mr-2" />
-                          {processing ? "Selecting..." : "Random Captains"}
-                        </Button>
-                      </div>
-                    </Card>
-                  </div>
-
-                  {currentCaptains.length > 0 && (
-                    <div className="pt-4 border-t">
+                      <p className="text-sm text-muted-foreground">
+                        Automatically selects highest and lowest ELO players as captains for balanced teams.
+                      </p>
                       <Button
-                        onClick={handleResetCaptains}
-                        disabled={processing}
-                        variant="destructive"
+                        onClick={handleAutomaticSelection}
+                        disabled={!canSelect || processing || currentCaptains.length > 0}
                         className="w-full"
                       >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        {processing ? "Resetting..." : "Reset Captain Selections"}
+                        <Zap className="h-4 w-4 mr-2" />
+                        {processing ? "Selecting..." : "Auto-Select Captains"}
                       </Button>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                  </Card>
+
+                  <Card className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-5 w-5 text-green-500" />
+                        <h4 className="font-medium">Creator Choice</h4>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Manually choose exactly 2 players to be team captains. Select players below.
+                      </p>
+                      <Button
+                        onClick={handleManualSelection}
+                        disabled={selectedPlayers.length !== 2 || processing || currentCaptains.length > 0}
+                        className="w-full"
+                        variant="outline"
+                      >
+                        <Users className="h-4 w-4 mr-2" />
+                        {processing ? "Selecting..." : `Select ${selectedPlayers.length}/2 Captains`}
+                      </Button>
+                    </div>
+                  </Card>
+
+                  <Card className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Shuffle className="h-5 w-5 text-purple-500" />
+                        <h4 className="font-medium">Random Selection</h4>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Randomly selects 2 players from the pool as captains for unpredictable matchups.
+                      </p>
+                      <Button
+                        onClick={handleRandomSelection}
+                        disabled={!canSelect || processing || currentCaptains.length > 0}
+                        className="w-full"
+                        variant="secondary"
+                      >
+                        <Shuffle className="h-4 w-4 mr-2" />
+                        {processing ? "Selecting..." : "Random Captains"}
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
+
+                {currentCaptains.length > 0 && (
+                  <div className="pt-4 border-t">
+                    <Button
+                      onClick={handleResetCaptains}
+                      disabled={processing}
+                      variant="destructive"
+                      className="w-full"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      {processing ? "Resetting..." : "Reset Captain Selections"}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Available Players */}
           <Card>
