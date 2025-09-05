@@ -200,7 +200,7 @@ export default function LobbiesPage() {
           </div>
         )}
 
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1 text-xs text-slate-200">
           <Clock className="h-3 w-3" />
           Created {new Date(lobby.created_at).toLocaleTimeString()}
         </div>
@@ -222,7 +222,7 @@ export default function LobbiesPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading live lobbies...</p>
+          <p className="mt-4 text-slate-200">Loading live lobbies...</p>
         </div>
       </div>
     )
@@ -236,7 +236,7 @@ export default function LobbiesPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">ELO Draft Lobbies & Active Games</h1>
-        <p className="text-muted-foreground">Join ELO draft lobbies, active games, and competitive tournaments</p>
+        <p className="text-slate-200">Join ELO draft lobbies, active games, and competitive tournaments</p>
       </div>
 
       <div className="mb-8 grid md:grid-cols-1 gap-6">
@@ -288,7 +288,7 @@ export default function LobbiesPage() {
               <CardContent>
                 <Gamepad2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-xl font-semibold mb-2">No Live Content</h3>
-                <p className="text-muted-foreground mb-4">Create a new ELO draft lobby to get started!</p>
+                <p className="text-slate-200 mb-4">Create a new ELO draft lobby to get started!</p>
                 <UnifiedDraftSelector buttonText="Create ELO Draft" mode="create" />
               </CardContent>
             </Card>
@@ -307,7 +307,7 @@ export default function LobbiesPage() {
               <CardContent>
                 <Play className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-xl font-semibold mb-2">No Active Games</h3>
-                <p className="text-muted-foreground mb-4">No games are currently in progress.</p>
+                <p className="text-slate-200 mb-4">No games are currently in progress.</p>
                 <UnifiedDraftSelector buttonText="Start New Game" mode="create" />
               </CardContent>
             </Card>
@@ -326,7 +326,7 @@ export default function LobbiesPage() {
               <CardContent>
                 <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-xl font-semibold mb-2">No Active Lobbies</h3>
-                <p className="text-muted-foreground mb-4">Create a new lobby to start playing with others.</p>
+                <p className="text-slate-200 mb-4">Create a new lobby to start playing with others.</p>
                 <Button asChild>
                   <Link href="/draft">Create Lobby</Link>
                 </Button>
@@ -347,7 +347,7 @@ export default function LobbiesPage() {
               <CardContent>
                 <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-xl font-semibold mb-2">No Active Tournaments</h3>
-                <p className="text-muted-foreground mb-4">Check back later for upcoming tournaments.</p>
+                <p className="text-slate-200 mb-4">Check back later for upcoming tournaments.</p>
                 <Button asChild>
                   <Link href="/tournaments/create">Create Tournament</Link>
                 </Button>

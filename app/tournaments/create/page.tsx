@@ -59,6 +59,7 @@ export default function CreateTournamentPage() {
       num_teams: 8,
       players_per_team: 4,
       max_teams: 8,
+      games_per_team: 10,
 
       // Team system settings
       allow_team_invitations: true,
@@ -85,6 +86,7 @@ export default function CreateTournamentPage() {
           bracket_type: "single_elimination",
           num_teams: 8,
           max_teams: 8,
+          games_per_team: 3,
         },
       }))
     } else {
@@ -99,6 +101,7 @@ export default function CreateTournamentPage() {
           bracket_type: "round_robin",
           num_teams: 16,
           max_teams: 16,
+          games_per_team: 20,
         },
       }))
     }
@@ -586,6 +589,38 @@ export default function CreateTournamentPage() {
                 <p className="text-sm text-muted-foreground">Number of players on each team</p>
               </div>
 
+              {formData.duration_type === "long" && (
+                <div className="space-y-2">
+                  <Label>Games per Team</Label>
+                  <Select
+                    value={formData.settings.games_per_team.toString()}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        settings: { ...formData.settings, games_per_team: Number.parseInt(value) },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[5, 8, 10, 12, 15, 18, 20, 24, 30].map((num) => (
+                        <SelectItem key={num} value={num.toString()}>
+                          <div className="flex items-center gap-2">
+                            <BarChart3 className="h-4 w-4" />
+                            {num} Games per Team
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    How many games each team will play during the league season
+                  </p>
+                </div>
+              )}
+
               {isTeamBased && (
                 <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
                   <h4 className="font-medium flex items-center gap-2">
@@ -702,11 +737,21 @@ export default function CreateTournamentPage() {
                       <p>
                         <strong>{formData.settings.max_teams}</strong> teams with{" "}
                         <strong>{formData.settings.players_per_team}</strong> players each
+                        {formData.duration_type === "long" && (
+                          <span>
+                            , <strong>{formData.settings.games_per_team}</strong> games per team
+                          </span>
+                        )}
                       </p>
                     ) : (
                       <p>
                         <strong>{formData.settings.num_teams}</strong> teams with{" "}
                         <strong>{formData.settings.players_per_team}</strong> players each
+                        {formData.duration_type === "long" && (
+                          <span>
+                            , <strong>{formData.settings.games_per_team}</strong> games per team
+                          </span>
+                        )}
                       </p>
                     )}
 

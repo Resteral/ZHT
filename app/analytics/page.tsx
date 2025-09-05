@@ -1120,10 +1120,10 @@ export default function AnalyticsPage() {
               <CardContent className="p-8">
                 {loadingEloStats ? (
                   <div className="flex items-center justify-center py-12">
-                    <div className="text-slate-400">Loading ELO statistics...</div>
+                    <div className="text-foreground">Loading ELO statistics...</div>
                   </div>
                 ) : eloStats.length === 0 ? (
-                  <div className="text-center py-12 text-slate-400">
+                  <div className="text-center py-12 text-foreground">
                     <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <h3 className="text-lg font-semibold mb-2">No ELO data found</h3>
                     <p>Player rankings will appear here once games are completed</p>
@@ -1135,29 +1135,29 @@ export default function AnalyticsPage() {
                         <div className="text-2xl font-bold text-purple-400 mb-1">
                           {Math.round(eloStats.reduce((sum, p) => sum + (p.elo_rating || 1200), 0) / eloStats.length)}
                         </div>
-                        <div className="text-xs font-semibold text-slate-300">Average ELO</div>
+                        <div className="text-xs font-semibold text-slate-200">Average ELO</div>
                       </div>
                       <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
                         <div className="text-2xl font-bold text-green-400 mb-1">
                           {Math.max(...eloStats.map((p) => p.elo_rating || 1200))}
                         </div>
-                        <div className="text-xs font-semibold text-slate-300">Highest ELO</div>
+                        <div className="text-xs font-semibold text-slate-200">Highest ELO</div>
                       </div>
                       <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
                         <div className="text-2xl font-bold text-blue-400 mb-1">
                           {eloStats.reduce((sum, p) => sum + (p.total_games || 0), 0)}
                         </div>
-                        <div className="text-xs font-semibold text-slate-300">Total Games</div>
+                        <div className="text-xs font-semibold text-slate-200">Total Games</div>
                       </div>
                       <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
                         <div className="text-2xl font-bold text-orange-400 mb-1">{eloStats.length}</div>
-                        <div className="text-xs font-semibold text-slate-300">Active Players</div>
+                        <div className="text-xs font-semibold text-slate-200">Active Players</div>
                       </div>
                       <div className="text-center p-4 bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 rounded-xl border border-slate-600 shadow-lg">
                         <div className="text-2xl font-bold text-cyan-400 mb-1">
                           {eloStats.filter((p) => p.account_id).length}
                         </div>
-                        <div className="text-xs font-semibold text-slate-300">CSV Mapped</div>
+                        <div className="text-xs font-semibold text-slate-200">CSV Mapped</div>
                       </div>
                     </div>
 
