@@ -81,6 +81,16 @@ export function TournamentRegistration({ tournament, onRegistrationComplete }: T
   const handleRegister = async () => {
     if (!user) return
 
+    if (tournament.status !== "registration" && tournament.status !== "registration_open") {
+      console.error("Registration is closed for this tournament")
+      return
+    }
+
+    if (tournament.participant_count >= tournament.max_participants) {
+      console.error("Tournament is full")
+      return
+    }
+
     setRegistering(true)
     try {
       if (tournament.is_team_based && !selectedTeam) {
@@ -242,12 +252,21 @@ export function TournamentRegistration({ tournament, onRegistrationComplete }: T
         {/* Registration Button */}
         <Button
           onClick={handleRegister}
-          disabled={registering || (tournament.is_team_based && !selectedTeam)}
+          disabled={
+            registering ||
+            (tournament.is_team_based && !selectedTeam) ||
+            (tournament.status !== "registration" && tournament.status !== "registration_open") ||
+            tournament.participant_count >= tournament.max_participants
+          }
           className="w-full"
           size="lg"
         >
           {registering ? (
             "Registering..."
+          ) : tournament.status !== "registration" && tournament.status !== "registration_open" ? (
+            "Registration Closed"
+          ) : tournament.participant_count >= tournament.max_participants ? (
+            "Tournament Full"
           ) : (
             <>
               <Trophy className="h-4 w-4 mr-2" />

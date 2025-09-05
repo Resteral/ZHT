@@ -18,28 +18,15 @@ interface CaptainSelectionInterfaceProps {
   tournamentId: string
   tournament: any
   isOrganizer?: boolean
+  isTournamentCreator?: boolean
   onCaptainsSelected?: (captains: any[]) => void
-}
-
-interface AvailablePlayer {
-  user_id: string
-  username: string
-  elo_rating: number
-  status: string
-  joined_at: string
-}
-
-interface Captain {
-  id: string
-  username: string
-  elo_rating: number
-  captain_type: "high_elo" | "low_elo"
 }
 
 export function CaptainSelectionInterface({
   tournamentId,
   tournament,
   isOrganizer = false,
+  isTournamentCreator = false,
   onCaptainsSelected,
 }: CaptainSelectionInterfaceProps) {
   const [availablePlayers, setAvailablePlayers] = useState<AvailablePlayer[]>([])
@@ -125,7 +112,7 @@ export function CaptainSelectionInterface({
   }
 
   const handleAutomaticSelection = async () => {
-    if (!isOrganizer) return
+    if (!isOrganizer && !isTournamentCreator && user && tournament?.created_by !== user.id) return
 
     setProcessing(true)
     try {
@@ -151,7 +138,7 @@ export function CaptainSelectionInterface({
   }
 
   const handleManualSelection = async () => {
-    if (!isOrganizer || selectedPlayers.length !== 2) return
+    if (!isOrganizer && !isTournamentCreator && user && tournament?.created_by !== user.id) return
 
     setProcessing(true)
     try {
@@ -181,7 +168,7 @@ export function CaptainSelectionInterface({
   }
 
   const handleResetCaptains = async () => {
-    if (!isOrganizer) return
+    if (!isOrganizer && !isTournamentCreator && user && tournament?.created_by !== user.id) return
 
     setProcessing(true)
     try {
@@ -318,75 +305,81 @@ export function CaptainSelectionInterface({
 
         <TabsContent value="selection" className="space-y-4">
           {/* Selection Methods */}
-          {isOrganizer && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Selection Methods
-                </CardTitle>
-                <CardDescription>Choose how to select team captains for the tournament.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Card className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-5 w-5 text-blue-500" />
-                        <h4 className="font-medium">Automatic Selection</h4>
+          {isOrganizer ||
+            isTournamentCreator ||
+            (user && tournament?.created_by === user.id && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5" />
+                    Selection Methods
+                  </CardTitle>
+                  <CardDescription>
+                    {isTournamentCreator || (user && tournament?.created_by === user.id)
+                      ? "As the tournament creator, choose how to select team captains."
+                      : "Choose how to select team captains for the tournament."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-5 w-5 text-blue-500" />
+                          <h4 className="font-medium">Automatic Selection</h4>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically selects highest and lowest ELO players as captains for balanced teams.
+                        </p>
+                        <Button
+                          onClick={handleAutomaticSelection}
+                          disabled={!canSelect || processing || currentCaptains.length > 0}
+                          className="w-full"
+                        >
+                          <Zap className="h-4 w-4 mr-2" />
+                          {processing ? "Selecting..." : "Auto-Select Captains"}
+                        </Button>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Automatically selects highest and lowest ELO players as captains for balanced teams.
-                      </p>
-                      <Button
-                        onClick={handleAutomaticSelection}
-                        disabled={!canSelect || processing || currentCaptains.length > 0}
-                        className="w-full"
-                      >
-                        <Zap className="h-4 w-4 mr-2" />
-                        {processing ? "Selecting..." : "Auto-Select Captains"}
-                      </Button>
-                    </div>
-                  </Card>
+                    </Card>
 
-                  <Card className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-5 w-5 text-green-500" />
-                        <h4 className="font-medium">Manual Selection</h4>
+                    <Card className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-5 w-5 text-green-500" />
+                          <h4 className="font-medium">Manual Selection</h4>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Manually choose exactly 2 players to be team captains. Select players below.
+                        </p>
+                        <Button
+                          onClick={handleManualSelection}
+                          disabled={selectedPlayers.length !== 2 || processing || currentCaptains.length > 0}
+                          className="w-full"
+                          variant="outline"
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          {processing ? "Selecting..." : `Select ${selectedPlayers.length}/2 Captains`}
+                        </Button>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Manually choose exactly 2 players to be team captains. Select players below.
-                      </p>
-                      <Button
-                        onClick={handleManualSelection}
-                        disabled={selectedPlayers.length !== 2 || processing || currentCaptains.length > 0}
-                        className="w-full"
-                        variant="outline"
-                      >
-                        <Users className="h-4 w-4 mr-2" />
-                        {processing ? "Selecting..." : `Select ${selectedPlayers.length}/2 Captains`}
-                      </Button>
-                    </div>
-                  </Card>
-                </div>
-
-                {currentCaptains.length > 0 && (
-                  <div className="pt-4 border-t">
-                    <Button
-                      onClick={handleResetCaptains}
-                      disabled={processing}
-                      variant="destructive"
-                      className="w-full"
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      {processing ? "Resetting..." : "Reset Captain Selections"}
-                    </Button>
+                    </Card>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+
+                  {currentCaptains.length > 0 && (
+                    <div className="pt-4 border-t">
+                      <Button
+                        onClick={handleResetCaptains}
+                        disabled={processing}
+                        variant="destructive"
+                        className="w-full"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        {processing ? "Resetting..." : "Reset Captain Selections"}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
 
           {/* Available Players */}
           <Card>
@@ -394,28 +387,31 @@ export function CaptainSelectionInterface({
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
                 Available Players ({availablePlayers.length})
-                {isOrganizer && currentCaptains.length === 0 && (
-                  <Badge variant="secondary" className="ml-2">
-                    Select 2 for Manual
-                  </Badge>
-                )}
+                {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) &&
+                  currentCaptains.length === 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      Select 2 for Manual
+                    </Badge>
+                  )}
               </CardTitle>
               <CardDescription>
                 Players available for captain selection, sorted by ELO rating.
-                {isOrganizer && " Check players for manual selection."}
+                {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) &&
+                  " Check players for manual selection."}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3 max-h-64 overflow-y-auto">
                 {availablePlayers.map((player, index) => (
                   <div key={player.user_id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                    {isOrganizer && currentCaptains.length === 0 && (
-                      <Checkbox
-                        checked={selectedPlayers.includes(player.user_id)}
-                        onCheckedChange={(checked) => handlePlayerSelection(player.user_id, checked as boolean)}
-                        disabled={!selectedPlayers.includes(player.user_id) && selectedPlayers.length >= 2}
-                      />
-                    )}
+                    {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) &&
+                      currentCaptains.length === 0 && (
+                        <Checkbox
+                          checked={selectedPlayers.includes(player.user_id)}
+                          onCheckedChange={(checked) => handlePlayerSelection(player.user_id, checked as boolean)}
+                          disabled={!selectedPlayers.includes(player.user_id) && selectedPlayers.length >= 2}
+                        />
+                      )}
 
                     <Badge variant="secondary" className="min-w-[2.5rem]">
                       #{index + 1}
@@ -522,9 +518,9 @@ export function CaptainSelectionInterface({
                     <Crown className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-medium mb-2">No Captains Selected</h3>
                     <p className="text-muted-foreground">
-                      {isOrganizer
+                      {isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)
                         ? "Use the selection methods above to choose team captains"
-                        : "Tournament organizer will select captains soon"}
+                        : "Tournament creator will select captains soon"}
                     </p>
                   </div>
                 )}
@@ -586,4 +582,19 @@ export function CaptainSelectionInterface({
       </Tabs>
     </div>
   )
+}
+
+interface AvailablePlayer {
+  user_id: string
+  username: string
+  elo_rating: number
+  status: string
+  joined_at: string
+}
+
+interface Captain {
+  id: string
+  username: string
+  elo_rating: number
+  captain_type: "high_elo" | "low_elo"
 }

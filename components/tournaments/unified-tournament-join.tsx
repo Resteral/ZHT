@@ -120,6 +120,21 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
     try {
       console.log("[v0] Joining tournament via unified system:", tournamentId)
 
+      if (
+        tournament.status !== "registration" &&
+        tournament.status !== "registration_open" &&
+        tournament.status !== "active"
+      ) {
+        toast.error("Registration is closed for this tournament")
+        return
+      }
+
+      const maxParticipants = tournament.max_participants || 16
+      if (participants.length >= maxParticipants) {
+        toast.error("Tournament is full!")
+        return
+      }
+
       let userId = null
       let finalUser = null
 
@@ -295,12 +310,6 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
         return
       }
 
-      const maxParticipants = tournament.max_participants || 16
-      if (participants.length >= maxParticipants) {
-        toast.error("Tournament is full!")
-        return
-      }
-
       console.log("[v0] Joining tournament with validated database user ID:", userId)
 
       const participantData = {
@@ -438,7 +447,11 @@ export function UnifiedTournamentJoin({ tournamentId, tournament: initialTournam
   const isUserJoined = participants.find((p) => p.user_id === user?.id)
   const isFull = currentParticipants >= maxParticipants
   const canJoin =
-    !isUserJoined && !isFull && (tournament.status === "active" || tournament.status === "registration_open")
+    !isUserJoined &&
+    !isFull &&
+    (tournament.status === "registration" ||
+      tournament.status === "registration_open" ||
+      tournament.status === "active")
 
   const getStatusColor = (status: string) => {
     switch (status) {

@@ -156,10 +156,18 @@ export function TournamentParticipants({ tournamentId }: TournamentParticipantsP
         </div>
 
         <div className="flex items-center gap-2">
-          {tournament?.status === "registration" && (
+          {tournament?.status === "registration" || tournament?.status === "registration_open" ? (
             <Badge variant="secondary" className="bg-blue-100 text-blue-800 animate-pulse">
               <UserPlus className="h-3 w-3 mr-1" />
               Registration Open
+            </Badge>
+          ) : tournament?.status === "active" || tournament?.status === "in_progress" ? (
+            <Badge variant="secondary" className="bg-green-100 text-green-800">
+              Tournament Active
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="bg-red-100 text-red-800">
+              Registration Closed
             </Badge>
           )}
           <Button onClick={loadParticipants} variant="outline" size="sm">
@@ -198,14 +206,16 @@ export function TournamentParticipants({ tournamentId }: TournamentParticipantsP
               </div>
             )}
 
-            {spotsRemaining === 0 && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-700 dark:text-red-300">
-                  <Trophy className="h-4 w-4 inline mr-1" />
-                  <strong>Tournament Full!</strong> Registration is now closed.
-                </p>
-              </div>
-            )}
+            {spotsRemaining === 0 &&
+              tournament?.status !== "registration" &&
+              tournament?.status !== "registration_open" && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    <Trophy className="h-4 w-4 inline mr-1" />
+                    <strong>Tournament Full!</strong> Registration is now closed.
+                  </p>
+                </div>
+              )}
           </CardContent>
         </Card>
       )}
