@@ -193,8 +193,9 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
             </div>
           </div>
           <p className="text-muted-foreground">
-            {userRole === "organizer" && "You are the tournament organizer - manage the draft"}
-            {userRole === "participant" && "You are participating in this draft - wait for your turn"}
+            {userRole === "organizer" && "You are the tournament organizer - manage the draft and select captains"}
+            {userRole === "participant" &&
+              "You are participating in this draft - wait for your turn or captain selection"}
             {userRole === "spectator" && "You are spectating this draft - watch the action unfold"}
           </p>
         </div>
@@ -224,6 +225,53 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
           </Badge>
         </div>
       </div>
+
+      <Card className="border-l-4 border-l-blue-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Crown className="h-5 w-5 text-blue-500" />
+            Draft & Captain Selection
+          </CardTitle>
+          <CardDescription>
+            Tournament creator can select captains using chosen method:{" "}
+            {tournament.player_pool_settings?.captain_selection_method?.replace("_", " ") || "Creator Choice"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="text-center p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+              <Crown className="h-6 w-6 mx-auto mb-1 text-blue-500" />
+              <div className="text-sm font-medium">Captain Method</div>
+              <div className="text-xs text-muted-foreground capitalize">
+                {tournament.player_pool_settings?.captain_selection_method?.replace("_", " ") || "Creator Choice"}
+              </div>
+            </div>
+            <div className="text-center p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
+              <Users className="h-6 w-6 mx-auto mb-1 text-green-500" />
+              <div className="text-sm font-medium">Draft Style</div>
+              <div className="text-xs text-muted-foreground capitalize">
+                {tournament.player_pool_settings?.draft_mode?.replace("_", " ") || "Snake Draft"}
+              </div>
+            </div>
+            <div className="text-center p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
+              <Target className="h-6 w-6 mx-auto mb-1 text-purple-500" />
+              <div className="text-sm font-medium">Teams</div>
+              <div className="text-xs text-muted-foreground">
+                {tournament.player_pool_settings?.num_teams || tournament.player_pool_settings?.max_teams || 8} teams
+              </div>
+            </div>
+          </div>
+
+          {userRole === "organizer" && (
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <strong>Tournament Creator:</strong> You can select captains and manage the draft process. Use the
+                captain selection tools below to choose team leaders before starting the draft.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="border-l-4" style={{ borderLeftColor: typeInfo.color.replace("text-", "") }}>
         <CardHeader>

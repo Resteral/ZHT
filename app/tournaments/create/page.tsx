@@ -9,7 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, Users, Trophy, Settings, Calendar, Clock, Target, Crown, Zap, BarChart3 } from "lucide-react"
+import {
+  ArrowLeft,
+  Users,
+  Trophy,
+  Settings,
+  Calendar,
+  Clock,
+  Target,
+  Crown,
+  Zap,
+  BarChart3,
+  DollarSign,
+} from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 
 export default function CreateTournamentPage() {
@@ -33,8 +45,9 @@ export default function CreateTournamentPage() {
     tournament_type: "draft",
     max_participants: 32,
     start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16),
-    end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
     game: "zealot_hockey",
+    entry_fee: 0,
+    prize_pool: 0,
     settings: {
       bracket_type: "single_elimination" as
         | "single_elimination"
@@ -74,14 +87,12 @@ export default function CreateTournamentPage() {
   })
 
   const updateDurationDefaults = (durationType: "short" | "long") => {
-    const now = new Date()
     if (durationType === "short") {
       // Tournaments: 1-7 days, smaller pools, live brackets
       setFormData((prev) => ({
         ...prev,
         duration_type: durationType,
         max_participants: 32,
-        end_date: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16), // 3 days
         settings: {
           ...prev.settings,
           bracket_type: "single_elimination",
@@ -95,7 +106,6 @@ export default function CreateTournamentPage() {
         ...prev,
         duration_type: durationType,
         max_participants: 128,
-        end_date: new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16), // 45 days
         settings: {
           ...prev.settings,
           // Remove bracket_type for long leagues - they use manual scheduling
@@ -122,14 +132,8 @@ export default function CreateTournamentPage() {
   const isValid = !hasConflict
 
   const startDate = new Date(formData.start_date)
-  const endDate = new Date(formData.end_date)
   const now = new Date()
   const isStartDateValid = startDate > now
-  const isEndDateValid = endDate > startDate
-  const isDateValid = isStartDateValid && isEndDateValid
-
-  const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-  const isDurationValid = formData.duration_type === "short" ? durationDays <= 7 : durationDays >= 30
 
   return (
     <div className="container mx-auto py-6 max-w-2xl">
@@ -188,7 +192,6 @@ export default function CreateTournamentPage() {
                 console.log("[v0] Tournament data:", formData)
 
                 const startDateTime = new Date(formData.start_date).toISOString()
-                const endDateTime = new Date(formData.end_date).toISOString()
 
                 const tournamentData = {
                   name: formData.name,
@@ -200,9 +203,9 @@ export default function CreateTournamentPage() {
                   max_participants: formData.max_participants,
                   max_teams: isTeamBased ? formData.settings.max_teams : formData.settings.num_teams,
                   team_based: isTeamBased,
-                  entry_fee: 0,
+                  entry_fee: formData.entry_fee,
+                  prize_pool: formData.prize_pool,
                   start_date: startDateTime,
-                  end_date: endDateTime,
                   game: formData.game,
                   player_pool_settings: {
                     ...formData.settings,
@@ -318,7 +321,7 @@ export default function CreateTournamentPage() {
                   Tournament Timing
                 </h4>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="start_date" className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
@@ -334,37 +337,61 @@ export default function CreateTournamentPage() {
                     <p className="text-xs text-muted-foreground">When draft begins, games start immediately after</p>
                     {!isStartDateValid && <p className="text-xs text-destructive">Start date must be in the future</p>}
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="end_date" className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      End Date & Time
-                    </Label>
-                    <Input
-                      id="end_date"
-                      type="datetime-local"
-                      value={formData.end_date}
-                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      className={!isEndDateValid || !isDurationValid ? "border-destructive" : ""}
-                    />
-                    <p className="text-xs text-muted-foreground">When tournament concludes</p>
-                    {!isEndDateValid && <p className="text-xs text-destructive">End date must be after start date</p>}
-                    {!isDurationValid && (
-                      <p className="text-xs text-destructive">
-                        {formData.duration_type === "short"
-                          ? "Tournaments must be 7 days or less"
-                          : "Leagues must be 30 days or more"}
-                      </p>
-                    )}
-                  </div>
                 </div>
 
                 <div className="text-sm text-muted-foreground">
-                  Duration: {durationDays} days •
-                  {formData.duration_type === "short" && durationDays <= 7 && " ✓ Valid for tournament"}
-                  {formData.duration_type === "long" && durationDays >= 30 && " ✓ Valid for league"}
-                  {!isDurationValid && " ⚠️ Duration doesn't match selected type"}
+                  Tournament starts: {new Date(formData.start_date).toLocaleString()} • Runs until completion
                 </div>
+              </div>
+
+              <div className="space-y-4 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <h4 className="font-medium flex items-center gap-2 text-green-800 dark:text-green-200">
+                  <DollarSign className="h-4 w-4" />
+                  Tournament Pricing & Rewards
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="entry_fee">Entry Fee ($)</Label>
+                    <Input
+                      id="entry_fee"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.entry_fee}
+                      onChange={(e) => setFormData({ ...formData, entry_fee: Number.parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-muted-foreground">Cost for players to enter tournament</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="prize_pool">Prize Pool ($)</Label>
+                    <Input
+                      id="prize_pool"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.prize_pool}
+                      onChange={(e) => setFormData({ ...formData, prize_pool: Number.parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-muted-foreground">Total prize money for winners</p>
+                  </div>
+                </div>
+
+                {formData.entry_fee > 0 && formData.max_participants > 0 && (
+                  <div className="text-sm text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 p-2 rounded">
+                    <strong>Projected Revenue:</strong> ${(formData.entry_fee * formData.max_participants).toFixed(2)}
+                    {formData.prize_pool > 0 && (
+                      <span>
+                        {" "}
+                        • <strong>Net:</strong> $
+                        {(formData.entry_fee * formData.max_participants - formData.prize_pool).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {formData.duration_type === "short" && (
@@ -445,50 +472,46 @@ export default function CreateTournamentPage() {
                 <p className="text-sm text-muted-foreground">How players are selected for teams</p>
               </div>
 
-              {formData.duration_type === "long" && (
-                <div className="space-y-2">
-                  <Label>Captain Selection Method</Label>
-                  <Select
-                    value={formData.settings.captain_selection_method}
-                    onValueChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        settings: { ...formData.settings, captain_selection_method: value as any },
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="creator_choice">
-                        <div className="flex items-center gap-2">
-                          <Crown className="h-4 w-4" />
-                          Creator Choice
-                          <span className="text-xs text-muted-foreground ml-2">Tournament creator selects</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="highest_elo">
-                        <div className="flex items-center gap-2">
-                          <Trophy className="h-4 w-4" />
-                          Highest ELO
-                          <span className="text-xs text-muted-foreground ml-2">Top rated players</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="random">
-                        <div className="flex items-center gap-2">
-                          <Target className="h-4 w-4" />
-                          Random Selection
-                          <span className="text-xs text-muted-foreground ml-2">Randomly chosen</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-muted-foreground">
-                    How team captains will be selected for all tournaments
-                  </p>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label>Captain Selection Method</Label>
+                <Select
+                  value={formData.settings.captain_selection_method}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      settings: { ...formData.settings, captain_selection_method: value as any },
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="creator_choice">
+                      <div className="flex items-center gap-2">
+                        <Crown className="h-4 w-4" />
+                        Creator Choice
+                        <span className="text-xs text-muted-foreground ml-2">Tournament creator selects</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="highest_elo">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-4 w-4" />
+                        Highest ELO
+                        <span className="text-xs text-muted-foreground ml-2">Top rated players</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="random">
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4" />
+                        Random Selection
+                        <span className="text-xs text-muted-foreground ml-2">Randomly chosen</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">How team captains will be selected for all tournaments</p>
+              </div>
 
               <div className="space-y-2">
                 <Label>Player Organization</Label>
@@ -658,18 +681,28 @@ export default function CreateTournamentPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[5, 8, 10, 12, 15, 18, 20, 24, 30].map((num) => (
+                      {[
+                        5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44,
+                        46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82,
+                      ].map((num) => (
                         <SelectItem key={num} value={num.toString()}>
                           <div className="flex items-center gap-2">
                             <BarChart3 className="h-4 w-4" />
                             {num} Games per Team
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {num <= 10 && "Short season"}
+                              {num > 10 && num <= 30 && "Regular season"}
+                              {num > 30 && num <= 50 && "Extended season"}
+                              {num > 50 && "Full season"}
+                            </span>
                           </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-sm text-muted-foreground">
-                    How many games each team will play during the league season
+                    How many games each team will play during the league season. More games provide better standings
+                    accuracy but require longer commitment.
                   </p>
                 </div>
               )}
@@ -746,7 +779,7 @@ export default function CreateTournamentPage() {
             </div>
 
             <Card
-              className={`${hasConflict || !isDateValid || !isDurationValid ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}
+              className={`${hasConflict || !isStartDateValid ? "bg-destructive/10 border-destructive" : "bg-muted/50"}`}
             >
               <CardContent className="pt-6">
                 <div className="space-y-2">
@@ -761,9 +794,6 @@ export default function CreateTournamentPage() {
                     <p>
                       <strong>Type:</strong>{" "}
                       {formData.duration_type === "short" ? "Tournament (Live Brackets)" : "League (Manual Scheduling)"}
-                    </p>
-                    <p>
-                      <strong>Duration:</strong> {durationDays} days
                     </p>
                     {formData.duration_type === "short" && (
                       <p>
@@ -786,8 +816,18 @@ export default function CreateTournamentPage() {
                       <strong>Draft Starts:</strong> {new Date(formData.start_date).toLocaleString()}
                     </p>
                     <p>
-                      <strong>Ends:</strong> {new Date(formData.end_date).toLocaleString()}
+                      <strong>Duration:</strong> Runs until completion
                     </p>
+                    {formData.entry_fee > 0 && (
+                      <p>
+                        <strong>Entry Fee:</strong> ${formData.entry_fee}
+                      </p>
+                    )}
+                    {formData.prize_pool > 0 && (
+                      <p>
+                        <strong>Prize Pool:</strong> ${formData.prize_pool}
+                      </p>
+                    )}
                     <p>
                       <strong>{formData.max_participants}</strong> players maximum can participate
                     </p>
@@ -813,18 +853,9 @@ export default function CreateTournamentPage() {
                       </p>
                     )}
 
-                    {!isDateValid && (
+                    {!isStartDateValid && (
                       <div className="text-destructive font-medium">
-                        ⚠️ <strong>DATE ERROR:</strong> Please fix the tournament dates
-                      </div>
-                    )}
-
-                    {!isDurationValid && (
-                      <div className="text-destructive font-medium">
-                        ⚠️ <strong>DURATION ERROR:</strong>{" "}
-                        {formData.duration_type === "short"
-                          ? "Tournaments must be 7 days or less"
-                          : "Leagues must be 30 days or more"}
+                        ⚠️ <strong>DATE ERROR:</strong> Please fix the tournament start date
                       </div>
                     )}
 
@@ -844,21 +875,14 @@ export default function CreateTournamentPage() {
               </CardContent>
             </Card>
 
-            <Button
-              type="submit"
-              disabled={loading || !isValid || !isDateValid || !isDurationValid}
-              className="w-full"
-              size="lg"
-            >
+            <Button type="submit" disabled={loading || !isValid || !isStartDateValid} className="w-full" size="lg">
               {loading
                 ? "Creating Tournament..."
-                : !isDateValid
-                  ? "Fix Tournament Dates First"
-                  : !isDurationValid
-                    ? "Fix Tournament Duration"
-                    : hasConflict
-                      ? "Increase Maximum Participants"
-                      : `Create ${formData.duration_type === "long" ? "League" : "Tournament"} & Go to ${formData.duration_type === "long" ? "Leagues" : "Lobby"}`}
+                : !isStartDateValid
+                  ? "Fix Tournament Start Date First"
+                  : hasConflict
+                    ? "Increase Maximum Participants"
+                    : `Create ${formData.duration_type === "long" ? "League" : "Tournament"} & Go to ${formData.duration_type === "long" ? "Leagues" : "Lobby"}`}
             </Button>
           </form>
         </CardContent>

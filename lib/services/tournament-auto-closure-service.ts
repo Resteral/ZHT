@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js" // Fixed incorrect import from "supabase-js" to "@supabase/supabase-js"
 
 export interface TournamentClosureReason {
-  reason: "insufficient_players" | "draft_date_passed" | "manual_closure"
+  reason: "insufficient_players" | "draft_date_passed" | "manual_closure" | "all_games_completed"
   details: string
   required_players: number
   actual_players: number
@@ -46,6 +46,182 @@ class TournamentAutoClosureService {
     } catch (error) {
       console.error("[v0] Error in automatic tournament closure:", error)
     }
+  }
+
+  async checkAndCompleteFinishedTournaments(): Promise<void> {
+    console.log("[v0] Checking for tournaments and leagues that have finished all games...")
+
+    try {
+      // Check tournaments (short format with brackets)
+      const { data: activeTournaments, error: tournamentsError } = await this.supabase
+        .from("tournaments")
+        .select(`
+          id,
+          name,
+          tournament_type,
+          status,
+          tournament_brackets(*)
+        `)
+        .eq("status", "active")
+        .in("tournament_type", ["tournament", "short", "draft"])
+
+      if (tournamentsError) throw tournamentsError
+
+      for (const tournament of activeTournaments || []) {
+        const isComplete = await this.checkTournamentBracketComplete(tournament.id)
+        if (isComplete) {
+          await this.completeTournament(tournament.id, "tournament")
+          console.log("[v0] Auto-completed tournament:", tournament.name)
+        }
+      }
+
+      // Check leagues (long format with manual scheduling)
+      const { data: activeLeagues, error: leaguesError } = await this.supabase
+        .from("tournaments")
+        .select(`
+          id,
+          name,
+          tournament_type,
+          status,
+          player_pool_settings
+        `)
+        .eq("status", "active")
+        .in("tournament_type", ["league", "long"])
+
+      if (leaguesError) throw leaguesError
+
+      for (const league of activeLeagues || []) {
+        const isComplete = await this.checkLeagueComplete(league.id)
+        if (isComplete) {
+          await this.completeTournament(league.id, "league")
+          console.log("[v0] Auto-completed league:", league.name)
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error checking tournament completion:", error)
+    }
+  }
+
+  private async checkTournamentBracketComplete(tournamentId: string): Promise<boolean> {
+    try {
+      const { data: brackets, error } = await this.supabase
+        .from("tournament_brackets")
+        .select("*")
+        .eq("tournament_id", tournamentId)
+        .eq("is_final", true)
+        .not("winner_id", "is", null)
+
+      if (error) throw error
+      return (brackets?.length || 0) > 0
+    } catch (error) {
+      console.error("[v0] Error checking bracket completion:", error)
+      return false
+    }
+  }
+
+  private async checkLeagueComplete(leagueId: string): Promise<boolean> {
+    try {
+      // Check if all scheduled games are completed
+      const { data: games, error } = await this.supabase.from("league_games").select("status").eq("league_id", leagueId)
+
+      if (error) throw error
+
+      const totalGames = games?.length || 0
+      const completedGames = games?.filter((game) => game.status === "completed").length || 0
+
+      // League is complete if all games are finished
+      return totalGames > 0 && completedGames === totalGames
+    } catch (error) {
+      console.error("[v0] Error checking league completion:", error)
+      return false
+    }
+  }
+
+  private async completeTournament(tournamentId: string, type: "tournament" | "league"): Promise<void> {
+    console.log(`[v0] Automatically completing ${type} ${tournamentId}`)
+
+    try {
+      // Update tournament status to completed
+      const { error: updateError } = await this.supabase
+        .from("tournaments")
+        .update({
+          status: "completed",
+          end_date: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", tournamentId)
+
+      if (updateError) throw updateError
+
+      // Log the completion
+      await this.supabase.from("tournament_lifecycle_logs").insert({
+        tournament_id: tournamentId,
+        event_type: "automatic_completion",
+        event_data: {
+          completion_reason: "all_games_completed",
+          completed_at: new Date().toISOString(),
+          automatic: true,
+          tournament_type: type,
+        },
+        severity: "info",
+      })
+
+      // Call the database function to record tournament completion and award trophies
+      const { error: completionError } = await this.supabase.rpc("record_tournament_completion", {
+        tournament_id_param: tournamentId,
+      })
+
+      if (completionError) {
+        console.error("[v0] Error recording tournament completion:", completionError)
+      }
+
+      // Notify participants about the completion
+      await this.notifyParticipantsOfCompletion(tournamentId, type)
+
+      // Schedule cleanup for completed tournament
+      await this.scheduleCompletionCleanup(tournamentId)
+
+      console.log(`[v0] ${type} ${tournamentId} automatically completed`)
+    } catch (error) {
+      console.error(`[v0] Error completing ${type} ${tournamentId}:`, error)
+    }
+  }
+
+  private async notifyParticipantsOfCompletion(tournamentId: string, type: "tournament" | "league"): Promise<void> {
+    const { data: participants } = await this.supabase
+      .from("tournament_participants")
+      .select("user_id, users(username)")
+      .eq("tournament_id", tournamentId)
+
+    if (!participants || participants.length === 0) return
+
+    const notifications = participants.map((participant) => ({
+      user_id: participant.user_id,
+      title: `${type === "tournament" ? "Tournament" : "League"} Completed`,
+      message: `The ${type} has finished! Check your results and any trophies earned.`,
+      type: "tournament_completed",
+      tournament_id: tournamentId,
+      created_at: new Date().toISOString(),
+    }))
+
+    await this.supabase.from("notifications").insert(notifications)
+  }
+
+  private async scheduleCompletionCleanup(tournamentId: string): Promise<void> {
+    const cleanupDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+
+    await this.supabase.from("tournament_cleanup_schedule").insert({
+      tournament_id: tournamentId,
+      scheduled_cleanup_at: cleanupDate.toISOString(),
+      cleanup_policy: JSON.stringify({
+        cleanup_type: "soft",
+        archive_before_cleanup: true,
+        preserve_results: true,
+        notify_participants: true,
+      }),
+      status: "scheduled",
+      created_at: new Date().toISOString(),
+    })
   }
 
   private async evaluateAndCloseTournament(tournament: any): Promise<void> {
@@ -197,6 +373,7 @@ class TournamentAutoClosureService {
   async runAutomaticClosure(): Promise<void> {
     console.log("[v0] Running automatic tournament closure check...")
     await this.checkAndCloseExpiredTournaments()
+    await this.checkAndCompleteFinishedTournaments()
   }
 }
 

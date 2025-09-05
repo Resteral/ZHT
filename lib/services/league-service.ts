@@ -90,6 +90,17 @@ class LeagueService {
 
       // Update league standings after game completion
       await this.updateLeagueStandings(gameId)
+
+      // Check if we should generate playoffs
+      const { data: game } = await supabase
+        .from("league_games")
+        .select("league_id, game_type")
+        .eq("id", gameId)
+        .single()
+
+      if (game && game.game_type === "regular") {
+        await this.generatePlayoffsIfReady(game.league_id)
+      }
     } catch (error) {
       console.error("Error updating game score:", error)
       throw error
@@ -195,7 +206,82 @@ class LeagueService {
       if (error) throw error
     } catch (error) {
       console.error("Error creating playoff series:", error)
-      throw error
+    }
+  }
+
+  async checkLeagueCompletion(leagueId: string): Promise<boolean> {
+    try {
+      const { data: games, error } = await supabase
+        .from("league_games")
+        .select("status, game_type")
+        .eq("league_id", leagueId)
+
+      if (error) throw error
+
+      const regularSeasonGames = games?.filter((game) => game.game_type === "regular") || []
+      const playoffGames = games?.filter((game) => game.game_type !== "regular") || []
+
+      const regularSeasonComplete =
+        regularSeasonGames.length > 0 && regularSeasonGames.every((game) => game.status === "completed")
+
+      const playoffsComplete = playoffGames.length === 0 || playoffGames.every((game) => game.status === "completed")
+
+      return regularSeasonComplete && playoffsComplete
+    } catch (error) {
+      console.error("Error checking league completion:", error)
+      return false
+    }
+  }
+
+  async generatePlayoffsIfReady(leagueId: string): Promise<void> {
+    try {
+      // Check if regular season is complete
+      const { data: regularGames, error } = await supabase
+        .from("league_games")
+        .select("status")
+        .eq("league_id", leagueId)
+        .eq("game_type", "regular")
+
+      if (error) throw error
+
+      const regularSeasonComplete =
+        regularGames?.length > 0 && regularGames.every((game) => game.status === "completed")
+
+      if (!regularSeasonComplete) return
+
+      // Check if playoffs already exist
+      const { data: existingPlayoffs } = await supabase
+        .from("league_games")
+        .select("id")
+        .eq("league_id", leagueId)
+        .neq("game_type", "regular")
+        .limit(1)
+
+      if (existingPlayoffs && existingPlayoffs.length > 0) return
+
+      // Get top teams for playoffs
+      const standings = await this.getLeagueStandings(leagueId)
+      const topTeams = standings.slice(0, 4) // Top 4 teams make playoffs
+
+      if (topTeams.length >= 4) {
+        // Create semi-final series
+        await this.createPlayoffSeries(
+          leagueId,
+          topTeams[0].team_id,
+          topTeams[3].team_id,
+          "semi",
+          new Date().toISOString(),
+        )
+        await this.createPlayoffSeries(
+          leagueId,
+          topTeams[1].team_id,
+          topTeams[2].team_id,
+          "semi",
+          new Date().toISOString(),
+        )
+      }
+    } catch (error) {
+      console.error("Error generating playoffs:", error)
     }
   }
 }
