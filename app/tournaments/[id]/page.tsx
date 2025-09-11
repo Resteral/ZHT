@@ -32,7 +32,7 @@ interface Tournament {
   entry_fee: number
   prize_pool: number
   created_at: string
-  commissioner_id: string
+  created_by: string
   league_mode: string
   participant_count?: number
   start_date?: string
@@ -71,7 +71,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         .from("tournaments")
         .select(`
           *,
-          creator:users!tournaments_created_by_fkey(username, id)
+          creator:users!created_by(username, id)
         `)
         .eq("id", params.id)
         .single()
