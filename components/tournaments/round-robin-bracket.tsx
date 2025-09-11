@@ -536,7 +536,7 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
                             : match.status === "live"
                               ? "bg-red-500 text-white animate-pulse"
                               : match.status === "ready"
-                                ? "bg-yellow-500 text-black"
+                                ? "bg-yellow-500 text-gray-900"
                                 : "bg-gray-500 text-white"
                         }`}
                       >

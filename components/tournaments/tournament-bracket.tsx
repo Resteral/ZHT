@@ -181,7 +181,7 @@ export function TournamentBracket({ tournamentId, tournament }: TournamentBracke
       case "Live":
         return "bg-red-500 text-white animate-pulse"
       case "Ready":
-        return "bg-yellow-500 text-black"
+        return "bg-yellow-500 text-gray-900"
       default:
         return "bg-gray-500 text-white"
     }

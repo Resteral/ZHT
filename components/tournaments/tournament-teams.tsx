@@ -196,7 +196,7 @@ export function TournamentTeams({ tournamentId, tournament }: TournamentTeamsPro
   const getStatusColor = (status: string) => {
     switch (status) {
       case "winner":
-        return "bg-yellow-500 text-black"
+        return "bg-yellow-500 text-gray-900"
       case "eliminated":
         return "bg-gray-500 text-white"
       default:
