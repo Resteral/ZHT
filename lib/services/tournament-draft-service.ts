@@ -458,8 +458,11 @@ export const tournamentDraftService = {
   },
 
   calculateNextDraftState(currentState: DraftState): DraftState {
-    const totalPicks = currentState.draft_order.length
     const nextPick = currentState.current_pick + 1
+
+    const teamsCount = Math.floor(currentState.draft_order.length / (currentState.current_round || 1))
+    const playersPerTeam = Math.ceil(currentState.draft_order.length / teamsCount)
+    const totalPicks = teamsCount * playersPerTeam
 
     if (nextPick > totalPicks) {
       return {
@@ -467,13 +470,15 @@ export const tournamentDraftService = {
         status: "completed",
         current_pick: nextPick,
         current_team_id: null,
+        current_team_index: -1,
         time_remaining: 0,
       }
     }
 
-    const nextTeamIndex = (currentState.current_team_index + 1) % currentState.draft_order.length
+    const nextTeamIndex = nextPick - 1 // Array is 0-indexed, picks are 1-indexed
     const nextTeamId = currentState.draft_order[nextTeamIndex]
-    const nextRound = Math.ceil(nextPick / (currentState.draft_order.length / currentState.current_round))
+
+    const nextRound = Math.ceil(nextPick / teamsCount)
 
     return {
       ...currentState,
