@@ -67,14 +67,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
     try {
       const supabase = createClient()
 
-      const { data, error } = await supabase
-        .from("tournaments")
-        .select(`
-          *,
-          creator:users!created_by(username, id)
-        `)
-        .eq("id", params.id)
-        .single()
+      const { data, error } = await supabase.from("tournaments").select("*").eq("id", params.id).single()
 
       if (error) {
         console.error("Error fetching tournament:", error)
@@ -83,6 +76,19 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       }
 
       if (data) {
+        let creator = null
+        if (data.created_by) {
+          const { data: userData } = await supabase
+            .from("users")
+            .select("username, id")
+            .eq("id", data.created_by)
+            .single()
+
+          if (userData) {
+            creator = userData
+          }
+        }
+
         const { data: participantData } = await supabase
           .from("tournament_participants")
           .select("id")
@@ -90,6 +96,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
 
         setTournament({
           ...data,
+          creator, // Add the separately fetched creator data
           sport: data.game || "fantasy_football",
           league_mode: data.tournament_type || "tournament",
           max_teams: data.max_participants || data.max_teams || 0,
