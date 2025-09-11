@@ -264,7 +264,7 @@ export function TournamentDraftRoom({
                             {team.players.length}/{draftSettings?.players_per_team}
                           </Badge>
                           {draftSettings?.draft_type === "auction" && (
-                            <div className="text-sm text-green-600 font-medium">${team.budget_remaining}</div>
+                            <div className="text-sm text-emerald-700 font-medium">${team.budget_remaining}</div>
                           )}
                         </div>
                       </div>
@@ -283,7 +283,7 @@ export function TournamentDraftRoom({
                                 <p className="text-sm font-medium truncate">{player.username}</p>
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                   <span>ELO: {player.elo_rating}</span>
-                                  {player.draft_cost && <span className="text-green-600">${player.draft_cost}</span>}
+                                  {player.draft_cost && <span className="text-emerald-700">${player.draft_cost}</span>}
                                   {player.id === team.captain_id && (
                                     <Badge variant="secondary" className="text-xs">
                                       <Crown className="h-3 w-3 mr-1" />
@@ -470,7 +470,9 @@ export function TournamentDraftRoom({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-center p-3 bg-muted/50 rounded-lg">
-                <div className="text-2xl font-bold text-green-500">${draftState?.auction_state?.current_bid || 1}</div>
+                <div className="text-2xl font-bold text-emerald-700">
+                  ${draftState?.auction_state?.current_bid || 1}
+                </div>
                 <div className="text-sm text-muted-foreground">Current Highest Bid</div>
                 <div className="text-xs text-muted-foreground mt-1">
                   ELO: {selectedPlayer.elo_rating} • CSV Score: {selectedPlayer.total_score}

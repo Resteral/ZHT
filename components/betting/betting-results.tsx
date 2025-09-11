@@ -273,7 +273,7 @@ export function BettingResults() {
             <div className={`text-2xl font-bold ${stats.netProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
               {stats.netProfit >= 0 ? "+" : ""}${stats.netProfit.toFixed(2)}
             </div>
-            <p className="text-xs text-green-600">
+            <p className="text-xs text-emerald-700">
               {stats.wonBets}W - {stats.lostBets}L - {stats.pendingBets}P
             </p>
           </CardContent>
@@ -285,7 +285,7 @@ export function BettingResults() {
             <Target className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${stats.winRate > 50 ? "text-green-700" : "text-red-700"}`}>
+            <div className={`text-2xl font-bold ${stats.winRate > 50 ? "text-emerald-700" : "text-red-700"}`}>
               {stats.winRate.toFixed(1)}%
             </div>
             <p className="text-xs text-blue-600">{stats.totalBets} total bets</p>
@@ -394,7 +394,7 @@ export function BettingResults() {
                   <div className="text-right">
                     {result.status !== "pending" && (
                       <div
-                        className={`text-lg font-bold ${getProfitLoss(result) > 0 ? "text-green-600" : "text-red-600"}`}
+                        className={`text-lg font-bold ${getProfitLoss(result) > 0 ? "text-emerald-700" : "text-red-600"}`}
                       >
                         {getProfitLoss(result) > 0 ? "+" : ""}${getProfitLoss(result).toFixed(2)}
                       </div>
@@ -438,7 +438,7 @@ export function BettingResults() {
                     {result.status === "pending" && (
                       <div className="text-sm">
                         <div className="text-muted-foreground">Potential Payout</div>
-                        <div className="font-semibold text-blue-600">${result.potential_payout.toFixed(2)}</div>
+                        <div className="font-semibold text-emerald-700">${result.potential_payout.toFixed(2)}</div>
                       </div>
                     )}
 

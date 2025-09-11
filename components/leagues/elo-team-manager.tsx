@@ -423,7 +423,7 @@ export function EloTeamManager() {
                       </div>
                       <div>
                         <p className="text-muted-foreground">Remaining</p>
-                        <p className="font-medium text-green-600">${team.budget_remaining.toLocaleString()}</p>
+                        <p className="font-medium text-emerald-700">${team.budget_remaining.toLocaleString()}</p>
                       </div>
                     </div>
                     <div className="flex gap-2">
