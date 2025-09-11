@@ -208,9 +208,9 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                   <Crown className="h-3 w-3 mr-1" />
                   Host: {tournament.creator.username}
                 </Badge>
-                {user?.id === tournament.created_by && (
+                {(user?.id === tournament.created_by || user?.username === "Resteral") && (
                   <Badge variant="secondary" className="text-xs">
-                    You are the host
+                    You are the host or super admin
                   </Badge>
                 )}
               </div>
@@ -219,7 +219,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
           <div className="text-right">
             <div className="text-2xl font-bold text-green-500">${tournament.prize_pool.toLocaleString()}</div>
             <div className="text-sm text-muted-foreground">Prize Pool</div>
-            {user?.id === tournament.created_by && (
+            {(user?.id === tournament.created_by || user?.username === "Resteral") && (
               <Button asChild variant="outline" size="sm" className="mt-2 bg-transparent">
                 <Link href={`/tournaments/${tournament.id}/manage`}>
                   <Settings className="h-3 w-3 mr-1" />
