@@ -14,9 +14,16 @@ import { useTournamentDraft, useTournamentDraftChat } from "@/lib/hooks/use-tour
 interface TournamentDraftRoomProps {
   tournamentId: string
   userRole: "organizer" | "participant" | "spectator"
+  tournament?: any
+  isCreator?: boolean
 }
 
-export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftRoomProps) {
+export function TournamentDraftRoom({
+  tournamentId,
+  userRole,
+  tournament,
+  isCreator = false,
+}: TournamentDraftRoomProps) {
   const { user } = useAuth()
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null)
   const [bidAmount, setBidAmount] = useState("")
@@ -126,6 +133,12 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
               {draftState?.status === "active" && (
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></div>
               )}
+              {tournament?.creator && isCreator && (
+                <Badge variant="outline" className="text-xs ml-2">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Host
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Badge variant={draftState?.status === "active" ? "default" : "secondary"}>
@@ -150,6 +163,11 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
             {draftState && (
               <span className="ml-2">
                 • Round {draftState.current_round} • Pick {draftState.current_pick}
+              </span>
+            )}
+            {tournament?.player_pool_settings?.captain_selection_method && (
+              <span className="ml-2">
+                • Captain Selection: {tournament.player_pool_settings.captain_selection_method.replace("_", " ")}
               </span>
             )}
           </CardDescription>
@@ -203,6 +221,9 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
               </CardTitle>
               <CardDescription>
                 Each team has one owner/captain who makes draft picks and manages the roster
+                {isCreator && tournament?.player_pool_settings?.captain_selection_method === "creator_choice" && (
+                  <span className="text-primary ml-2">• You can edit team owners in tournament management</span>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -228,6 +249,12 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
                             {user?.id === team.captain_id && (
                               <Badge variant="secondary" className="ml-2 text-xs">
                                 Your Team
+                              </Badge>
+                            )}
+                            {isCreator && tournament?.created_by === user?.id && (
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                <Crown className="h-3 w-3 mr-1" />
+                                Host Control
                               </Badge>
                             )}
                           </p>

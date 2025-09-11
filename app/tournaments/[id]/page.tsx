@@ -8,12 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Trophy, Users, Calendar, DollarSign } from "lucide-react"
+import { ArrowLeft, Trophy, Users, Calendar, DollarSign, Crown, Settings } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { UnifiedTournamentJoin } from "@/components/tournaments/unified-tournament-join"
 import { PlayerPoolManagement } from "@/components/tournaments/player-pool-management"
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { TournamentBettingInterface } from "@/components/tournaments/tournament-betting-interface"
+import { useAuth } from "@/lib/auth-context"
 
 interface TournamentPageProps {
   params: {
@@ -35,6 +36,10 @@ interface Tournament {
   league_mode: string
   participant_count?: number
   start_date?: string
+  creator?: {
+    username: string
+    id: string
+  }
 }
 
 function isValidUUID(str: string): boolean {
@@ -47,7 +52,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
-  const [user, setUser] = useState<any | null>(null)
+  const { user } = useAuth()
 
   useEffect(() => {
     if (!isValidUUID(params.id)) {
@@ -56,7 +61,6 @@ export default function TournamentPage({ params }: TournamentPageProps) {
     }
 
     fetchTournament()
-    fetchUser()
   }, [params.id, router])
 
   const fetchTournament = async () => {
@@ -66,7 +70,8 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       const { data, error } = await supabase
         .from("tournaments")
         .select(`
-          *
+          *,
+          creator:users!tournaments_created_by_fkey(username, id)
         `)
         .eq("id", params.id)
         .single()
@@ -101,11 +106,6 @@ export default function TournamentPage({ params }: TournamentPageProps) {
     } finally {
       setLoading(false)
     }
-  }
-
-  const fetchUser = async () => {
-    const user = { id: "some_user_id" }
-    setUser(user)
   }
 
   if (!isValidUUID(params.id)) {
@@ -195,10 +195,31 @@ export default function TournamentPage({ params }: TournamentPageProps) {
           <div>
             <h1 className="text-3xl font-bold tracking-tight mb-2">{tournament.name}</h1>
             <p className="text-muted-foreground">{tournament.description}</p>
+            {tournament.creator && (
+              <div className="flex items-center gap-2 mt-2">
+                <Badge variant="outline" className="text-xs">
+                  <Crown className="h-3 w-3 mr-1" />
+                  Host: {tournament.creator.username}
+                </Badge>
+                {user?.id === tournament.created_by && (
+                  <Badge variant="secondary" className="text-xs">
+                    You are the host
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-green-500">${tournament.prize_pool.toLocaleString()}</div>
             <div className="text-sm text-muted-foreground">Prize Pool</div>
+            {user?.id === tournament.created_by && (
+              <Button asChild variant="outline" size="sm" className="mt-2 bg-transparent">
+                <Link href={`/tournaments/${tournament.id}/manage`}>
+                  <Settings className="h-3 w-3 mr-1" />
+                  Manage Tournament
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 

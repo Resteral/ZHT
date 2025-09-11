@@ -71,7 +71,8 @@ export const tournamentService = {
       .from("tournaments")
       .select(`
         *,
-        participant_count:tournament_participants(count)
+        participant_count:tournament_participants(count),
+        creator:users!created_by(id, username, display_name)
       `)
       .eq("id", id)
       .single()
@@ -89,6 +90,13 @@ export const tournamentService = {
 
     const supabase = createClient()
 
+    if (!userId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      userId = user?.id
+    }
+
     const tournamentToCreate = {
       name: tournamentData.name,
       description: tournamentData.description,
@@ -101,7 +109,7 @@ export const tournamentService = {
       start_date: tournamentData.start_date,
       end_date: tournamentData.end_date,
       team_based: true,
-      created_by: userId,
+      created_by: userId, // Ensure created_by is always set
       player_pool_settings: {
         max_teams: tournamentData.player_pool_settings?.num_teams || 8,
         draft_mode: tournamentData.player_pool_settings?.draft_mode || "snake_draft",

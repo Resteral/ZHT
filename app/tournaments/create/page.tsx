@@ -23,11 +23,13 @@ import {
   DollarSign,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
+import { useAuth } from "@/lib/auth-context"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
+  const { user } = useAuth()
 
   const tournamentType = searchParams.get("type")
 
@@ -190,6 +192,7 @@ export default function CreateTournamentPage() {
               try {
                 console.log("[v0] Starting tournament creation")
                 console.log("[v0] Tournament data:", formData)
+                console.log("[v0] Current user:", user?.id)
 
                 const startDateTime = new Date(formData.start_date).toISOString()
 
@@ -219,7 +222,7 @@ export default function CreateTournamentPage() {
                 console.log("[v0] Creating tournament:", tournamentData)
 
                 const { tournamentService } = await import("@/lib/services/tournament-service")
-                const tournament = await tournamentService.createTournament(tournamentData)
+                const tournament = await tournamentService.createTournament(tournamentData, user?.id)
 
                 console.log("[v0] Tournament created successfully:", tournament)
 

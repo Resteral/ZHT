@@ -233,6 +233,19 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
             <div>
               <h1 className="text-3xl font-bold tracking-tight">{tournament.name}</h1>
               <p className="text-lg text-muted-foreground">{typeInfo.name} - Draft Room</p>
+              {tournament.creator && (
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant="outline" className="text-xs">
+                    <Crown className="h-3 w-3 mr-1" />
+                    Host: {tournament.creator.username}
+                  </Badge>
+                  {user?.id === tournament.created_by && (
+                    <Badge variant="secondary" className="text-xs">
+                      You are the host
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <p className="text-muted-foreground">
@@ -363,7 +376,12 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
               <CardDescription>Manage the tournament player pool for extended tournament format</CardDescription>
             </CardHeader>
             <CardContent>
-              <TournamentDraftRoom tournamentId={params.id} userRole={userRole} />
+              <TournamentDraftRoom
+                tournamentId={params.id}
+                userRole={userRole}
+                tournament={tournament}
+                isCreator={userRole === "organizer"}
+              />
             </CardContent>
           </Card>
 
@@ -462,7 +480,12 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
         </div>
       ) : (
         <div className="space-y-6">
-          <TournamentDraftRoom tournamentId={params.id} userRole={userRole} />
+          <TournamentDraftRoom
+            tournamentId={params.id}
+            userRole={userRole}
+            tournament={tournament}
+            isCreator={userRole === "organizer"}
+          />
 
           <Card>
             <CardHeader>
