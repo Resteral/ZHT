@@ -49,12 +49,12 @@ const gameModes: GameMode[] = [
   },
   {
     id: "team-auction",
-    name: "Team Auction",
-    description: "Bid on teams and compete in auction-style tournaments",
+    name: "Leagues",
+    description: "Join league tournaments and compete with organized teams",
     icon: <Crown className="w-6 h-6" />,
-    route: "/tournaments/team-auction",
+    route: "/leagues",
     color: "from-green-400 to-emerald-500",
-    participants: "Auction Draft",
+    participants: "League Teams",
   },
 ]
 

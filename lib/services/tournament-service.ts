@@ -44,9 +44,13 @@ export const tournamentService = {
     const tournaments = tournamentsData.data || []
     const leagues = leaguesData.data || []
 
+    const regularTournaments = tournaments.filter((tournament) => tournament.tournament_type !== "league")
+
+    const leagueTournaments = tournaments.filter((tournament) => tournament.tournament_type === "league")
+
     // Combine and normalize data from both sources
     const allTournaments = [
-      ...tournaments.map((tournament) => ({
+      ...regularTournaments.map((tournament) => ({
         ...tournament,
         participant_count: tournament.participant_count[0]?.count || 0,
         source: "tournaments",
@@ -64,6 +68,42 @@ export const tournamentService = {
     })
 
     return allTournaments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  },
+
+  async getLeagueTournaments() {
+    console.log("[v0] Fetching league tournaments for ZHL League section...")
+
+    const { data: leagueTournaments, error } = await supabase
+      .from("tournaments")
+      .select(`
+        *,
+        participant_count:tournament_participants(count)
+      `)
+      .eq("tournament_type", "league")
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("[v0] Error fetching league tournaments:", error)
+      return []
+    }
+
+    const processedLeagueTournaments = (leagueTournaments || []).map((tournament) => ({
+      ...tournament,
+      participant_count: tournament.participant_count[0]?.count || 0,
+      source: "tournaments",
+      duration_days: tournament.player_pool_settings?.duration_type === "long" ? 30 : 7,
+    }))
+
+    console.log("[v0] League tournaments result:", {
+      count: processedLeagueTournaments.length,
+      tournaments: processedLeagueTournaments.map((t) => ({
+        id: t.id,
+        name: t.name,
+        tournament_type: t.tournament_type,
+      })),
+    })
+
+    return processedLeagueTournaments
   },
 
   async getTournament(id: string) {

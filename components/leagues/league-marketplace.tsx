@@ -155,7 +155,7 @@ export function LeagueMarketplace() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="teams" className="flex items-center space-x-2">
             <Trophy className="h-4 w-4" />
-            <span>Team Auctions</span>
+            <span>League Teams</span>
           </TabsTrigger>
           <TabsTrigger value="powerups" className="flex items-center space-x-2">
             <Zap className="h-4 w-4" />
@@ -170,7 +170,7 @@ export function LeagueMarketplace() {
         <TabsContent value="teams" className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold">Team Auctions</h2>
+              <h2 className="text-2xl font-bold">League Teams</h2>
               <p className="text-muted-foreground">Bid on teams with your winnings</p>
             </div>
             <Badge variant="secondary" className="flex items-center space-x-1">

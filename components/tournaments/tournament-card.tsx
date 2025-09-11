@@ -94,6 +94,8 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
         return "Double Elimination"
       case "round_robin":
         return "Round Robin"
+      case "auction_draft":
+        return "League"
       default:
         return type
     }

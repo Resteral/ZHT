@@ -16,6 +16,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Crown, Target, Star, BarChart3, TrendingUp } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { SeasonalTournamentDashboard } from "@/components/tournaments/seasonal-tournament-dashboard"
+import { LeagueTournamentsSection } from "@/components/leagues/league-tournaments-section"
 
 interface WagerMatch {
   id: string
@@ -682,10 +683,14 @@ export default function LeaguesPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
-                            <p className="font-medium text-sm">{player.username}</p>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Star className="h-3 w-3" />
-                              <span>{player.elo_rating}</span>
+                            <p className="font-medium">{player.username}</p>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Star className="h-3 w-3" />
+                                {player.elo_rating} ELO
+                              </span>
+                              <span>•</span>
+                              <span>{player.monthly_points} pts</span>
                             </div>
                           </div>
                         </div>
@@ -821,49 +826,8 @@ export default function LeaguesPage() {
             </p>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Active Long Tournaments */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-blue-500" />
-                  Active ZHL League Tournaments
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">Currently running long-term tournaments</p>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="font-medium mb-2">No Active League Tournaments</p>
-                  <p className="text-sm">Create the first ZHL league tournament to get started</p>
-                  <Button asChild className="mt-4">
-                    <Link href="/tournaments/create?type=long">
-                      <Trophy className="h-4 w-4 mr-2" />
-                      Create League Tournament
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* League Statistics */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-green-500" />
-                  ZHL League Statistics
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">Your performance in ZHL league tournaments</p>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="font-medium mb-2">No League Statistics Yet</p>
-                  <p className="text-sm">Join your first ZHL league tournament to start tracking your performance</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Active Long Tournaments */}
+          <LeagueTournamentsSection />
 
           {/* Create League Tournament */}
           <Card>

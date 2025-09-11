@@ -178,7 +178,7 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
       case "linear_draft":
         return { icon: Users, color: "text-green-500", name: "Linear Draft Tournament" }
       case "auction_draft":
-        return { icon: Crown, color: "text-yellow-500", name: "Auction Draft Tournament" }
+        return { icon: Crown, color: "text-yellow-500", name: "League Tournament" }
       case "single_elimination":
         return { icon: Trophy, color: "text-purple-500", name: "Single Elimination Tournament" }
       case "month_long_draft":

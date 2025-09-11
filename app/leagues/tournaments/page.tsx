@@ -40,7 +40,7 @@ export default function MonthLongTournamentsPage() {
         {
           id: "1",
           name: "Winter Championship Series",
-          description: "Month-long tournament with team auctions and weekly matches",
+          description: "Month-long tournament with team purchasing and weekly matches",
           duration_days: 30,
           max_teams: 16,
           current_teams: 12,
@@ -126,7 +126,7 @@ export default function MonthLongTournamentsPage() {
           <div className="space-y-2">
             <h1 className="text-3xl font-bold tracking-tight">Month-Long Tournaments</h1>
             <p className="text-muted-foreground">
-              Host and join extended tournaments with team purchasing and auction drafts
+              Host and join extended tournaments with team purchasing and league drafts
             </p>
           </div>
           <Button asChild>
@@ -145,7 +145,7 @@ export default function MonthLongTournamentsPage() {
             <div className="flex-1">
               <h3 className="font-semibold mb-1">How Month-Long Tournaments Work</h3>
               <p className="text-sm text-muted-foreground">
-                Buy team slots • Participate in auction drafts • Compete over weeks/months • Win prize pools based on
+                Buy team slots • Participate in league drafts • Compete over weeks/months • Win prize pools based on
                 performance
               </p>
             </div>
