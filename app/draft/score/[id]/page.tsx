@@ -15,7 +15,9 @@ import { toast } from "sonner"
 import { MatchStatsViewer } from "@/components/analytics/match-stats-viewer"
 import { loadMatchResult as loadMatchResultUtil } from "@/lib/supabase/match-result"
 import type { Match } from "@/lib/types/match" // Import Match type
-import { supabase } from "@/lib/supabase/client" // Declare the variable here
+import { createClient } from "@/lib/supabase/client" // Changed from supabase import to createClient
+
+const supabase = createClient() // Initialize the client here
 
 interface ScoreScreenPageProps {
   params: {

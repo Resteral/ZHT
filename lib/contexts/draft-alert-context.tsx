@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 
 interface DraftAlert {
@@ -39,6 +39,7 @@ export function DraftAlertProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return
 
+    const supabase = createClient()
     const draftSubscription = supabase
       .channel("global-draft-alerts")
       .on(
@@ -75,6 +76,7 @@ export function DraftAlertProvider({ children }: { children: ReactNode }) {
 
   const handleDraftStatusChange = async (draftData: any) => {
     if (draftData.status === "drafting") {
+      const supabase = createClient()
       // Fetch additional draft details
       const { data: leagueData } = await supabase
         .from("captain_draft_leagues")

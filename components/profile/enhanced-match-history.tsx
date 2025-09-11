@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Calendar, Filter, TrendingUp, TrendingDown, Search } from "lucide-react"
 import { ProfileNameLink } from "./profile-name-link"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 interface Match {
   id: string
@@ -53,6 +53,7 @@ export function EnhancedMatchHistory({ userId }: EnhancedMatchHistoryProps) {
     try {
       console.log("[v0] Loading match history...")
 
+      const supabase = createClient()
       const { data: matchResults, error } = await supabase
         .from("match_results")
         .select(`

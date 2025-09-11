@@ -12,5 +12,14 @@ export function createClient() {
   return createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 }
 
-// Export the createClient function for consistency
-export const supabase = createClient()
+// This creates the client only when accessed, avoiding the "supabaseKey is required" error
+let _supabase: ReturnType<typeof createClient> | null = null
+
+export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
+  get(target, prop) {
+    if (!_supabase) {
+      _supabase = createClient()
+    }
+    return (_supabase as any)[prop]
+  },
+})

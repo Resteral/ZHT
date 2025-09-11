@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 interface User {
   id: string // Back to using UUID as primary identifier
@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const validateAndRefreshSession = async (storedUser: User) => {
     try {
+      const supabase = createClient()
       let query = supabase.from("users").select("*")
 
       if (storedUser.id && storedUser.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
@@ -71,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return
 
     try {
+      const supabase = createClient()
       const { data, error } = await supabase.from("users").select("*").eq("id", user.id).single()
 
       if (!error && data) {

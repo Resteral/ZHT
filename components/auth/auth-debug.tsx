@@ -1,7 +1,7 @@
 "use client"
 
 import { useAuth } from "@/lib/auth-context"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,6 +22,8 @@ export function AuthDebug() {
     }
 
     try {
+      const supabase = createClient()
+
       // Check localStorage
       const storedUser = localStorage.getItem("fantasy_user")
       diagnostics.localStorage = storedUser ? JSON.parse(storedUser) : null

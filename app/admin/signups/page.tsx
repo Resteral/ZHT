@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Users, UserCheck, Clock, AlertCircle, RefreshCw } from "lucide-react"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 interface SignupRecord {
   id: string
@@ -31,6 +31,7 @@ export default function SignupManagement() {
   const loadSignups = async () => {
     try {
       setLoading(true)
+      const supabase = createClient()
       const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false })
 
       if (error) throw error

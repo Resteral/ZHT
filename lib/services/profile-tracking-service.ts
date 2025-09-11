@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 export interface ProfileView {
   id: string
@@ -24,6 +24,7 @@ export async function trackProfileView(
   viewDuration?: number,
 ): Promise<void> {
   try {
+    const supabase = createClient()
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -45,6 +46,7 @@ export async function trackProfileInteraction(
   metadata: Record<string, any> = {},
 ): Promise<void> {
   try {
+    const supabase = createClient()
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -64,6 +66,7 @@ export async function trackProfileInteraction(
 
 export async function getProfileViews(profileId: string): Promise<ProfileView[]> {
   try {
+    const supabase = createClient()
     const { data, error } = await supabase
       .from("profile_views")
       .select("*")
@@ -81,6 +84,8 @@ export async function getProfileViews(profileId: string): Promise<ProfileView[]>
 
 export async function getProfileAnalytics(profileId: string) {
   try {
+    const supabase = createClient()
+
     // Get view counts by page source
     const { data: viewsBySource } = await supabase
       .from("profile_views")

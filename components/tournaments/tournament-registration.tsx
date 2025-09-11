@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Users, Trophy, Clock, DollarSign, CheckCircle } from "lucide-react"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 
 interface Team {
@@ -41,6 +41,7 @@ export function TournamentRegistration({ tournament, onRegistrationComplete }: T
 
     setLoading(true)
     try {
+      const supabase = createClient()
       const { data: userTeams, error } = await supabase
         .from("teams")
         .select(`
@@ -93,6 +94,8 @@ export function TournamentRegistration({ tournament, onRegistrationComplete }: T
 
     setRegistering(true)
     try {
+      const supabase = createClient()
+
       if (tournament.is_team_based && !selectedTeam) {
         throw new Error("Please select a team")
       }
