@@ -199,8 +199,11 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-blue-500" />
-                Team Rosters
+                Team Rosters & Ownership
               </CardTitle>
+              <CardDescription>
+                Each team has one owner/captain who makes draft picks and manages the roster
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2">
@@ -209,15 +212,25 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
                     key={team.id}
                     className={`${
                       draftState?.current_team_index === index && draftState?.status === "active"
-                        ? "border-amber-500 bg-amber-50"
+                        ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20"
                         : ""
                     }`}
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-lg">{team.name}</CardTitle>
-                          <p className="text-sm text-muted-foreground">Captain: {team.captain_name}</p>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            {team.name}
+                            <Crown className="h-4 w-4 text-amber-500" />
+                          </CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            <strong>Owner:</strong> {team.captain_name}
+                            {user?.id === team.captain_id && (
+                              <Badge variant="secondary" className="ml-2 text-xs">
+                                Your Team
+                              </Badge>
+                            )}
+                          </p>
                         </div>
                         <div className="text-right">
                           <Badge variant="outline">
@@ -244,6 +257,12 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                   <span>ELO: {player.elo_rating}</span>
                                   {player.draft_cost && <span className="text-green-600">${player.draft_cost}</span>}
+                                  {player.id === team.captain_id && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      <Crown className="h-3 w-3 mr-1" />
+                                      Captain
+                                    </Badge>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -253,6 +272,7 @@ export function TournamentDraftRoom({ tournamentId, userRole }: TournamentDraftR
                             <div className="text-center">
                               <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
                               <p className="text-sm">No players drafted</p>
+                              <p className="text-xs">Captain: {team.captain_name}</p>
                             </div>
                           </div>
                         )}

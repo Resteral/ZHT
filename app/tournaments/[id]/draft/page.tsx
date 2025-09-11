@@ -42,6 +42,47 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
     return durationHours > 24 || tournament.tournament_type === "month_long_draft"
   }
 
+  const validateTeamOwnership = async (tournamentData: any) => {
+    try {
+      console.log("[v0] Validating team ownership for tournament:", tournamentData.id)
+
+      // Get current teams and their captains
+      const { data: teams, error: teamsError } = await supabase
+        .from("tournament_teams")
+        .select(`
+          id,
+          team_name,
+          team_captain,
+          team_members,
+          users:team_captain(username, id)
+        `)
+        .eq("tournament_id", tournamentData.id)
+
+      if (teamsError) {
+        console.log("[v0] Teams load error:", teamsError)
+        return
+      }
+
+      console.log("[v0] Current teams:", teams?.length || 0)
+
+      const maxTeams = tournamentData.player_pool_settings?.max_teams || tournamentData.max_teams || 8
+      const teamsWithoutCaptains = teams?.filter((team) => !team.team_captain) || []
+
+      console.log("[v0] Teams without captains:", teamsWithoutCaptains.length)
+      console.log("[v0] Expected teams:", maxTeams, "Current teams:", teams?.length || 0)
+
+      // If we don't have enough teams or captains, show warning
+      if (!teams || teams.length < maxTeams || teamsWithoutCaptains.length > 0) {
+        console.log("[v0] Team ownership validation failed - missing teams or captains")
+        setError(
+          `Tournament needs ${maxTeams} teams with captains. Currently: ${teams?.length || 0} teams, ${teamsWithoutCaptains.length} without captains.`,
+        )
+      }
+    } catch (err) {
+      console.error("[v0] Error validating team ownership:", err)
+    }
+  }
+
   useEffect(() => {
     loadTournamentData()
   }, [params.id, user])
@@ -69,6 +110,8 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
 
       console.log("[v0] Tournament loaded:", tournamentData.name, "Type:", tournamentData.tournament_type)
       setTournament(tournamentData)
+
+      await validateTeamOwnership(tournamentData)
 
       const isLong = calculateTournamentDuration(tournamentData)
       setIsLongTournament(isLong)
@@ -230,15 +273,15 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Crown className="h-5 w-5 text-blue-500" />
-            Draft & Captain Selection
+            Draft & Team Ownership Setup
           </CardTitle>
           <CardDescription>
-            Tournament creator can select captains using chosen method:{" "}
+            Each team must have exactly one owner/captain. Tournament creator manages captain selection using:{" "}
             {tournament.player_pool_settings?.captain_selection_method?.replace("_", " ") || "Creator Choice"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div className="text-center p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
               <Crown className="h-6 w-6 mx-auto mb-1 text-blue-500" />
               <div className="text-sm font-medium">Captain Method</div>
@@ -260,82 +303,50 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
                 {tournament.player_pool_settings?.num_teams || tournament.player_pool_settings?.max_teams || 8} teams
               </div>
             </div>
+            <div className="text-center p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
+              <Crown className="h-6 w-6 mx-auto mb-1 text-amber-500" />
+              <div className="text-sm font-medium">Team Owners</div>
+              <div className="text-xs text-muted-foreground">1 captain per team</div>
+            </div>
           </div>
 
           {userRole === "organizer" && (
-            <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                <strong>Tournament Creator:</strong> You can select captains and manage the draft process. Use the
-                captain selection tools below to choose team leaders before starting the draft.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-l-4" style={{ borderLeftColor: typeInfo.color.replace("text-", "") }}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TypeIcon className={`h-5 w-5 ${typeInfo.color}`} />
-            {typeInfo.name} Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <div className="font-medium text-muted-foreground">Tournament Format</div>
-              <div className="capitalize">{tournament.tournament_type?.replace("_", " ")}</div>
-            </div>
-            <div>
-              <div className="font-medium text-muted-foreground">Max Participants</div>
-              <div>{tournament.max_participants}</div>
-            </div>
-            <div>
-              <div className="font-medium text-muted-foreground">Entry Fee</div>
-              <div className="text-red-600 font-medium">${tournament.entry_fee || 0}</div>
-            </div>
-            <div>
-              <div className="font-medium text-muted-foreground">Prize Pool</div>
-              <div className="text-green-600 font-medium">${tournament.prize_pool || 0}</div>
-            </div>
-            <div>
-              <div className="font-medium text-muted-foreground">Duration</div>
-              <div className="flex items-center gap-1">
-                {isLongTournament ? (
-                  <>
-                    <Badge variant="secondary" className="text-xs">
-                      Extended
-                    </Badge>
-                    <span className="text-xs">Multi-day</span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="outline" className="text-xs">
-                      Short
-                    </Badge>
-                    <span className="text-xs">Single day</span>
-                  </>
-                )}
+            <div className="space-y-3">
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <strong>Tournament Creator:</strong> You must ensure each team has exactly one owner/captain before
+                  starting the draft. Use the captain selection tools below to assign team leaders.
+                </p>
               </div>
-            </div>
-          </div>
 
-          {isLongTournament && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>Extended Tournament:</strong> This tournament spans multiple days with scheduled matches and
-                extended draft periods.
-                {userRole === "organizer" && " As the organizer, you can edit the tournament schedule."}
-              </p>
-            </div>
-          )}
-
-          {!isLongTournament && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">
-                <strong>Live Tournament:</strong> This tournament features live bracket progression with real-time
-                matches and immediate results.
-              </p>
+              <div className="p-4 border rounded-lg bg-muted/50">
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <Crown className="h-4 w-4 text-blue-500" />
+                  Team Ownership Management
+                </h4>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Button
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={() => router.push(`/tournaments/${params.id}/manage`)}
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Manage Team Captains
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={() => validateTeamOwnership(tournament)}
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    Validate Team Setup
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Ensure all {tournament.player_pool_settings?.max_teams || 8} teams have assigned captains before
+                  starting the draft.
+                </p>
+              </div>
             </div>
           )}
         </CardContent>

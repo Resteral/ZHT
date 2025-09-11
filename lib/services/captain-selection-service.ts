@@ -5,7 +5,7 @@ export interface CaptainSelectionResult {
     id: string
     username: string
     elo_rating: number
-    captain_type: "high_elo" | "low_elo" | "random"
+    captain_type: "high_elo" | "low_elo" | "mid_elo" | "random"
   }[]
   success: boolean
   message: string
@@ -23,11 +23,29 @@ class CaptainSelectionService {
 
   /**
    * Automatically select captains based on ELO ratings
-   * Selects highest and lowest ELO players as captains
+   * Selects exactly as many captains as there are teams in the tournament
    */
   async selectCaptainsAutomatically(tournamentId: string): Promise<CaptainSelectionResult> {
     try {
       console.log("[v0] Starting automatic captain selection for tournament:", tournamentId)
+
+      const { data: tournament, error: tournamentError } = await this.supabase
+        .from("tournaments")
+        .select("player_pool_settings, max_teams")
+        .eq("id", tournamentId)
+        .single()
+
+      if (tournamentError) {
+        console.error("[v0] Error fetching tournament settings:", tournamentError)
+        throw tournamentError
+      }
+
+      const maxTeams =
+        tournament.max_teams ||
+        tournament.player_pool_settings?.max_teams ||
+        tournament.player_pool_settings?.num_teams ||
+        8
+      console.log("[v0] Tournament requires", maxTeams, "captains (one per team)")
 
       // Get all available players in the tournament pool
       const { data: poolPlayers, error: poolError } = await this.supabase
@@ -46,11 +64,11 @@ class CaptainSelectionService {
         throw poolError
       }
 
-      if (!poolPlayers || poolPlayers.length < 2) {
+      if (!poolPlayers || poolPlayers.length < maxTeams) {
         return {
           captains: [],
           success: false,
-          message: "Need at least 2 players in the pool to select captains",
+          message: `Need at least ${maxTeams} players in the pool to select ${maxTeams} captains (one per team)`,
         }
       }
 
@@ -66,27 +84,29 @@ class CaptainSelectionService {
 
       console.log("[v0] Processed players for captain selection:", processedPlayers.length)
 
-      // Select highest and lowest ELO players as captains
-      const highEloCaptain = processedPlayers[0]
-      const lowEloCaptain = processedPlayers[processedPlayers.length - 1]
+      const selectedCaptains = []
+      const captainUpdates = []
 
-      // Update database to mark selected players as captains
-      const captainUpdates = [
-        {
+      // Distribute captains evenly across ELO ranges
+      for (let i = 0; i < maxTeams; i++) {
+        const playerIndex = Math.floor((i * processedPlayers.length) / maxTeams)
+        const captain = processedPlayers[playerIndex]
+
+        selectedCaptains.push({
+          id: captain.user_id,
+          username: captain.username,
+          elo_rating: captain.elo_rating,
+          captain_type: i === 0 ? "high_elo" : i === maxTeams - 1 ? "low_elo" : "mid_elo",
+        })
+
+        captainUpdates.push({
           tournament_id: tournamentId,
-          user_id: highEloCaptain.user_id,
+          user_id: captain.user_id,
           status: "captain",
-          captain_type: "high_elo",
+          captain_type: i === 0 ? "high_elo" : i === maxTeams - 1 ? "low_elo" : "mid_elo",
           updated_at: new Date().toISOString(),
-        },
-        {
-          tournament_id: tournamentId,
-          user_id: lowEloCaptain.user_id,
-          status: "captain",
-          captain_type: "low_elo",
-          updated_at: new Date().toISOString(),
-        },
-      ]
+        })
+      }
 
       // Update the tournament_player_pool table
       for (const update of captainUpdates) {
@@ -106,21 +126,6 @@ class CaptainSelectionService {
         }
       }
 
-      const selectedCaptains = [
-        {
-          id: highEloCaptain.user_id,
-          username: highEloCaptain.username,
-          elo_rating: highEloCaptain.elo_rating,
-          captain_type: "high_elo" as const,
-        },
-        {
-          id: lowEloCaptain.user_id,
-          username: lowEloCaptain.username,
-          elo_rating: lowEloCaptain.elo_rating,
-          captain_type: "low_elo" as const,
-        },
-      ]
-
       console.log("[v0] Successfully selected captains:", selectedCaptains)
 
       // Log captain selection activity
@@ -129,7 +134,7 @@ class CaptainSelectionService {
       return {
         captains: selectedCaptains,
         success: true,
-        message: `Successfully selected ${selectedCaptains.length} captains`,
+        message: `Successfully selected ${selectedCaptains.length} captains (one per team)`,
       }
     } catch (error) {
       console.error("[v0] Error in automatic captain selection:", error)
@@ -148,11 +153,28 @@ class CaptainSelectionService {
     try {
       console.log("[v0] Starting manual captain selection for tournament:", tournamentId)
 
-      if (captainIds.length !== 2) {
+      const { data: tournament, error: tournamentError } = await this.supabase
+        .from("tournaments")
+        .select("player_pool_settings, max_teams")
+        .eq("id", tournamentId)
+        .single()
+
+      if (tournamentError) {
+        console.error("[v0] Error fetching tournament settings:", tournamentError)
+        throw tournamentError
+      }
+
+      const maxTeams =
+        tournament.max_teams ||
+        tournament.player_pool_settings?.max_teams ||
+        tournament.player_pool_settings?.num_teams ||
+        8
+
+      if (captainIds.length !== maxTeams) {
         return {
           captains: [],
           success: false,
-          message: "Must select exactly 2 captains",
+          message: `Must select exactly ${maxTeams} captains (one per team)`,
         }
       }
 
@@ -171,7 +193,7 @@ class CaptainSelectionService {
         throw playersError
       }
 
-      if (!selectedPlayers || selectedPlayers.length !== 2) {
+      if (!selectedPlayers || selectedPlayers.length !== maxTeams) {
         return {
           captains: [],
           success: false,
@@ -179,7 +201,7 @@ class CaptainSelectionService {
         }
       }
 
-      // Sort by ELO to determine high/low captain types
+      // Sort by ELO to determine captain types
       const sortedPlayers = selectedPlayers
         .map((entry: any) => ({
           user_id: entry.user_id,
@@ -188,21 +210,12 @@ class CaptainSelectionService {
         }))
         .sort((a, b) => b.elo_rating - a.elo_rating)
 
-      // Update database with captain assignments
-      const captainUpdates = [
-        {
-          user_id: sortedPlayers[0].user_id,
-          captain_type: "high_elo",
-          username: sortedPlayers[0].username,
-          elo_rating: sortedPlayers[0].elo_rating,
-        },
-        {
-          user_id: sortedPlayers[1].user_id,
-          captain_type: "low_elo",
-          username: sortedPlayers[1].username,
-          elo_rating: sortedPlayers[1].elo_rating,
-        },
-      ]
+      const captainUpdates = sortedPlayers.map((player, index) => ({
+        user_id: player.user_id,
+        captain_type: index === 0 ? "high_elo" : index === maxTeams - 1 ? "low_elo" : "mid_elo",
+        username: player.username,
+        elo_rating: player.elo_rating,
+      }))
 
       for (const update of captainUpdates) {
         const { error: updateError } = await this.supabase
@@ -225,7 +238,7 @@ class CaptainSelectionService {
         id: update.user_id,
         username: update.username,
         elo_rating: update.elo_rating,
-        captain_type: update.captain_type as "high_elo" | "low_elo",
+        captain_type: update.captain_type as "high_elo" | "low_elo" | "mid_elo",
       }))
 
       console.log("[v0] Successfully selected manual captains:", selectedCaptains)
@@ -255,6 +268,24 @@ class CaptainSelectionService {
     try {
       console.log("[v0] Starting random captain selection for tournament:", tournamentId)
 
+      const { data: tournament, error: tournamentError } = await this.supabase
+        .from("tournaments")
+        .select("player_pool_settings, max_teams")
+        .eq("id", tournamentId)
+        .single()
+
+      if (tournamentError) {
+        console.error("[v0] Error fetching tournament settings:", tournamentError)
+        throw tournamentError
+      }
+
+      const maxTeams =
+        tournament.max_teams ||
+        tournament.player_pool_settings?.max_teams ||
+        tournament.player_pool_settings?.num_teams ||
+        8
+      console.log("[v0] Tournament requires", maxTeams, "captains (one per team)")
+
       // Get all available players in the tournament pool
       const { data: poolPlayers, error: poolError } = await this.supabase
         .from("tournament_player_pool")
@@ -272,11 +303,11 @@ class CaptainSelectionService {
         throw poolError
       }
 
-      if (!poolPlayers || poolPlayers.length < 2) {
+      if (!poolPlayers || poolPlayers.length < maxTeams) {
         return {
           captains: [],
           success: false,
-          message: "Need at least 2 players in the pool to select captains",
+          message: `Need at least ${maxTeams} players in the pool to select ${maxTeams} captains`,
         }
       }
 
@@ -289,29 +320,34 @@ class CaptainSelectionService {
       }))
 
       const shuffledPlayers = [...processedPlayers].sort(() => Math.random() - 0.5)
-      const captain1 = shuffledPlayers[0]
-      const captain2 = shuffledPlayers[1]
+      const selectedCaptainPlayers = shuffledPlayers.slice(0, maxTeams)
 
-      // Assign captain types based on ELO for consistency
-      const [highEloCaptain, lowEloCaptain] = [captain1, captain2].sort((a, b) => b.elo_rating - a.elo_rating)
+      // Sort selected captains by ELO for type assignment
+      const sortedCaptains = selectedCaptainPlayers.sort((a, b) => b.elo_rating - a.elo_rating)
 
       // Update database to mark selected players as captains
-      const captainUpdates = [
-        {
+      const captainUpdates = []
+      const selectedCaptains = []
+
+      for (let i = 0; i < maxTeams; i++) {
+        const captain = sortedCaptains[i]
+        const captainType = i === 0 ? "high_elo" : i === maxTeams - 1 ? "low_elo" : "mid_elo"
+
+        captainUpdates.push({
           tournament_id: tournamentId,
-          user_id: highEloCaptain.user_id,
+          user_id: captain.user_id,
           status: "captain",
-          captain_type: "high_elo",
+          captain_type: captainType,
           updated_at: new Date().toISOString(),
-        },
-        {
-          tournament_id: tournamentId,
-          user_id: lowEloCaptain.user_id,
-          status: "captain",
-          captain_type: "low_elo",
-          updated_at: new Date().toISOString(),
-        },
-      ]
+        })
+
+        selectedCaptains.push({
+          id: captain.user_id,
+          username: captain.username,
+          elo_rating: captain.elo_rating,
+          captain_type: captainType as "high_elo" | "low_elo" | "mid_elo",
+        })
+      }
 
       // Update the tournament_player_pool table
       for (const update of captainUpdates) {
@@ -330,21 +366,6 @@ class CaptainSelectionService {
           throw updateError
         }
       }
-
-      const selectedCaptains = [
-        {
-          id: highEloCaptain.user_id,
-          username: highEloCaptain.username,
-          elo_rating: highEloCaptain.elo_rating,
-          captain_type: "high_elo" as const,
-        },
-        {
-          id: lowEloCaptain.user_id,
-          username: lowEloCaptain.username,
-          elo_rating: lowEloCaptain.elo_rating,
-          captain_type: "low_elo" as const,
-        },
-      ]
 
       console.log("[v0] Successfully selected random captains:", selectedCaptains)
 
@@ -440,6 +461,23 @@ class CaptainSelectionService {
     message: string
   }> {
     try {
+      const { data: tournament, error: tournamentError } = await this.supabase
+        .from("tournaments")
+        .select("player_pool_settings, max_teams")
+        .eq("id", tournamentId)
+        .single()
+
+      if (tournamentError) {
+        console.error("[v0] Error fetching tournament settings:", tournamentError)
+        throw tournamentError
+      }
+
+      const maxTeams =
+        tournament.max_teams ||
+        tournament.player_pool_settings?.max_teams ||
+        tournament.player_pool_settings?.num_teams ||
+        8
+
       const { data: players, error } = await this.supabase
         .from("tournament_player_pool")
         .select("user_id")
@@ -452,14 +490,14 @@ class CaptainSelectionService {
       }
 
       const playerCount = players?.length || 0
-      const canSelect = playerCount >= 2
+      const canSelect = playerCount >= maxTeams
 
       return {
         canSelect,
         playerCount,
         message: canSelect
-          ? `Ready to select captains from ${playerCount} players`
-          : `Need at least 2 players (currently ${playerCount})`,
+          ? `Ready to select ${maxTeams} captains from ${playerCount} players`
+          : `Need at least ${maxTeams} players (currently ${playerCount}) to select ${maxTeams} captains`,
       }
     } catch (error) {
       console.error("[v0] Error checking captain selection eligibility:", error)
