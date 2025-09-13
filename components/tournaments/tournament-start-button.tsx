@@ -81,7 +81,18 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
       return 4
     }
 
-    return tournamentSettings.player_pool_settings?.max_teams || tournamentSettings.max_teams || 4
+    const settingsTeams =
+      tournamentSettings.player_pool_settings?.max_teams ||
+      tournamentSettings.player_pool_settings?.num_teams ||
+      tournamentSettings.max_teams
+
+    console.log("[v0] Getting required teams:", {
+      settingsTeams,
+      player_pool_settings: tournamentSettings.player_pool_settings,
+      max_teams: tournamentSettings.max_teams,
+    })
+
+    return settingsTeams || 4
   }
 
   const getMinimumPlayers = () => {
@@ -90,7 +101,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
       return 16 // 4 teams × 4 players
     }
 
-    const maxTeams = tournamentSettings.player_pool_settings?.max_teams || tournamentSettings.max_teams || 4
+    const maxTeams = getRequiredTeams()
     const playersPerTeam = tournamentSettings.player_pool_settings?.players_per_team || 4
 
     const minPlayers = maxTeams * playersPerTeam
@@ -230,7 +241,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
             <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
             <div className="text-2xl font-bold text-green-700">{minParticipants}</div>
             <div className="text-sm text-green-600">
-              Players Needed to Start ({getRequiredTeams()} teams ×{" "}
+              Players Needed to Start ({requiredTeams} teams ×{" "}
               {tournamentSettings?.player_pool_settings?.players_per_team || 4} players)
             </div>
           </div>
