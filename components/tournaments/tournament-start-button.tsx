@@ -67,11 +67,11 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
           .select(`
             id,
             team_name,
-            captain_id,
-            users:captain_id(username)
+            team_captain,
+            users:team_captain(username)
           `)
           .eq("tournament_id", tournament.id)
-          .not("captain_id", "is", null)
+          .not("team_captain", "is", null)
 
         if (teamsError) {
           console.error("[v0] Error loading teams with captains:", teamsError)

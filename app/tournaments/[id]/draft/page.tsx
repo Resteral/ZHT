@@ -13,6 +13,7 @@ import { TournamentBracket } from "@/components/tournaments/tournament-bracket"
 import { liveBracketIntegrationService } from "@/lib/services/live-bracket-integration-service"
 import { TournamentDraftIntegration } from "@/components/tournaments/tournament-draft-integration"
 import { TournamentAuctionDraft } from "@/components/tournaments/tournament-auction-draft"
+import { TournamentDraftCaptainSelection } from "@/components/tournaments/tournament-draft-captain-selection"
 
 interface TournamentDraftPageProps {
   params: {
@@ -386,6 +387,19 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
 
       {tournament.status === "drafting" && (
         <div className="space-y-6">
+          <Card className="border-l-4 border-l-blue-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-blue-500" />
+                Captain Selection & Team Setup
+              </CardTitle>
+              <CardDescription>Tournament owner must assign captains before starting the draft</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TournamentDraftCaptainSelection tournamentId={params.id} isOwner={userRole === "organizer"} />
+            </CardContent>
+          </Card>
+
           <TournamentDraftIntegration
             tournamentId={params.id}
             onDraftStarted={(draftId) => {
