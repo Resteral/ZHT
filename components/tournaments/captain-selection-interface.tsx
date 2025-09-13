@@ -396,7 +396,7 @@ export function CaptainSelectionInterface({
                           tournament?.player_pool_settings?.num_teams ||
                           tournament?.max_participants ||
                           4}{" "}
-                        players to be team captains. Select players below.
+                        captains from {availablePlayers.length} available players. Each captain will lead one team.
                       </p>
                       <Button
                         onClick={handleManualSelection}
@@ -481,14 +481,15 @@ export function CaptainSelectionInterface({
                         tournament?.player_pool_settings?.num_teams ||
                         tournament?.max_participants ||
                         4}{" "}
-                      for Manual
+                      Captains
                     </Badge>
                   )}
               </CardTitle>
               <CardDescription>
-                Players available for captain selection, sorted by ELO rating.
+                Players available for captain selection, sorted by ELO rating. Tournament structure: 4 teams with 4
+                players each (16 total players, 4 captains).
                 {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) &&
-                  " Check players for manual selection."}
+                  " Check players for manual captain selection."}
               </CardDescription>
             </CardHeader>
             <CardContent>
