@@ -15,10 +15,8 @@ import { PlayerPoolManagement } from "@/components/tournaments/player-pool-manag
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { TournamentBettingInterface } from "@/components/tournaments/tournament-betting-interface"
 import { TournamentStartButton } from "@/components/tournaments/tournament-start-button"
-import { CaptainSelectionControl } from "@/components/tournaments/captain-selection-control"
 import TournamentAuctionRoom from "@/components/tournaments/tournament-auction-room"
 import { useAuth } from "@/lib/auth-context"
-import { toast } from "sonner"
 
 interface TournamentPageProps {
   params: {
@@ -291,24 +289,11 @@ export default function TournamentPage({ params }: TournamentPageProps) {
               fetchTournament()
             }}
           />
-          <CaptainSelectionControl
-            tournament={{
-              id: tournament.id,
-              name: tournament.name,
-              status: tournament.status,
-              created_by: tournament.created_by,
-            }}
-            onCaptainsSelected={(captains) => {
-              console.log("[v0] Captains selected:", captains)
-              // Optionally refresh tournament data or update UI
-              fetchTournament()
-            }}
-          />
         </div>
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="join">Join Tournament</TabsTrigger>
           <TabsTrigger value="pools">Player Pools</TabsTrigger>
@@ -316,7 +301,6 @@ export default function TournamentPage({ params }: TournamentPageProps) {
             Auction Draft
           </TabsTrigger>
           <TabsTrigger value="bracket">Live Bracket</TabsTrigger>
-          <TabsTrigger value="betting">Betting</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -459,7 +443,11 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         </TabsContent>
 
         <TabsContent value="pools" className="space-y-6">
-          <PlayerPoolManagement tournamentId={tournament.id} />
+          <PlayerPoolManagement
+            tournamentId={tournament.id}
+            tournament={tournament}
+            isOrganizer={user?.id === tournament.created_by || user?.username === "Resteral"}
+          />
         </TabsContent>
 
         <TabsContent value="bracket" className="space-y-6">
@@ -473,23 +461,6 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         <TabsContent value="auction" className="space-y-6">
           {tournament.status === "drafting" || auctionSession ? (
             <div className="space-y-6">
-              {(user?.id === tournament.created_by || user?.username === "Resteral") && (
-                <CaptainSelectionControl
-                  tournament={{
-                    id: tournament.id,
-                    name: tournament.name,
-                    status: tournament.status,
-                    created_by: tournament.created_by,
-                  }}
-                  onCaptainsSelected={(captains) => {
-                    console.log("[v0] Captains selected:", captains)
-                    // Refresh tournament data to get updated info
-                    fetchTournament()
-                    // Enable auction draft functionality
-                    setActiveTab("auction")
-                  }}
-                />
-              )}
               <TournamentAuctionRoom
                 tournamentId={tournament.id}
                 currentUserId={user?.id || ""}
@@ -503,29 +474,24 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                 <h3 className="text-lg font-semibold mb-2">Tournament Formation</h3>
                 <p className="text-muted-foreground mb-4">
                   {tournament.status === "registration"
-                    ? "Complete registration and select captains to begin tournament formation."
+                    ? "Complete registration and select captains in the Player Pools tab to begin tournament formation."
                     : "The tournament formation will be available when ready."}
                 </p>
                 {tournament.status === "registration" &&
                   (user?.id === tournament.created_by || user?.username === "Resteral") && (
                     <div className="mt-6">
-                      <CaptainSelectionControl
-                        tournament={{
-                          id: tournament.id,
-                          name: tournament.name,
-                          status: tournament.status,
-                          created_by: tournament.created_by,
-                        }}
-                        onCaptainsSelected={(captains) => {
-                          console.log("[v0] Captains selected:", captains)
-                          fetchTournament()
-                          toast.success("Captains selected! Tournament formation ready.")
-                        }}
-                      />
+                      <Button onClick={() => setActiveTab("pools")} variant="outline">
+                        <Users className="h-4 w-4 mr-2" />
+                        Go to Player Pools
+                      </Button>
                     </div>
                   )}
                 {(user?.id === tournament.created_by || user?.username === "Resteral") && (
-                  <Button onClick={() => router.push(`/tournaments/${tournament.id}/manage`)} variant="outline">
+                  <Button
+                    onClick={() => router.push(`/tournaments/${tournament.id}/manage`)}
+                    variant="outline"
+                    className="ml-2"
+                  >
                     Manage Tournament
                   </Button>
                 )}

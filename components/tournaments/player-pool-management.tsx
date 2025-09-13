@@ -11,20 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import {
-  Users,
-  Crown,
-  Settings,
-  RefreshCw,
-  UserMinus,
-  Search,
-  Filter,
-  BarChart3,
-  Star,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-} from "lucide-react"
+import { Gavel } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { captainSelectionService } from "@/lib/services/captain-selection-service"
@@ -294,13 +281,13 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "captain":
-        return <Crown className="h-4 w-4 text-yellow-500" />
+        return <Gavel className="h-4 w-4 text-yellow-500" />
       case "drafted":
-        return <CheckCircle className="h-4 w-4 text-green-500" />
+        return <Gavel className="h-4 w-4 text-green-500" />
       case "withdrawn":
-        return <AlertCircle className="h-4 w-4 text-red-500" />
+        return <Gavel className="h-4 w-4 text-red-500" />
       default:
-        return <Users className="h-4 w-4 text-blue-500" />
+        return <Gavel className="h-4 w-4 text-blue-500" />
     }
   }
 
@@ -370,7 +357,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-blue-500" />
+            <Gavel className="h-5 w-5 text-blue-500" />
             Player Pool Statistics
             <div className="ml-auto flex items-center gap-2">
               <div className="flex items-center gap-2 text-sm">
@@ -378,7 +365,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
                 <span className="text-muted-foreground">Auto-refresh</span>
               </div>
               <Button onClick={loadPlayerPool} variant="outline" size="sm">
-                <RefreshCw className="h-3 w-3 mr-1" />
+                <Gavel className="h-3 w-3 mr-1" />
                 Refresh
               </Button>
             </div>
@@ -437,7 +424,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
+                <Gavel className="h-5 w-5" />
                 Filter & Search Players
               </CardTitle>
             </CardHeader>
@@ -446,7 +433,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
                 <div className="space-y-2">
                   <Label>Search Players</Label>
                   <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Gavel className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Search by username..."
                       value={searchTerm}
@@ -502,7 +489,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
+                <Gavel className="h-5 w-5" />
                 Player Pool ({filteredPlayers.length})
               </CardTitle>
             </CardHeader>
@@ -528,11 +515,11 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
                         <div className="font-medium">{player.username}</div>
                         <div className="flex items-center gap-3 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
-                            <Star className="h-3 w-3" />
+                            <Gavel className="h-3 w-3" />
                             <span>{player.elo_rating} ELO</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
+                            <Gavel className="h-3 w-3" />
                             <span>{new Date(player.joined_at).toLocaleDateString()}</span>
                           </div>
                         </div>
@@ -563,7 +550,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
                           size="sm"
                           className="text-red-600 hover:bg-red-50"
                         >
-                          <UserMinus className="h-3 w-3" />
+                          <Gavel className="h-3 w-3" />
                         </Button>
                       )}
                     </div>
@@ -572,7 +559,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
 
                 {filteredPlayers.length === 0 && (
                   <div className="text-center py-8">
-                    <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <Gavel className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-medium mb-2">No Players Found</h3>
                     <p className="text-muted-foreground">
                       {searchTerm || statusFilter !== "all"
@@ -590,7 +577,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Crown className="h-5 w-5 text-yellow-500" />
+                <Gavel className="h-5 w-5 text-yellow-500" />
                 Captain Selection Management
               </CardTitle>
               <CardDescription>
@@ -599,15 +586,45 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
             </CardHeader>
             <CardContent className="space-y-4">
               {isOrganizer && (
-                <div className="flex gap-2">
-                  <Button onClick={selectCaptainsAutomatically} className="flex-1">
-                    <Crown className="h-4 w-4 mr-2" />
-                    Auto-Select Captains
-                  </Button>
-                  <Button onClick={resetCaptains} variant="outline">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Reset Captains
-                  </Button>
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <Button onClick={selectCaptainsAutomatically} className="flex-1">
+                      <Gavel className="h-4 w-4 mr-2" />
+                      Auto-Select Captains
+                    </Button>
+                    <Button onClick={resetCaptains} variant="outline">
+                      <Gavel className="h-4 w-4 mr-2" />
+                      Reset Captains
+                    </Button>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Gavel className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium text-blue-900 dark:text-blue-100">Captain Selection Status</span>
+                    </div>
+                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                      {players.filter((p) => p.status === "captain").length > 0
+                        ? `${players.filter((p) => p.status === "captain").length} captains selected. Ready to start tournament formation.`
+                        : "No captains selected yet. Use auto-select to choose captains based on ELO ratings."}
+                    </div>
+                    {players.filter((p) => p.status === "captain").length > 0 &&
+                      tournament?.status === "registration" && (
+                        <div className="mt-3">
+                          <Button
+                            onClick={() => {
+                              // This would trigger tournament status change to drafting
+                              toast.success("Tournament formation ready! Switch to Auction Draft tab to begin.")
+                            }}
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            <Gavel className="h-3 w-3 mr-1" />
+                            Ready for Draft
+                          </Button>
+                        </div>
+                      )}
+                  </div>
                 </div>
               )}
 
@@ -619,7 +636,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
                       key={captain.id}
                       className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
                     >
-                      <Crown className="h-5 w-5 text-yellow-500" />
+                      <Gavel className="h-5 w-5 text-yellow-500" />
                       <Avatar className="h-10 w-10">
                         <AvatarFallback className="bg-yellow-100 text-yellow-800">
                           {captain.username.charAt(0).toUpperCase()}
@@ -639,9 +656,17 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
 
                 {players.filter((p) => p.status === "captain").length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
-                    <Crown className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <Gavel className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No captains selected yet</p>
                     <p className="text-sm">Use auto-select to choose captains based on ELO</p>
+                    {isOrganizer && (
+                      <div className="mt-4">
+                        <Button onClick={selectCaptainsAutomatically} variant="outline">
+                          <Gavel className="h-4 w-4 mr-2" />
+                          Select Captains Now
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -653,7 +678,7 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
+                <Gavel className="h-5 w-5" />
                 Player Pool Settings
               </CardTitle>
               <CardDescription>Configure player pool parameters and tournament settings.</CardDescription>
