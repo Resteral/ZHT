@@ -51,14 +51,12 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
     try {
       console.log("[v0] Validating team ownership for tournament:", tournamentData.id)
 
-      // Get current teams and their captains
       const { data: teams, error: teamsError } = await supabase
         .from("tournament_teams")
         .select(`
           id,
           team_name,
           team_captain,
-          team_members,
           users:team_captain(username, id)
         `)
         .eq("tournament_id", tournamentData.id)
@@ -77,7 +75,6 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
       console.log("[v0] Teams without captains:", teamsWithoutCaptains.length)
       console.log("[v0] Expected teams:", maxTeams, "Current teams:", teams?.length || 0)
 
-      // If we don't have enough teams or captains, show warning
       if (!teams || teams.length < maxTeams || teamsWithoutCaptains.length > 0) {
         console.log("[v0] Team ownership validation failed - missing teams or captains")
         setError(
@@ -116,6 +113,39 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
 
       console.log("[v0] Tournament loaded:", tournamentData.name, "Status:", tournamentData.status)
       setTournament(tournamentData)
+
+      console.log("[v0] Loading player pool for tournament:", params.id)
+      const { data: playerPoolData, error: playerPoolError } = await supabase
+        .from("tournament_player_pool")
+        .select(`
+          *,
+          user:users(id, username, email)
+        `)
+        .eq("tournament_id", params.id)
+
+      if (playerPoolError) {
+        console.log("[v0] Player pool load error:", playerPoolError)
+      } else {
+        console.log("[v0] Loaded player pool:", playerPoolData?.length || 0, "players")
+        setPlayerPool(playerPoolData || [])
+      }
+
+      console.log("[v0] Loading team captains for tournament:", params.id)
+      const { data: teamsData, error: teamsError } = await supabase
+        .from("tournament_teams")
+        .select(`
+          *,
+          captain:users!tournament_teams_team_captain_fkey(id, username, email)
+        `)
+        .eq("tournament_id", params.id)
+        .not("team_captain", "is", null)
+
+      if (teamsError) {
+        console.log("[v0] Teams load error:", teamsError)
+      } else {
+        console.log("[v0] Loaded teams with captains:", teamsData?.length || 0, "teams")
+        setCaptains(teamsData || [])
+      }
 
       const { data: existingDraft } = await supabase
         .from("captain_drafts")
@@ -164,12 +194,12 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
               .from("tournament_teams")
               .select("id, team_captain")
               .eq("tournament_id", params.id)
-              .or(`team_captain.eq.${user.id},team_members.cs.["${user.id}"]`)
+              .eq("team_captain", user.id)
               .maybeSingle()
 
             if (teamMembership) {
               setUserRole("participant")
-              console.log("[v0] User is team member/captain")
+              console.log("[v0] User is team captain")
             } else {
               setUserRole("spectator")
               console.log("[v0] User is spectator")
@@ -404,17 +434,12 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
             tournamentId={params.id}
             onDraftStarted={(draftId) => {
               console.log("[v0] Draft started with ID:", draftId)
-              // Refresh tournament data to show updated status
               loadTournamentData()
             }}
           />
 
           {tournament.tournament_type === "auction_draft" && (
-            <TournamentAuctionDraft
-              tournamentId={params.id}
-              captains={captains} // Will be loaded from tournament data
-              playerPool={playerPool} // Will be loaded from tournament participants
-            />
+            <TournamentAuctionDraft tournamentId={params.id} captains={captains} playerPool={playerPool} />
           )}
         </div>
       )}

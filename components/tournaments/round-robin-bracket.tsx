@@ -76,20 +76,23 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
 
       const { data: tournamentTeamsData, error: tournamentTeamsError } = await supabase
         .from("tournament_teams")
-        .select(`
-          id,
-          team_id,
-          teams!inner(
-            id,
-            name
-          )
-        `)
+        .select("*")
         .eq("tournament_id", tournamentId)
 
       if (tournamentTeamsError) throw tournamentTeamsError
 
+      const captainIds = (tournamentTeamsData || []).map((team) => team.team_captain).filter(Boolean)
+      const { data: usersData, error: usersError } = await supabase
+        .from("users")
+        .select("id, username, display_name")
+        .in("id", captainIds)
+
+      if (usersError) throw usersError
+
       const teamLookup = (tournamentTeamsData || []).reduce((acc: Record<string, string>, tournamentTeam: any) => {
-        acc[tournamentTeam.team_id] = tournamentTeam.teams?.name || "Unknown Team"
+        const captain = (usersData || []).find((user) => user.id === tournamentTeam.team_captain)
+        acc[tournamentTeam.team_captain] =
+          tournamentTeam.team_name || captain?.display_name || captain?.username || "Unknown Team"
         return acc
       }, {})
 
@@ -205,14 +208,7 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
     try {
       const { data: tournamentTeamsData, error: teamsError } = await supabase
         .from("tournament_teams")
-        .select(`
-          id,
-          team_id,
-          teams!inner(
-            id,
-            name
-          )
-        `)
+        .select("*")
         .eq("tournament_id", tournamentId)
 
       if (teamsError) throw teamsError
@@ -231,8 +227,8 @@ export function RoundRobinBracket({ tournamentId, tournament }: RoundRobinBracke
             id: `${tournamentId}-rr-${matchNumber}`,
             tournament_id: tournamentId,
             match_number: matchNumber,
-            team1_captain_id: tournamentTeamsData[i].team_id,
-            team2_captain_id: tournamentTeamsData[j].team_id,
+            team1_captain_id: tournamentTeamsData[i].team_captain,
+            team2_captain_id: tournamentTeamsData[j].team_captain,
             team1_score: 0,
             team2_score: 0,
             winner_captain_id: null,

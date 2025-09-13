@@ -16,6 +16,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   })
 
   try {
+    console.log("[v0] Fetching auction session for tournament:", params.id)
+
     const { data: auctionSession, error: sessionError } = await supabase
       .from("tournament_auction_sessions")
       .select("*")
@@ -24,11 +26,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     if (sessionError && sessionError.code !== "PGRST116") {
       console.error("[v0] Error fetching auction session:", sessionError)
+      return NextResponse.json({ error: "Failed to fetch auction session" }, { status: 500 })
     }
 
     let currentPlayer = null
     if (auctionSession?.current_player_id) {
-      const { data: playerData } = await supabase
+      const { data: playerData, error: playerError } = await supabase
         .from("tournament_player_pool")
         .select(`
           id,
@@ -36,24 +39,45 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           users(username, elo_rating)
         `)
         .eq("id", auctionSession.current_player_id)
-        .single()
+        .maybeSingle()
 
-      currentPlayer = playerData
+      if (!playerError) {
+        currentPlayer = playerData
+      }
     }
 
-    const { data: teamBudgets, error: budgetError } = await supabase
+    const { data: tournamentTeams, error: teamsError } = await supabase
       .from("tournament_teams")
       .select(`
         id,
         team_name,
         team_captain,
-        budget_remaining,
-        users!tournament_teams_team_captain_fkey(username)
+        budget_remaining
       `)
       .eq("tournament_id", params.id)
 
-    if (budgetError) {
-      console.error("[v0] Error fetching team budgets:", budgetError)
+    if (teamsError) {
+      console.error("[v0] Error fetching tournament teams:", teamsError)
+    }
+
+    let teamBudgets = []
+    if (tournamentTeams && tournamentTeams.length > 0) {
+      const captainIds = tournamentTeams.map((team) => team.team_captain).filter(Boolean)
+
+      const { data: captains, error: captainsError } = await supabase
+        .from("users")
+        .select("id, username")
+        .in("id", captainIds)
+
+      if (!captainsError) {
+        // Combine team data with captain usernames
+        teamBudgets = tournamentTeams.map((team) => ({
+          ...team,
+          captain_username: captains.find((captain) => captain.id === team.team_captain)?.username || "Unknown",
+        }))
+      } else {
+        teamBudgets = tournamentTeams
+      }
     }
 
     const { data: playerPool, error: poolError } = await supabase
