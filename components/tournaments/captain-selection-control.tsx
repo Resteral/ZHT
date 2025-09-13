@@ -131,10 +131,15 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
 
     setLoading(true)
     try {
+      console.log("[v0] Starting captain selection with method:", selectionMethod)
+      console.log("[v0] Selected players for manual:", selectedPlayers)
+      console.log("[v0] Player pool size:", playerPool.length)
+
       let result
 
       switch (selectionMethod) {
         case "automatic":
+          console.log("[v0] Calling automatic captain selection...")
           result = await captainSelectionService.selectCaptainsAutomatically(tournament.id)
           break
         case "manual":
@@ -142,14 +147,18 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
             toast.error("Please select players for manual captain selection")
             return
           }
+          console.log("[v0] Calling manual captain selection with players:", selectedPlayers)
           result = await captainSelectionService.selectCaptainsManually(tournament.id, selectedPlayers)
           break
         case "random":
+          console.log("[v0] Calling random captain selection...")
           result = await captainSelectionService.selectCaptainsRandomly(tournament.id)
           break
         default:
           throw new Error("Invalid selection method")
       }
+
+      console.log("[v0] Captain selection result:", result)
 
       if (result.success) {
         toast.success(result.message)

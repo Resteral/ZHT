@@ -44,6 +44,8 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
           .single()
 
         if (error) throw error
+
+        console.log("[v0] Loaded tournament settings:", data)
         setTournamentSettings(data)
       } catch (error) {
         console.error("[v0] Error loading tournament settings:", error)
@@ -56,12 +58,24 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
   }, [tournament.id])
 
   const getMinimumPlayers = () => {
-    if (!tournamentSettings) return 4
+    if (!tournamentSettings) {
+      console.log("[v0] No tournament settings, using defaults")
+      return 16 // Default: 4 teams × 4 players
+    }
 
-    const maxTeams = tournamentSettings.max_teams || 4 // Default to 4 teams, not 8
+    const maxTeams = tournamentSettings.max_teams || tournamentSettings.player_pool_settings?.max_teams || 4
     const playersPerTeam = tournamentSettings.player_pool_settings?.players_per_team || 4
 
-    return maxTeams * playersPerTeam
+    const minPlayers = maxTeams * playersPerTeam
+
+    console.log("[v0] Calculating minimum players:", {
+      maxTeams,
+      playersPerTeam,
+      minPlayers,
+      tournamentSettings,
+    })
+
+    return minPlayers
   }
 
   const minParticipants = getMinimumPlayers()
@@ -183,20 +197,21 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
             <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
             <div className="text-2xl font-bold text-green-700">{minParticipants}</div>
             <div className="text-sm text-green-600">
-              Minimum Required ({tournamentSettings?.max_teams || 4} teams ×{" "}
+              Minimum Required (
+              {tournamentSettings?.max_teams || tournamentSettings?.player_pool_settings?.max_teams || 4} teams ×{" "}
               {tournamentSettings?.player_pool_settings?.players_per_team || 4} players)
             </div>
           </div>
           <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
             <Star className="h-8 w-8 mx-auto mb-2 text-purple-500" />
             <div className="text-2xl font-bold text-purple-700">{tournament.max_participants}</div>
-            <div className="text-sm text-purple-600">Max Players Allowed</div>
+            <div className="text-sm text-purple-600">Maximum Allowed</div>
           </div>
         </div>
 
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span>Tournament Readiness</span>
+            <span>Registration Progress</span>
             <span className="font-medium">
               {participantCount}/{minParticipants} required • {tournament.max_participants} max allowed
             </span>
@@ -223,9 +238,10 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
                       Need {minParticipants - participantCount} more players to start the tournament. Minimum:{" "}
-                      {minParticipants} players ({tournamentSettings?.max_teams || 4} teams of{" "}
-                      {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each). Maximum allowed:{" "}
-                      {tournament.max_participants} players.
+                      {minParticipants} players (
+                      {tournamentSettings?.max_teams || tournamentSettings?.player_pool_settings?.max_teams || 4} teams
+                      of {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each). Maximum
+                      allowed: {tournament.max_participants} players.
                     </AlertDescription>
                   </Alert>
                 )}

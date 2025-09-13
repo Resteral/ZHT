@@ -21,7 +21,7 @@ export interface PlayerPoolEntry {
 class CaptainSelectionService {
   private supabase = createClient()
 
-  get Supabase() {
+  get supabase() {
     return this.supabase
   }
 
