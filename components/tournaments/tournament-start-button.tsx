@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Play, Users, Clock, AlertTriangle, CheckCircle, Star } from "lucide-react"
+import { Play, Users, Clock, AlertTriangle, CheckCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
@@ -220,7 +220,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
         <CardDescription>Manage tournament progression and start the draft when ready</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <Users className="h-8 w-8 mx-auto mb-2 text-blue-500" />
             <div className="text-2xl font-bold text-blue-700">{participantCount}</div>
@@ -230,14 +230,9 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
             <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
             <div className="text-2xl font-bold text-green-700">{minParticipants}</div>
             <div className="text-sm text-green-600">
-              Minimum Required ({tournamentSettings?.player_pool_settings?.max_teams || 4} teams ×{" "}
+              Players Needed to Start ({getRequiredTeams()} teams ×{" "}
               {tournamentSettings?.player_pool_settings?.players_per_team || 4} players)
             </div>
-          </div>
-          <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
-            <Star className="h-8 w-8 mx-auto mb-2 text-purple-500" />
-            <div className="text-2xl font-bold text-purple-700">{tournament.max_participants}</div>
-            <div className="text-sm text-purple-600">Maximum Allowed</div>
           </div>
         </div>
 
@@ -245,7 +240,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
           <div className="flex justify-between text-sm">
             <span>Registration Progress</span>
             <span className="font-medium">
-              {participantCount}/{minParticipants} required • {tournament.max_participants} max allowed
+              {participantCount}/{minParticipants} required • Unlimited registration
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -278,10 +273,9 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
-                      Need {minParticipants - participantCount} more players to start the tournament. Minimum:{" "}
+                      Need {minParticipants - participantCount} more players to start the tournament. Required to start:{" "}
                       {minParticipants} players ({requiredTeams} teams of{" "}
-                      {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each). Maximum allowed:{" "}
-                      {tournament.max_participants} players.
+                      {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each).
                     </AlertDescription>
                   </Alert>
                 )}
