@@ -273,12 +273,9 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
               ))}
             </div>
             <div className="flex gap-2">
-              <Button
-                onClick={() => (window.location.href = `/tournaments/${tournament.id}/draft`)}
-                className="flex-1 bg-green-600 hover:bg-green-700"
-              >
+              <Button onClick={() => onCaptainsSelected?.(captains)} className="flex-1 bg-green-600 hover:bg-green-700">
                 <ArrowRight className="h-4 w-4 mr-2" />
-                Move to Draft Screen
+                Start Tournament Formation
               </Button>
               {canSelectCaptains && (
                 <Button onClick={handleResetCaptains} disabled={loading} variant="outline" className="bg-transparent">

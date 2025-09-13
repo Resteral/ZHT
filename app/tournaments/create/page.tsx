@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
 import {
   ArrowLeft,
   Users,
@@ -21,6 +22,7 @@ import {
   Zap,
   BarChart3,
   DollarSign,
+  Sparkles,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
@@ -43,6 +45,7 @@ export default function CreateTournamentPage() {
             ? "Auction Draft"
             : "Snake Draft"
     } Tournament`,
+    description: "",
     duration_type: "short" as "short" | "long",
     tournament_type: "draft",
     max_participants: 32,
@@ -50,6 +53,12 @@ export default function CreateTournamentPage() {
     game: "zealot_hockey",
     entry_fee: 0,
     prize_pool: 0,
+    team_buy_in: 50,
+    auction_budget: 500,
+    registration_opens: new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString().slice(0, 16),
+    registration_closes: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString().slice(0, 16),
+    auction_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
+    tournament_start: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString().slice(0, 16),
     settings: {
       bracket_type: "single_elimination" as
         | "single_elimination"
@@ -77,6 +86,9 @@ export default function CreateTournamentPage() {
       max_teams: 8,
       games_per_team: 10,
 
+      league_tournament_type: "weekly" as "daily" | "weekly" | "biweekly" | "monthly" | "seasonal" | "custom",
+      duration_days: 7,
+
       // Team system settings
       allow_team_invitations: true,
       require_team_confirmation: true,
@@ -87,6 +99,15 @@ export default function CreateTournamentPage() {
       create_lobbies_on_finish: true,
     },
   })
+
+  const leagueTournamentTypes = {
+    daily: { name: "Daily Tournament", days: 1, icon: "⚡", description: "Fast-paced single day competition" },
+    weekly: { name: "Weekly Tournament", days: 7, icon: "📅", description: "Week-long competitive series" },
+    biweekly: { name: "Bi-Weekly Tournament", days: 14, icon: "🗓️", description: "Two week tournament format" },
+    monthly: { name: "Monthly Tournament", days: 30, icon: "📆", description: "Month-long championship" },
+    seasonal: { name: "Seasonal Tournament", days: 90, icon: "🏆", description: "3-month seasonal competition" },
+    custom: { name: "Custom Duration", days: 0, icon: "⚙️", description: "Set your own duration" },
+  }
 
   const updateDurationDefaults = (durationType: "short" | "long") => {
     if (durationType === "short") {
@@ -120,6 +141,26 @@ export default function CreateTournamentPage() {
     }
   }
 
+  const handleLeagueTournamentTypeChange = (value: string) => {
+    const typeData = leagueTournamentTypes[value as keyof typeof leagueTournamentTypes]
+    setFormData((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        league_tournament_type: value as any,
+        duration_days: typeData.days,
+      },
+    }))
+  }
+
+  const handleTeamBuyInChange = (value: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      team_buy_in: value,
+      prize_pool: prev.settings.max_teams * value * 0.8, // 80% of buy-ins go to prize pool
+    }))
+  }
+
   const playersNeeded =
     formData.settings.player_organization === "premade_teams"
       ? formData.settings.max_teams * formData.settings.players_per_team
@@ -136,6 +177,8 @@ export default function CreateTournamentPage() {
   const startDate = new Date(formData.start_date)
   const now = new Date()
   const isStartDateValid = startDate > now
+
+  const currentLeagueTournamentType = leagueTournamentTypes[formData.settings.league_tournament_type]
 
   return (
     <div className="container mx-auto py-6 max-w-2xl">
@@ -170,6 +213,19 @@ export default function CreateTournamentPage() {
         </div>
       )}
 
+      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800 mb-6">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <Sparkles className="h-6 w-6 text-yellow-500" />
+            <h3 className="text-lg font-semibold">Tournament Creation Now Open to Everyone!</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Create your own tournaments with custom formats, team purchasing, and auction drafts. Set your own rules,
+            prize pools, and duration. Perfect for organizing competitions with friends or the community!
+          </p>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -199,9 +255,10 @@ export default function CreateTournamentPage() {
                 const tournamentData = {
                   name: formData.name,
                   description:
-                    formData.duration_type === "short"
+                    formData.description ||
+                    (formData.duration_type === "short"
                       ? `${formData.settings.bracket_type.replace("_", " ")} tournament with ${formData.settings.draft_mode.replace("_", " ")} drafting`
-                      : `League with ${formData.settings.draft_mode.replace("_", " ")} drafting and manual scheduling`,
+                      : `League with ${formData.settings.draft_mode.replace("_", " ")} drafting and manual scheduling`),
                   tournament_type: formData.duration_type === "long" ? "league" : "draft",
                   max_participants: formData.max_participants,
                   max_teams: isTeamBased ? formData.settings.max_teams : formData.settings.num_teams,
@@ -210,6 +267,12 @@ export default function CreateTournamentPage() {
                   prize_pool: formData.prize_pool,
                   start_date: startDateTime,
                   game: formData.game,
+                  team_buy_in: formData.team_buy_in,
+                  auction_budget: formData.auction_budget,
+                  registration_opens: formData.registration_opens,
+                  registration_closes: formData.registration_closes,
+                  auction_date: formData.auction_date,
+                  tournament_start: formData.tournament_start,
                   player_pool_settings: {
                     ...formData.settings,
                     duration_type: formData.duration_type,
@@ -265,6 +328,18 @@ export default function CreateTournamentPage() {
                 <p className="text-sm text-muted-foreground">Give your tournament a unique and memorable name</p>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Describe your tournament format, rules, and what makes it special..."
+                  rows={4}
+                />
+                <p className="text-sm text-muted-foreground">Optional description of your tournament</p>
+              </div>
+
               <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
                 <h4 className="font-medium flex items-center gap-2">
                   <Clock className="h-4 w-4" />
@@ -318,34 +393,85 @@ export default function CreateTournamentPage() {
                 </div>
               </div>
 
-              <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Tournament Timing
-                </h4>
+              {formData.duration_type === "long" && (
+                <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    League Tournament Type
+                  </h4>
 
-                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="start_date" className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      Draft Start Time
-                    </Label>
-                    <Input
-                      id="start_date"
-                      type="datetime-local"
-                      value={formData.start_date}
-                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                      className={!isStartDateValid ? "border-destructive" : ""}
-                    />
-                    <p className="text-xs text-muted-foreground">When draft begins, games start immediately after</p>
-                    {!isStartDateValid && <p className="text-xs text-destructive">Start date must be in the future</p>}
+                    <Label htmlFor="league_tournament_type">Tournament Type</Label>
+                    <Select
+                      value={formData.settings.league_tournament_type}
+                      onValueChange={handleLeagueTournamentTypeChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(leagueTournamentTypes).map(([key, type]) => (
+                          <SelectItem key={key} value={key}>
+                            <div className="flex items-center gap-2">
+                              <span>{type.icon}</span>
+                              <div>
+                                <div className="font-medium">{type.name}</div>
+                                <div className="text-xs text-muted-foreground">{type.description}</div>
+                              </div>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="duration_days">Duration (Days)</Label>
+                    {formData.settings.league_tournament_type === "custom" ? (
+                      <Input
+                        id="duration_days"
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={formData.settings.duration_days}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            settings: { ...formData.settings, duration_days: Number.parseInt(e.target.value) || 1 },
+                          })
+                        }
+                        placeholder="Enter custom duration..."
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{currentLeagueTournamentType.days} Days</span>
+                        <Badge variant="secondary" className="ml-auto">
+                          {currentLeagueTournamentType.icon} {currentLeagueTournamentType.name}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-muted/50 rounded-lg border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">{currentLeagueTournamentType.icon}</span>
+                      <h4 className="font-medium">{currentLeagueTournamentType.name}</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">{currentLeagueTournamentType.description}</p>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {formData.settings.duration_days} days
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3 w-3" />
+                        {formData.settings.max_teams} teams
+                      </span>
+                    </div>
                   </div>
                 </div>
-
-                <div className="text-sm text-muted-foreground">
-                  Tournament starts: {new Date(formData.start_date).toLocaleString()} • Runs until completion
-                </div>
-              </div>
+              )}
 
               <div className="space-y-4 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
                 <h4 className="font-medium flex items-center gap-2 text-green-800 dark:text-green-200">
@@ -383,6 +509,40 @@ export default function CreateTournamentPage() {
                   </div>
                 </div>
 
+                {formData.duration_type === "long" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="team_buy_in">Team Buy-In ($)</Label>
+                      <Input
+                        id="team_buy_in"
+                        type="number"
+                        min="50"
+                        step="25"
+                        value={formData.team_buy_in}
+                        onChange={(e) => handleTeamBuyInChange(Number.parseFloat(e.target.value) || 0)}
+                        placeholder="100"
+                      />
+                      <p className="text-xs text-muted-foreground">Cost for players to buy a team slot</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="auction_budget">Auction Budget ($)</Label>
+                      <Input
+                        id="auction_budget"
+                        type="number"
+                        min="500"
+                        step="100"
+                        value={formData.auction_budget}
+                        onChange={(e) =>
+                          setFormData({ ...formData, auction_budget: Number.parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="1000"
+                      />
+                      <p className="text-xs text-muted-foreground">Budget each team gets for player auctions</p>
+                    </div>
+                  </div>
+                )}
+
                 {formData.entry_fee > 0 && formData.max_participants > 0 && (
                   <div className="text-sm text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 p-2 rounded">
                     <strong>Projected Revenue:</strong> ${(formData.entry_fee * formData.max_participants).toFixed(2)}
@@ -395,7 +555,106 @@ export default function CreateTournamentPage() {
                     )}
                   </div>
                 )}
+
+                {formData.duration_type === "long" && formData.team_buy_in > 0 && (
+                  <div className="p-4 bg-muted/50 rounded-lg">
+                    <h4 className="font-medium text-sm mb-2">How Team Purchasing Works:</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Players pay the buy-in to purchase a team slot</li>
+                      <li>• Each team owner gets an auction budget to bid on players</li>
+                      <li>• Auction draft determines team rosters</li>
+                      <li>• Tournament runs for the specified duration</li>
+                      <li>• Prize pool distributed to top performers</li>
+                    </ul>
+                  </div>
+                )}
               </div>
+
+              {formData.duration_type === "long" && (
+                <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Tournament Schedule
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="registration_opens">Registration Opens</Label>
+                      <Input
+                        id="registration_opens"
+                        type="datetime-local"
+                        value={formData.registration_opens}
+                        onChange={(e) => setFormData({ ...formData, registration_opens: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="registration_closes">Registration Closes</Label>
+                      <Input
+                        id="registration_closes"
+                        type="datetime-local"
+                        value={formData.registration_closes}
+                        onChange={(e) => setFormData({ ...formData, registration_closes: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="auction_date">Auction Draft Date</Label>
+                      <Input
+                        id="auction_date"
+                        type="datetime-local"
+                        value={formData.auction_date}
+                        onChange={(e) => setFormData({ ...formData, auction_date: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="tournament_start">Tournament Start</Label>
+                      <Input
+                        id="tournament_start"
+                        type="datetime-local"
+                        value={formData.tournament_start}
+                        onChange={(e) => setFormData({ ...formData, tournament_start: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {formData.duration_type === "short" && (
+                <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Tournament Timing
+                  </h4>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="start_date" className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Draft Start Time
+                      </Label>
+                      <Input
+                        id="start_date"
+                        type="datetime-local"
+                        value={formData.start_date}
+                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                        className={!isStartDateValid ? "border-destructive" : ""}
+                      />
+                      <p className="text-xs text-muted-foreground">When draft begins, games start immediately after</p>
+                      {!isStartDateValid && (
+                        <p className="text-xs text-destructive">Start date must be in the future</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-sm text-muted-foreground">
+                    Tournament starts: {new Date(formData.start_date).toLocaleString()} • Runs until completion
+                  </div>
+                </div>
+              )}
 
               {formData.duration_type === "short" && (
                 <div className="space-y-2">
@@ -804,6 +1063,12 @@ export default function CreateTournamentPage() {
                         bracket
                       </p>
                     )}
+                    {formData.duration_type === "long" && (
+                      <p>
+                        <strong>League Type:</strong> {currentLeagueTournamentType.name} (
+                        {formData.settings.duration_days} days)
+                      </p>
+                    )}
                     <p>
                       <strong>Draft Style:</strong> {formData.settings.draft_mode.replace("_", " ").toUpperCase()}
                     </p>
@@ -824,6 +1089,11 @@ export default function CreateTournamentPage() {
                     {formData.entry_fee > 0 && (
                       <p>
                         <strong>Entry Fee:</strong> ${formData.entry_fee}
+                      </p>
+                    )}
+                    {formData.duration_type === "long" && formData.team_buy_in > 0 && (
+                      <p>
+                        <strong>Team Buy-In:</strong> ${formData.team_buy_in}
                       </p>
                     )}
                     {formData.prize_pool > 0 && (
@@ -877,6 +1147,34 @@ export default function CreateTournamentPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {formData.duration_type === "long" && formData.prize_pool > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Prize Distribution</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>1st Place (40%):</span>
+                      <span className="font-medium text-green-500">${(formData.prize_pool * 0.4).toFixed(0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>2nd Place (25%):</span>
+                      <span className="font-medium text-green-500">${(formData.prize_pool * 0.25).toFixed(0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>3rd Place (15%):</span>
+                      <span className="font-medium text-green-500">${(formData.prize_pool * 0.15).toFixed(0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>4th-6th (20%):</span>
+                      <span className="font-medium text-green-500">${(formData.prize_pool * 0.2).toFixed(0)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Button type="submit" disabled={loading || !isValid || !isStartDateValid} className="w-full" size="lg">
               {loading

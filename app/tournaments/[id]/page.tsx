@@ -18,6 +18,7 @@ import { TournamentStartButton } from "@/components/tournaments/tournament-start
 import { CaptainSelectionControl } from "@/components/tournaments/captain-selection-control"
 import TournamentAuctionRoom from "@/components/tournaments/tournament-auction-room"
 import { useAuth } from "@/lib/auth-context"
+import { toast } from "sonner"
 
 interface TournamentPageProps {
   params: {
@@ -471,19 +472,58 @@ export default function TournamentPage({ params }: TournamentPageProps) {
 
         <TabsContent value="auction" className="space-y-6">
           {tournament.status === "drafting" || auctionSession ? (
-            <TournamentAuctionRoom
-              tournamentId={tournament.id}
-              currentUserId={user?.id || ""}
-              isOwner={user?.id === tournament.created_by || user?.username === "Resteral"}
-            />
+            <div className="space-y-6">
+              {(user?.id === tournament.created_by || user?.username === "Resteral") && (
+                <CaptainSelectionControl
+                  tournament={{
+                    id: tournament.id,
+                    name: tournament.name,
+                    status: tournament.status,
+                    created_by: tournament.created_by,
+                  }}
+                  onCaptainsSelected={(captains) => {
+                    console.log("[v0] Captains selected:", captains)
+                    // Refresh tournament data to get updated info
+                    fetchTournament()
+                    // Enable auction draft functionality
+                    setActiveTab("auction")
+                  }}
+                />
+              )}
+              <TournamentAuctionRoom
+                tournamentId={tournament.id}
+                currentUserId={user?.id || ""}
+                isOwner={user?.id === tournament.created_by || user?.username === "Resteral"}
+              />
+            </div>
           ) : (
             <Card>
               <CardContent className="py-8 text-center">
                 <Gavel className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Auction Draft Not Available</h3>
+                <h3 className="text-lg font-semibold mb-2">Tournament Formation</h3>
                 <p className="text-muted-foreground mb-4">
-                  The auction draft will be available when the tournament enters the drafting phase.
+                  {tournament.status === "registration"
+                    ? "Complete registration and select captains to begin tournament formation."
+                    : "The tournament formation will be available when ready."}
                 </p>
+                {tournament.status === "registration" &&
+                  (user?.id === tournament.created_by || user?.username === "Resteral") && (
+                    <div className="mt-6">
+                      <CaptainSelectionControl
+                        tournament={{
+                          id: tournament.id,
+                          name: tournament.name,
+                          status: tournament.status,
+                          created_by: tournament.created_by,
+                        }}
+                        onCaptainsSelected={(captains) => {
+                          console.log("[v0] Captains selected:", captains)
+                          fetchTournament()
+                          toast.success("Captains selected! Tournament formation ready.")
+                        }}
+                      />
+                    </div>
+                  )}
                 {(user?.id === tournament.created_by || user?.username === "Resteral") && (
                   <Button onClick={() => router.push(`/tournaments/${tournament.id}/manage`)} variant="outline">
                     Manage Tournament
