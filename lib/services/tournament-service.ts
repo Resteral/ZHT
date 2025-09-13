@@ -151,7 +151,8 @@ export const tournamentService = {
       team_based: true,
       created_by: userId, // Ensure created_by is always set
       player_pool_settings: {
-        max_teams: tournamentData.player_pool_settings?.num_teams || 8,
+        max_teams:
+          tournamentData.player_pool_settings?.num_teams || tournamentData.player_pool_settings?.max_teams || 4,
         draft_mode: tournamentData.player_pool_settings?.draft_mode || "snake_draft",
         players_per_team: tournamentData.player_pool_settings?.players_per_team || 4,
         auto_start: false, // Disable auto start to prevent instant tournament starting
@@ -238,7 +239,7 @@ export const tournamentService = {
         throw new Error("Failed to get tournament participants")
       }
 
-      const numTeams = tournament.player_pool_settings?.max_teams || 4
+      const numTeams = tournament.player_pool_settings?.max_teams || tournament.player_pool_settings?.num_teams || 4
       const playersPerTeam = tournament.player_pool_settings?.players_per_team || 4
       const lobbiesCreated = []
 

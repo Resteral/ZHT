@@ -34,7 +34,7 @@ export function TournamentPlayerPoolDraft({
   isHosted = false,
 }: TournamentPlayerPoolDraftProps) {
   const [settings, setSettings] = useState<PlayerPoolSettings>({
-    max_teams: 8,
+    max_teams: 4,
     players_per_team: 5,
     max_pool_size: 50,
     draft_type: "auction",

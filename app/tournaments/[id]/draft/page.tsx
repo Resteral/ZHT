@@ -69,7 +69,8 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
 
       console.log("[v0] Current teams:", teams?.length || 0)
 
-      const maxTeams = tournamentData.player_pool_settings?.max_teams || tournamentData.max_teams || 8
+      const maxTeams =
+        tournamentData.player_pool_settings?.max_teams || tournamentData.player_pool_settings?.num_teams || 4
       const teamsWithoutCaptains = teams?.filter((team) => !team.team_captain) || []
 
       console.log("[v0] Teams without captains:", teamsWithoutCaptains.length)
@@ -330,7 +331,7 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
               <Target className="h-6 w-6 mx-auto mb-1 text-purple-500" />
               <div className="text-sm font-medium">Teams</div>
               <div className="text-xs text-muted-foreground">
-                {tournament.player_pool_settings?.num_teams || tournament.player_pool_settings?.max_teams || 8} teams
+                {tournament.player_pool_settings?.num_teams || tournament.player_pool_settings?.max_teams || 4} teams
               </div>
             </div>
             <div className="text-center p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
@@ -373,8 +374,9 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Ensure all {tournament.player_pool_settings?.max_teams || 8} teams have assigned captains before
-                  starting the draft.
+                  Ensure all{" "}
+                  {tournament.player_pool_settings?.max_teams || tournament.player_pool_settings?.num_teams || 4} teams
+                  have assigned captains before starting the draft.
                 </p>
               </div>
             </div>
