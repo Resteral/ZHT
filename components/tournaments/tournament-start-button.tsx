@@ -33,6 +33,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
 
   const [tournamentSettings, setTournamentSettings] = useState<any>(null)
   const [teamsWithCaptains, setTeamsWithCaptains] = useState<any[]>([])
+  const [playerPoolSize, setPlayerPoolSize] = useState<number>(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -48,6 +49,18 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
 
         console.log("[v0] Loaded tournament settings:", data)
         setTournamentSettings(data)
+
+        const { data: poolData, error: poolError } = await supabase
+          .from("tournament_player_pool")
+          .select("id")
+          .eq("tournament_id", tournament.id)
+
+        if (poolError) {
+          console.error("[v0] Error loading player pool size:", poolError)
+        } else {
+          setPlayerPoolSize(poolData?.length || 0)
+          console.log("[v0] Player pool size:", poolData?.length || 0)
+        }
 
         const { data: teams, error: teamsError } = await supabase
           .from("tournament_teams")
@@ -78,21 +91,24 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
 
   const getRequiredTeams = () => {
     if (!tournamentSettings) {
+      console.log("[v0] No tournament settings loaded, using fallback of 4 teams")
       return 4
     }
 
     const settingsTeams =
-      tournamentSettings.player_pool_settings?.max_teams ||
       tournamentSettings.player_pool_settings?.num_teams ||
-      tournamentSettings.max_teams
+      tournamentSettings.player_pool_settings?.max_teams ||
+      tournamentSettings.max_teams ||
+      4 // Default to 4 teams if no settings found
 
     console.log("[v0] Getting required teams:", {
       settingsTeams,
       player_pool_settings: tournamentSettings.player_pool_settings,
       max_teams: tournamentSettings.max_teams,
+      final_result: settingsTeams,
     })
 
-    return settingsTeams || 4
+    return Math.min(Math.max(settingsTeams, 2), 8)
   }
 
   const getMinimumPlayers = () => {
@@ -251,7 +267,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
           <div className="flex justify-between text-sm">
             <span>Registration Progress</span>
             <span className="font-medium">
-              {participantCount}/{minParticipants} required • Unlimited registration
+              {participantCount}/{minParticipants} required • {playerPoolSize} in player pool
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
