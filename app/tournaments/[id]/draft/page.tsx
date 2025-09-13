@@ -122,7 +122,7 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
         .select("id, status")
         .eq("tournament_id", params.id)
         .eq("status", "drafting")
-        .single()
+        .maybeSingle()
 
       if (existingDraft) {
         console.log("[v0] Found existing draft, redirecting:", existingDraft.id)
@@ -154,7 +154,7 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
             .select("id, status")
             .eq("tournament_id", params.id)
             .eq("user_id", user.id)
-            .single()
+            .maybeSingle()
 
           if (participation) {
             setUserRole("participant")
@@ -165,7 +165,7 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
               .select("id, team_captain")
               .eq("tournament_id", params.id)
               .or(`team_captain.eq.${user.id},team_members.cs.["${user.id}"]`)
-              .single()
+              .maybeSingle()
 
             if (teamMembership) {
               setUserRole("participant")

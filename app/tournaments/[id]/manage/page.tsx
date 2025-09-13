@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Settings, Users, Trophy, Calendar } from "lucide-react"
+import { ArrowLeft, Settings, Users, Trophy, Calendar, Gavel } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import { TournamentLifecycleManager } from "@/components/tournaments/tournament-lifecycle-manager"
@@ -21,6 +21,7 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
   const [tournament, setTournament] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [auctionSession, setAuctionSession] = useState<any>(null)
   const router = useRouter()
   const supabase = createClient()
   const { user } = useAuth()
@@ -80,6 +81,29 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
     if (tournament) {
       setTournament({ ...tournament, status: newStatus })
       toast.success(`Tournament status updated to ${newStatus}`)
+    }
+  }
+
+  const startAuctionDraft = async () => {
+    try {
+      const response = await fetch(`/api/tournaments/${params.id}/auction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start_auction" }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setAuctionSession(data.session)
+        toast.success("Auction draft started successfully!")
+        router.push(`/tournaments/${params.id}/auction`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to start auction draft")
+      }
+    } catch (error) {
+      console.error("[v0] Error starting auction draft:", error)
+      toast.error("Failed to start auction draft")
     }
   }
 
@@ -225,6 +249,22 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
                 <Users className="h-4 w-4 mr-2" />
                 Manage Participants
               </Button>
+              {tournament?.status === "team_building" && (
+                <Button onClick={startAuctionDraft} variant="outline" className="w-full justify-start bg-transparent">
+                  <Gavel className="h-4 w-4 mr-2" />
+                  Start Auction Draft
+                </Button>
+              )}
+              {(tournament?.status === "drafting" || auctionSession) && (
+                <Button
+                  onClick={() => router.push(`/tournaments/${params.id}/auction`)}
+                  variant="outline"
+                  className="w-full justify-start"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Auction Room
+                </Button>
+              )}
               {tournament?.status === "drafting" && (
                 <Button
                   onClick={() => router.push(`/tournaments/${params.id}/draft`)}

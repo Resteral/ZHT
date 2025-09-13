@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Trophy, Users, Calendar, DollarSign, Crown, Settings } from "lucide-react"
+import { ArrowLeft, Trophy, Users, Calendar, DollarSign, Crown, Settings, Gavel } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { UnifiedTournamentJoin } from "@/components/tournaments/unified-tournament-join"
 import { PlayerPoolManagement } from "@/components/tournaments/player-pool-management"
@@ -16,6 +16,7 @@ import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { TournamentBettingInterface } from "@/components/tournaments/tournament-betting-interface"
 import { TournamentStartButton } from "@/components/tournaments/tournament-start-button"
 import { CaptainSelectionControl } from "@/components/tournaments/captain-selection-control"
+import TournamentAuctionRoom from "@/components/tournaments/tournament-auction-room"
 import { useAuth } from "@/lib/auth-context"
 
 interface TournamentPageProps {
@@ -54,6 +55,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
+  const [auctionSession, setAuctionSession] = useState<any>(null)
   const { user } = useAuth()
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
     }
 
     fetchTournament()
+    checkAuctionSession()
   }, [params.id, router])
 
   const fetchTournament = async () => {
@@ -114,6 +117,20 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       router.push("/tournaments")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const checkAuctionSession = async () => {
+    try {
+      const response = await fetch(`/api/tournaments/${params.id}/auction`)
+      if (response.ok) {
+        const data = await response.json()
+        setAuctionSession(data.auctionSession)
+      } else {
+        console.log("[v0] No active auction session found")
+      }
+    } catch (error) {
+      console.log("[v0] No auction session available:", error)
     }
   }
 
@@ -290,10 +307,13 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="join">Join Tournament</TabsTrigger>
           <TabsTrigger value="pools">Player Pools</TabsTrigger>
+          <TabsTrigger value="auction" disabled={tournament.status !== "drafting" && !auctionSession}>
+            Auction Draft
+          </TabsTrigger>
           <TabsTrigger value="bracket">Live Bracket</TabsTrigger>
           <TabsTrigger value="betting">Betting</TabsTrigger>
         </TabsList>
@@ -447,6 +467,31 @@ export default function TournamentPage({ params }: TournamentPageProps) {
 
         <TabsContent value="betting" className="space-y-6">
           <TournamentBettingInterface tournamentId={tournament.id} tournamentName={tournament.name} participants={[]} />
+        </TabsContent>
+
+        <TabsContent value="auction" className="space-y-6">
+          {tournament.status === "drafting" || auctionSession ? (
+            <TournamentAuctionRoom
+              tournamentId={tournament.id}
+              currentUserId={user?.id || ""}
+              isOwner={user?.id === tournament.created_by || user?.username === "Resteral"}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <Gavel className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Auction Draft Not Available</h3>
+                <p className="text-muted-foreground mb-4">
+                  The auction draft will be available when the tournament enters the drafting phase.
+                </p>
+                {(user?.id === tournament.created_by || user?.username === "Resteral") && (
+                  <Button onClick={() => router.push(`/tournaments/${tournament.id}/manage`)} variant="outline">
+                    Manage Tournament
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>
