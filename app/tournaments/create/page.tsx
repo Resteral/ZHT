@@ -855,7 +855,7 @@ export default function CreateTournamentPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[4, 6, 8, 10, 12, 16, 20, 24].map((num) => (
+                      {[2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32].map((num) => (
                         <SelectItem key={num} value={num.toString()}>
                           <div className="flex items-center gap-2">
                             <Trophy className="h-4 w-4" />
@@ -865,7 +865,9 @@ export default function CreateTournamentPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-muted-foreground">Maximum number of teams that can register</p>
+                  <p className="text-sm text-muted-foreground">
+                    Maximum number of teams that can register. Supports 2-32 teams for flexible tournament formats.
+                  </p>
                 </div>
               )}
 
@@ -885,7 +887,7 @@ export default function CreateTournamentPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[4, 6, 8, 10, 12, 16].map((num) => (
+                      {[2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24].map((num) => (
                         <SelectItem key={num} value={num.toString()}>
                           <div className="flex items-center gap-2">
                             <Trophy className="h-4 w-4" />

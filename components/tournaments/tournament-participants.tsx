@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Trophy, Medal, Award, Users, Clock, Wifi, WifiOff, RefreshCw, UserPlus } from "lucide-react"
-import { tournamentService } from "@/lib/services/tournament-service"
 import { createBrowserClient } from "@supabase/ssr"
 import { toast } from "sonner"
 
@@ -40,72 +39,71 @@ export function TournamentParticipants({ tournamentId }: TournamentParticipantsP
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
-  const loadParticipants = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const [participantsData, tournamentData] = await Promise.all([
-        tournamentService.getParticipants(tournamentId),
-        tournamentService.getTournament(tournamentId),
-      ])
+      const { data: tournamentData, error } = await supabase
+        .from("tournaments")
+        .select(`
+          *,
+          tournament_participants (
+            id,
+            user_id,
+            team_name,
+            seed,
+            status,
+            joined_at,
+            users (
+              username,
+              elo_rating
+            )
+          )
+        `)
+        .eq("id", tournamentId)
+        .single()
 
-      setParticipants(participantsData)
+      if (error) throw error
+
       setTournament(tournamentData)
+      setParticipants(tournamentData.tournament_participants || [])
       setLastUpdate(new Date())
     } catch (error) {
-      console.error("Error loading participants:", error)
-      toast.error("Failed to load tournament participants")
+      console.error("Error loading tournament data:", error)
+      toast.error("Failed to load tournament data")
     } finally {
       setLoading(false)
     }
-  }, [tournamentId])
+  }, [tournamentId, supabase])
 
   useEffect(() => {
-    loadParticipants()
+    loadData()
 
     const channel = supabase
-      .channel(`tournament-participants-${tournamentId}`)
+      .channel(`tournament-data-${tournamentId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "league_memberships",
-          filter: `league_id=eq.${tournamentId}`,
+          table: "tournament_participants",
+          filter: `tournament_id=eq.${tournamentId}`,
         },
         (payload) => {
-          console.log("[v0] Real-time participant update:", payload)
-
-          if (payload.eventType === "INSERT") {
-            toast.success("New player joined the tournament!")
-            loadParticipants()
-          } else if (payload.eventType === "UPDATE") {
-            setParticipants((prev) =>
-              prev.map((participant) =>
-                participant.id === payload.new.id ? { ...participant, ...payload.new } : participant,
-              ),
-            )
-          } else if (payload.eventType === "DELETE") {
-            setParticipants((prev) => prev.filter((participant) => participant.id !== payload.old.id))
-            toast.info("A player left the tournament")
-          }
-
+          console.log("[v0] Participant update:", payload)
+          loadData() // Reload all data on any change
           setLastUpdate(new Date())
         },
       )
-      .on("presence", { event: "sync" }, () => {
-        setIsConnected(true)
-      })
-      .on("presence", { event: "leave" }, () => {
-        setIsConnected(false)
-      })
+      .on("presence", { event: "sync" }, () => setIsConnected(true))
+      .on("presence", { event: "leave" }, () => setIsConnected(false))
       .subscribe((status) => {
-        console.log("[v0] Participant subscription status:", status)
+        console.log("[v0] Subscription status:", status)
         setIsConnected(status === "SUBSCRIBED")
       })
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [tournamentId, loadParticipants, supabase])
+  }, [loadData])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -170,7 +168,7 @@ export function TournamentParticipants({ tournamentId }: TournamentParticipantsP
               Registration Closed
             </Badge>
           )}
-          <Button onClick={loadParticipants} variant="outline" size="sm">
+          <Button onClick={loadData} variant="outline" size="sm">
             <RefreshCw className="h-3 w-3 mr-1" />
             Refresh
           </Button>

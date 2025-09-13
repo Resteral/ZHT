@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Trophy, DollarSign, Users, Plus, Calendar, Clock } from "lucide-react"
 import Link from "next/link"
 import { monthLongTournamentService } from "@/lib/services/month-long-tournament-service"
+import { toast } from "react-toastify"
 
 interface Tournament {
   id: string
@@ -32,63 +33,41 @@ export default function TournamentsPage() {
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    fetchTournaments()
-    fetchUser()
-  }, [])
+    const fetchAllData = async () => {
+      try {
+        console.log("[v0] Fetching tournaments and user data...")
 
-  const fetchTournaments = async () => {
-    try {
-      console.log("[v0] Fetching month-long tournaments...")
+        const { createClient } = await import("@/lib/supabase/client")
+        const supabase = createClient()
 
-      const tournamentData = await monthLongTournamentService.getMonthLongTournaments()
+        const [userResult, tournamentResult] = await Promise.all([
+          supabase.auth.getUser(),
+          monthLongTournamentService.getMonthLongTournaments(),
+        ])
 
-      console.log("[v0] Raw month-long tournament data:", tournamentData)
-      console.log("[v0] Tournament data type:", typeof tournamentData)
-      console.log(
-        "[v0] Tournament data length:",
-        Array.isArray(tournamentData) ? tournamentData.length : "Not an array",
-      )
+        setUser(userResult.data.user)
 
-      if (tournamentData && Array.isArray(tournamentData)) {
-        console.log("[v0] Setting tournaments state with", tournamentData.length, "tournaments")
-        setTournaments(tournamentData)
-        console.log("[v0] Tournaments state updated successfully")
-      } else {
-        console.log("[v0] Tournament data is invalid or empty, setting empty array")
+        if (tournamentResult && Array.isArray(tournamentResult)) {
+          console.log("[v0] Setting tournaments:", tournamentResult.length)
+          setTournaments(tournamentResult)
+        } else {
+          console.log("[v0] No tournaments found")
+          setTournaments([])
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching data:", error)
         setTournaments([])
+      } finally {
+        setLoading(false)
       }
-
-      console.log("[v0] Final tournaments count:", tournamentData?.length || 0)
-    } catch (error) {
-      console.error("[v0] Error fetching month-long tournaments:", error)
-      console.error("[v0] Error details:", {
-        message: error?.message,
-        stack: error?.stack,
-        name: error?.name,
-      })
-      setTournaments([])
-    } finally {
-      setLoading(false)
-      console.log("[v0] Tournament fetching completed, loading set to false")
     }
-  }
 
-  const fetchUser = async () => {
-    try {
-      const { createClient } = await import("@/lib/supabase/client")
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
-    } catch (error) {
-      console.error("[v0] Error fetching user:", error)
-    }
-  }
+    fetchAllData()
+  }, [])
 
   const joinTournament = async (tournamentId: string) => {
     if (!user) {
-      alert("Please sign in to join tournaments")
+      toast.error("Please sign in to join tournaments")
       return
     }
 
@@ -96,7 +75,6 @@ export default function TournamentsPage() {
       const { createClient } = await import("@/lib/supabase/client")
       const supabase = createClient()
 
-      // Check if user already joined
       const { data: existingParticipant } = await supabase
         .from("tournament_participants")
         .select("id")
@@ -105,29 +83,28 @@ export default function TournamentsPage() {
         .single()
 
       if (existingParticipant) {
-        alert("You're already registered for this tournament!")
+        toast.error("You're already registered for this tournament!")
         return
       }
 
-      // Add user to tournament
       const { error } = await supabase.from("tournament_participants").insert({
         tournament_id: tournamentId,
         user_id: user.id,
         joined_at: new Date().toISOString(),
-        elo_rating: 1200, // Default ELO rating
+        elo_rating: 1200,
       })
 
-      if (error) {
-        console.error("Error joining tournament:", error)
-        alert("Failed to join tournament. Please try again.")
-        return
-      }
+      if (error) throw error
 
-      alert("Successfully joined tournament!")
-      fetchTournaments() // Refresh tournaments to show updated participant count
+      toast.success("Successfully joined tournament!")
+
+      const tournamentResult = await monthLongTournamentService.getMonthLongTournaments()
+      if (tournamentResult && Array.isArray(tournamentResult)) {
+        setTournaments(tournamentResult)
+      }
     } catch (error) {
       console.error("Error joining tournament:", error)
-      alert("Failed to join tournament. Please try again.")
+      toast.error("Failed to join tournament. Please try again.")
     }
   }
 

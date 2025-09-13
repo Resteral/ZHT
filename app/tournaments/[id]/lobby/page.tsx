@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Trophy, Crown, Zap, Timer, Target, Calendar, Brackets, Play } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { tournamentService } from "@/lib/services/tournament-service"
+import { useTournamentData } from "@/hooks/use-tournament-data"
 
 interface Player {
   id: string
@@ -39,14 +40,11 @@ export default function TournamentLobbyPage() {
   const router = useRouter()
   const tournamentId = params.id as string
 
-  const [tournament, setTournament] = useState<Tournament | null>(null)
-  const [players, setPlayers] = useState<Player[]>([])
+  const { tournament, participants: players, loading, error, refetch } = useTournamentData(tournamentId)
+
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [timeUntilStart, setTimeUntilStart] = useState<string>("")
-  const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
   const [bracket, setBracket] = useState<any[]>([])
   const [draftInfo, setDraftInfo] = useState<any>(null)
   const [tournamentStarted, setTournamentStarted] = useState(false)
@@ -54,100 +52,24 @@ export default function TournamentLobbyPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        console.log("[v0] Fetching tournament data for ID:", tournamentId)
-        setError(null)
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setCurrentUser(user)
+    }
+    getUser()
+  }, [])
 
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-        setCurrentUser(user)
+  useEffect(() => {
+    if (tournament) {
+      setTournamentStarted(tournament.status === "in_progress" || tournament.status === "drafting")
 
-        const { data: tournamentData, error: tournamentError } = await supabase
-          .from("tournaments")
-          .select("*")
-          .eq("id", tournamentId)
-          .single()
-
-        if (tournamentError) {
-          console.error("[v0] Tournament query error:", tournamentError)
-          if (tournamentError.code === "PGRST116" && retryCount < 3) {
-            console.log("[v0] Tournament not found, retrying in 1 second... (attempt", retryCount + 1, ")")
-            setTimeout(() => {
-              setRetryCount((prev) => prev + 1)
-            }, 1000)
-            return
-          }
-          throw new Error("Tournament not found. It may still be loading.")
-        }
-
-        console.log("[v0] Tournament loaded successfully:", tournamentData.name)
-        setTournament(tournamentData)
-
-        setTournamentStarted(tournamentData.status === "in_progress" || tournamentData.status === "drafting")
-
-        const { data: participantsData, error: participantsError } = await supabase
-          .from("tournament_participants")
-          .select(`
-            user_id,
-            users!inner(username, elo_rating)
-          `)
-          .eq("tournament_id", tournamentId)
-          .eq("status", "registered")
-
-        if (participantsError) {
-          console.error("[v0] Participants query error:", participantsError)
-          setPlayers([])
-        } else {
-          const playersData = participantsData
-            .map((p: any) => ({
-              id: p.user_id,
-              username: p.users.username,
-              elo_rating: p.users.elo_rating || 1000,
-            }))
-            .sort((a: Player, b: Player) => b.elo_rating - a.elo_rating)
-
-          console.log("[v0] Loaded", playersData.length, "tournament participants")
-          setPlayers(playersData)
-        }
-
-        if (tournamentData.status === "in_progress" || tournamentData.status === "drafting") {
-          await loadBracketAndDraftInfo(tournamentId)
-        }
-
-        setRetryCount(0)
-      } catch (error: any) {
-        console.error("[v0] Error fetching tournament data:", error)
-        setError(error.message || "Failed to load tournament")
-      } finally {
-        setLoading(false)
+      if (tournament.status === "in_progress" || tournament.status === "drafting") {
+        loadBracketAndDraftInfo(tournamentId)
       }
     }
-
-    fetchData()
-
-    const subscription = supabase
-      .channel(`tournament-${tournamentId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tournament_participants",
-          filter: `tournament_id=eq.${tournamentId}`,
-        },
-        () => {
-          console.log("[v0] Tournament participants updated, refreshing data")
-          fetchData()
-        },
-      )
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [tournamentId, retryCount])
+  }, [tournament])
 
   const loadBracketAndDraftInfo = async (tournamentId: string) => {
     try {
@@ -220,6 +142,7 @@ export default function TournamentLobbyPage() {
     setJoining(true)
     try {
       await tournamentService.joinTournament(tournamentId, currentUser.id)
+      refetch()
     } catch (error) {
       console.error("[v0] Error joining tournament:", error)
     } finally {
@@ -245,10 +168,8 @@ export default function TournamentLobbyPage() {
       console.log("[v0] Selected players:", selectedPlayers.length)
       console.log("[v0] Removing excess players:", excessPlayers.length)
 
-      // Update tournament status to drafting
       await supabase.from("tournaments").update({ status: "drafting" }).eq("id", tournamentId)
 
-      // Create captain draft record for the tournament
       const { data: captainDraft, error: draftError } = await supabase
         .from("captain_drafts")
         .insert({
@@ -271,7 +192,6 @@ export default function TournamentLobbyPage() {
 
       if (draftError) throw draftError
 
-      // Add all selected players to the draft system
       const draftParticipants = selectedPlayers.map((player, index) => ({
         draft_id: captainDraft.id,
         user_id: player.id,
@@ -284,7 +204,6 @@ export default function TournamentLobbyPage() {
 
       if (participantsError) throw participantsError
 
-      // Update tournament participants status to indicate they're in draft
       await supabase
         .from("tournament_participants")
         .update({ status: "drafting" })
@@ -294,7 +213,6 @@ export default function TournamentLobbyPage() {
           selectedPlayers.map((p) => p.id),
         )
 
-      // Remove excess players from tournament if any
       if (excessPlayers.length > 0) {
         await supabase
           .from("tournament_participants")
@@ -317,9 +235,9 @@ export default function TournamentLobbyPage() {
   }
 
   useEffect(() => {
-    const updateTimer = () => {
-      if (!tournament?.start_date) return
+    if (!tournament?.start_date) return
 
+    const updateTimer = () => {
       const startTime = new Date(tournament.start_date).getTime()
       const now = new Date().getTime()
       const difference = startTime - now
@@ -342,7 +260,7 @@ export default function TournamentLobbyPage() {
     updateTimer()
 
     return () => clearInterval(timer)
-  }, [tournament])
+  }, [tournament?.start_date, tournament?.status])
 
   const isUserInTournament = players.some((p) => p.id === currentUser?.id)
   const totalPlayersNeeded =

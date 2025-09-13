@@ -140,6 +140,13 @@ export function CaptainSelectionInterface({
   const handleManualSelection = async () => {
     if (!isOrganizer && !isTournamentCreator && user && tournament?.created_by !== user.id) return
 
+    const maxTeams =
+      tournament?.max_teams ||
+      tournament?.player_pool_settings?.max_teams ||
+      tournament?.player_pool_settings?.num_teams ||
+      tournament?.max_participants ||
+      4
+
     setProcessing(true)
     try {
       console.log("[v0] Starting manual captain selection:", selectedPlayers)
@@ -195,8 +202,15 @@ export function CaptainSelectionInterface({
   }
 
   const handlePlayerSelection = (playerId: string, checked: boolean) => {
+    const maxTeams =
+      tournament?.max_teams ||
+      tournament?.player_pool_settings?.max_teams ||
+      tournament?.player_pool_settings?.num_teams ||
+      tournament?.max_participants ||
+      4
+
     if (checked) {
-      if (selectedPlayers.length < 2) {
+      if (selectedPlayers.length < maxTeams) {
         setSelectedPlayers([...selectedPlayers, playerId])
       }
     } else {
@@ -309,7 +323,11 @@ export function CaptainSelectionInterface({
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-500">
-                {tournament?.player_pool_settings?.max_teams || 2}
+                {tournament?.max_teams ||
+                  tournament?.player_pool_settings?.max_teams ||
+                  tournament?.player_pool_settings?.num_teams ||
+                  tournament?.max_participants ||
+                  4}
               </div>
               <div className="text-sm text-muted-foreground">Teams Needed</div>
             </div>
@@ -352,7 +370,7 @@ export function CaptainSelectionInterface({
                         <h4 className="font-medium">Highest ELO</h4>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Automatically selects highest and lowest ELO players as captains for balanced teams.
+                        Automatically selects captains distributed across ELO ranges for balanced teams.
                       </p>
                       <Button
                         onClick={handleAutomaticSelection}
@@ -372,16 +390,33 @@ export function CaptainSelectionInterface({
                         <h4 className="font-medium">Creator Choice</h4>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Manually choose exactly 2 players to be team captains. Select players below.
+                        Manually choose exactly{" "}
+                        {tournament?.max_teams ||
+                          tournament?.player_pool_settings?.max_teams ||
+                          tournament?.player_pool_settings?.num_teams ||
+                          tournament?.max_participants ||
+                          4}{" "}
+                        players to be team captains. Select players below.
                       </p>
                       <Button
                         onClick={handleManualSelection}
-                        disabled={selectedPlayers.length !== 2 || processing || currentCaptains.length > 0}
+                        disabled={
+                          selectedPlayers.length !==
+                            (tournament?.max_teams ||
+                              tournament?.player_pool_settings?.max_teams ||
+                              tournament?.player_pool_settings?.num_teams ||
+                              tournament?.max_participants ||
+                              4) ||
+                          processing ||
+                          currentCaptains.length > 0
+                        }
                         className="w-full"
                         variant="outline"
                       >
                         <Users className="h-4 w-4 mr-2" />
-                        {processing ? "Selecting..." : `Select ${selectedPlayers.length}/2 Captains`}
+                        {processing
+                          ? "Selecting..."
+                          : `Select ${selectedPlayers.length}/${tournament?.max_teams || tournament?.player_pool_settings?.max_teams || tournament?.player_pool_settings?.num_teams || tournament?.max_participants || 4} Captains`}
                       </Button>
                     </div>
                   </Card>
@@ -393,7 +428,13 @@ export function CaptainSelectionInterface({
                         <h4 className="font-medium">Random Selection</h4>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Randomly selects 2 players from the pool as captains for unpredictable matchups.
+                        Randomly selects{" "}
+                        {tournament?.max_teams ||
+                          tournament?.player_pool_settings?.max_teams ||
+                          tournament?.player_pool_settings?.num_teams ||
+                          tournament?.max_participants ||
+                          4}{" "}
+                        players from the pool as captains for unpredictable matchups.
                       </p>
                       <Button
                         onClick={handleRandomSelection}
@@ -434,7 +475,13 @@ export function CaptainSelectionInterface({
                 {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) &&
                   currentCaptains.length === 0 && (
                     <Badge variant="secondary" className="ml-2">
-                      Select 2 for Manual
+                      Select{" "}
+                      {tournament?.max_teams ||
+                        tournament?.player_pool_settings?.max_teams ||
+                        tournament?.player_pool_settings?.num_teams ||
+                        tournament?.max_participants ||
+                        4}{" "}
+                      for Manual
                     </Badge>
                   )}
               </CardTitle>
@@ -453,7 +500,15 @@ export function CaptainSelectionInterface({
                         <Checkbox
                           checked={selectedPlayers.includes(player.user_id)}
                           onCheckedChange={(checked) => handlePlayerSelection(player.user_id, checked as boolean)}
-                          disabled={!selectedPlayers.includes(player.user_id) && selectedPlayers.length >= 2}
+                          disabled={
+                            !selectedPlayers.includes(player.user_id) &&
+                            selectedPlayers.length >=
+                              (tournament?.max_teams ||
+                                tournament?.player_pool_settings?.max_teams ||
+                                tournament?.player_pool_settings?.num_teams ||
+                                tournament?.max_participants ||
+                                4)
+                          }
                         />
                       )}
 

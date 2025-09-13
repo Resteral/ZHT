@@ -16,6 +16,7 @@ import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { TournamentBettingInterface } from "@/components/tournaments/tournament-betting-interface"
 import { TournamentStartButton } from "@/components/tournaments/tournament-start-button"
 import TournamentAuctionRoom from "@/components/tournaments/tournament-auction-room"
+import { CaptainTeamCustomization } from "@/components/tournaments/captain-team-customization"
 import { useAuth } from "@/lib/auth-context"
 
 interface TournamentPageProps {
@@ -301,6 +302,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
             Auction Draft
           </TabsTrigger>
           <TabsTrigger value="bracket">Live Bracket</TabsTrigger>
+          <TabsTrigger value="betting">Betting</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -448,6 +450,32 @@ export default function TournamentPage({ params }: TournamentPageProps) {
             tournament={tournament}
             isOrganizer={user?.id === tournament.created_by || user?.username === "Resteral"}
           />
+
+          {(tournament.status === "team_building" || tournament.status === "drafting") && (
+            <div className="mt-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Crown className="h-5 w-5" />
+                    Team Customization
+                  </CardTitle>
+                  <CardDescription>
+                    Customize your team's name, logo, colors, and draft strategy as a team captain.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <CaptainTeamCustomization
+                    tournamentId={tournament.id}
+                    tournament={tournament}
+                    onCustomizationSaved={() => {
+                      // Refresh tournament data when customization is saved
+                      fetchTournament()
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="bracket" className="space-y-6">

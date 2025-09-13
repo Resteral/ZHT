@@ -66,6 +66,7 @@
     "react-hook-form": "^7.60.0",
     "react-native": "latest",
     "react-resizable-panels": "^2.1.7",
+    "react-toastify": "latest",
     "recharts": "latest",
     "sonner": "latest",
     "tailwind-merge": "^2.5.5",
