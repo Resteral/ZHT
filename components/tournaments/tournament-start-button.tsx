@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Play, Users, Clock, AlertTriangle, CheckCircle } from "lucide-react"
+import { Play, Users, Clock, AlertTriangle, CheckCircle, Star } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
@@ -31,7 +31,42 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
   const router = useRouter()
   const supabase = createClient()
 
-  const canStart = tournament.status === "registration" && participantCount >= 4 && tournament.created_by === user?.id
+  const [tournamentSettings, setTournamentSettings] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadTournamentSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("tournaments")
+          .select("player_pool_settings, max_teams")
+          .eq("id", tournament.id)
+          .single()
+
+        if (error) throw error
+        setTournamentSettings(data)
+      } catch (error) {
+        console.error("[v0] Error loading tournament settings:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadTournamentSettings()
+  }, [tournament.id])
+
+  const getMinimumPlayers = () => {
+    if (!tournamentSettings) return 4
+
+    const maxTeams = tournamentSettings.max_teams || tournamentSettings.player_pool_settings?.max_teams || 8
+    const playersPerTeam = tournamentSettings.player_pool_settings?.players_per_team || 4
+
+    return maxTeams * playersPerTeam
+  }
+
+  const minParticipants = getMinimumPlayers()
+  const canStart =
+    tournament.status === "registration" && participantCount >= minParticipants && tournament.created_by === user?.id
 
   const handleStartTournament = async () => {
     if (!user || !canStart) return
@@ -110,8 +145,17 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
   }
 
   const statusInfo = getStatusInfo()
-  const minParticipants = 4
   const progressPercentage = Math.min((participantCount / minParticipants) * 100, 100)
+
+  if (loading) {
+    return (
+      <Card className="border-l-4 border-l-blue-500">
+        <CardContent className="p-6">
+          <div className="text-center">Loading tournament settings...</div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="border-l-4 border-l-blue-500">
@@ -129,7 +173,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
         <CardDescription>Manage tournament progression and start the draft when ready</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <Users className="h-8 w-8 mx-auto mb-2 text-blue-500" />
             <div className="text-2xl font-bold text-blue-700">{participantCount}</div>
@@ -138,7 +182,15 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
           <div className="text-center p-4 bg-green-50 border border-green-200 rounded-lg">
             <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
             <div className="text-2xl font-bold text-green-700">{minParticipants}</div>
-            <div className="text-sm text-green-600">Minimum Required</div>
+            <div className="text-sm text-green-600">
+              Minimum Required ({tournamentSettings?.max_teams || 8} teams ×{" "}
+              {tournamentSettings?.player_pool_settings?.players_per_team || 4} players)
+            </div>
+          </div>
+          <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
+            <Star className="h-8 w-8 mx-auto mb-2 text-purple-500" />
+            <div className="text-2xl font-bold text-purple-700">{tournamentSettings?.max_teams || 8}</div>
+            <div className="text-sm text-purple-600">Teams Needed</div>
           </div>
         </div>
 
@@ -146,7 +198,8 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
           <div className="flex justify-between text-sm">
             <span>Tournament Readiness</span>
             <span className="font-medium">
-              {participantCount}/{minParticipants} minimum players
+              {participantCount}/{minParticipants} players (
+              {tournamentSettings?.player_pool_settings?.players_per_team || 4} per team)
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -170,7 +223,9 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
-                      Need {minParticipants - participantCount} more players to start the tournament
+                      Need {minParticipants - participantCount} more players to start the tournament (
+                      {tournamentSettings?.max_teams || 8} teams of{" "}
+                      {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each)
                     </AlertDescription>
                   </Alert>
                 )}

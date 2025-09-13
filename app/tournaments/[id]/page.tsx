@@ -15,6 +15,7 @@ import { PlayerPoolManagement } from "@/components/tournaments/player-pool-manag
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { TournamentBettingInterface } from "@/components/tournaments/tournament-betting-interface"
 import { TournamentStartButton } from "@/components/tournaments/tournament-start-button"
+import { CaptainSelectionControl } from "@/components/tournaments/captain-selection-control"
 import { useAuth } from "@/lib/auth-context"
 
 interface TournamentPageProps {
@@ -254,7 +255,7 @@ export default function TournamentPage({ params }: TournamentPageProps) {
       </div>
 
       {(user?.id === tournament.created_by || user?.username === "Resteral") && (
-        <div className="mb-6">
+        <div className="mb-6 space-y-4">
           <TournamentStartButton
             tournament={{
               id: tournament.id,
@@ -269,6 +270,19 @@ export default function TournamentPage({ params }: TournamentPageProps) {
             onStatusChange={(newStatus) => {
               setTournament((prev) => (prev ? { ...prev, status: newStatus } : null))
               // Refresh tournament data to get updated info
+              fetchTournament()
+            }}
+          />
+          <CaptainSelectionControl
+            tournament={{
+              id: tournament.id,
+              name: tournament.name,
+              status: tournament.status,
+              created_by: tournament.created_by,
+            }}
+            onCaptainsSelected={(captains) => {
+              console.log("[v0] Captains selected:", captains)
+              // Optionally refresh tournament data or update UI
               fetchTournament()
             }}
           />
