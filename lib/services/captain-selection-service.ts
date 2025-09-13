@@ -21,6 +21,10 @@ export interface PlayerPoolEntry {
 class CaptainSelectionService {
   private supabase = createClient()
 
+  get Supabase() {
+    return this.supabase
+  }
+
   /**
    * Automatically select captains based on ELO ratings
    * Selects exactly as many captains as there are teams in the tournament

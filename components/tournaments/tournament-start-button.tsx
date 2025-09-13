@@ -189,8 +189,8 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
           </div>
           <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
             <Star className="h-8 w-8 mx-auto mb-2 text-purple-500" />
-            <div className="text-2xl font-bold text-purple-700">{tournamentSettings?.max_teams || 4}</div>
-            <div className="text-sm text-purple-600">Teams Needed</div>
+            <div className="text-2xl font-bold text-purple-700">{tournament.max_participants}</div>
+            <div className="text-sm text-purple-600">Max Players Allowed</div>
           </div>
         </div>
 
@@ -198,8 +198,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
           <div className="flex justify-between text-sm">
             <span>Tournament Readiness</span>
             <span className="font-medium">
-              {participantCount}/{minParticipants} players (
-              {tournamentSettings?.player_pool_settings?.players_per_team || 4} per team)
+              {participantCount}/{minParticipants} required • {tournament.max_participants} max allowed
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -223,9 +222,10 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
-                      Need {minParticipants - participantCount} more players to start the tournament (
-                      {tournamentSettings?.max_teams || 4} teams of{" "}
-                      {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each)
+                      Need {minParticipants - participantCount} more players to start the tournament. Minimum:{" "}
+                      {minParticipants} players ({tournamentSettings?.max_teams || 4} teams of{" "}
+                      {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each). Maximum allowed:{" "}
+                      {tournament.max_participants} players.
                     </AlertDescription>
                   </Alert>
                 )}

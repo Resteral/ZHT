@@ -52,14 +52,14 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
   const loadPlayerPool = async () => {
     try {
       const { data } = await captainSelectionService.supabase
-        .from("tournament_participants")
+        .from("tournament_player_pool")
         .select(`
           user_id,
           status,
           users(username, elo_rating)
         `)
         .eq("tournament_id", tournament.id)
-        .eq("status", "registered")
+        .eq("status", "available")
         .order("users(elo_rating)", { ascending: false })
 
       if (data) {
@@ -69,9 +69,51 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
           elo_rating: entry.users?.elo_rating || 1200,
         }))
         setPlayerPool(processedPlayers)
+        console.log("[v0] Loaded player pool:", processedPlayers.length, "players")
+      } else {
+        await populatePlayerPool()
       }
     } catch (error) {
       console.error("[v0] Error loading player pool:", error)
+      await populatePlayerPool()
+    }
+  }
+
+  const populatePlayerPool = async () => {
+    try {
+      console.log("[v0] Populating player pool from tournament participants...")
+
+      const { data: participants } = await captainSelectionService.supabase
+        .from("tournament_participants")
+        .select(`
+          user_id,
+          status,
+          users(username, elo_rating)
+        `)
+        .eq("tournament_id", tournament.id)
+        .eq("status", "registered")
+
+      if (participants && participants.length > 0) {
+        const poolEntries = participants.map((participant: any) => ({
+          tournament_id: tournament.id,
+          user_id: participant.user_id,
+          status: "available",
+          created_at: new Date().toISOString(),
+        }))
+
+        const { error: insertError } = await captainSelectionService.supabase
+          .from("tournament_player_pool")
+          .insert(poolEntries)
+
+        if (insertError) {
+          console.error("[v0] Error populating player pool:", insertError)
+        } else {
+          console.log("[v0] Successfully populated player pool with", poolEntries.length, "players")
+          await loadPlayerPool()
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error populating player pool:", error)
     }
   }
 
@@ -113,7 +155,7 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
         toast.success(result.message)
         setCaptains(result.captains)
         onCaptainsSelected?.(result.captains)
-        await loadPlayerPool() // Refresh to remove selected captains
+        await loadPlayerPool()
       } else {
         toast.error(result.message)
       }
@@ -162,13 +204,13 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
   }
 
   return (
-    <Card className="border-l-4 border-l-purple-500">
+    <Card className="border-l-4 border-l-slate-500">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Crown className="h-5 w-5 text-purple-500" />
+          <Crown className="h-5 w-5 text-slate-500" />
           Captain Selection
           {captains.length > 0 && (
-            <Badge variant="secondary" className="bg-purple-500/20 text-purple-700">
+            <Badge variant="secondary" className="bg-slate-100 text-slate-700">
               {captains.length} Selected
             </Badge>
           )}
@@ -203,7 +245,7 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
               {captains.map((captain) => (
                 <div
                   key={captain.id}
-                  className="flex items-center gap-3 p-3 bg-purple-50 border border-purple-200 rounded-lg"
+                  className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg"
                 >
                   <Avatar className="h-10 w-10">
                     <AvatarFallback>{captain.username.slice(0, 2).toUpperCase()}</AvatarFallback>
@@ -278,7 +320,7 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
                       key={player.id}
                       className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
                         selectedPlayers.includes(player.id)
-                          ? "bg-purple-100 border border-purple-300"
+                          ? "bg-slate-100 border border-slate-300"
                           : "bg-gray-50 hover:bg-gray-100"
                       }`}
                       onClick={() => {
@@ -299,7 +341,7 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
                           <span>{player.elo_rating}</span>
                         </div>
                       </div>
-                      {selectedPlayers.includes(player.id) && <Crown className="h-4 w-4 text-purple-500" />}
+                      {selectedPlayers.includes(player.id) && <Crown className="h-4 w-4 text-slate-600" />}
                     </div>
                   ))}
                 </div>

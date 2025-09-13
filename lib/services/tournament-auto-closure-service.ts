@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js" // Fixed incorrect import from "supabase-js" to "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/client" // Updated import statement
 
 export interface TournamentClosureReason {
   reason: "insufficient_players" | "draft_date_passed" | "manual_closure" | "all_games_completed"
@@ -8,7 +8,7 @@ export interface TournamentClosureReason {
 }
 
 class TournamentAutoClosureService {
-  private supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  private supabase = createClient() // Updated to use the existing client function
 
   async checkAndCloseExpiredTournaments(): Promise<void> {
     console.log("[v0] Checking for tournaments that need automatic closure...")
