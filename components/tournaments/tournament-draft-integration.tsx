@@ -19,6 +19,8 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
   const [tournament, setTournament] = useState<any>(null)
   const [participants, setParticipants] = useState<any[]>([])
   const [captains, setCaptains] = useState<any[]>([])
+  const [teamsWithCaptains, setTeamsWithCaptains] = useState<any[]>([])
+  const [requiredTeams, setRequiredTeams] = useState(4)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const supabase = createClient()
@@ -36,9 +38,11 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
           name,
           tournament_type,
           max_participants,
+          max_teams,
           prize_pool,
           status,
           created_by,
+          player_pool_settings,
           tournament_participants (
             user_id,
             status,
@@ -56,7 +60,28 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
       setTournament(tournamentData)
       setParticipants(tournamentData.tournament_participants || [])
 
-      // Check if there's already an active captain draft
+      const maxTeams = tournamentData.max_teams || tournamentData.player_pool_settings?.max_teams || 4
+      const playersPerTeam = tournamentData.player_pool_settings?.players_per_team || 4
+      setRequiredTeams(maxTeams)
+
+      const { data: teams, error: teamsError } = await supabase
+        .from("tournament_teams")
+        .select(`
+          id,
+          team_name,
+          captain_id,
+          users:captain_id(username, elo_rating)
+        `)
+        .eq("tournament_id", tournamentId)
+        .not("captain_id", "is", null)
+
+      if (teamsError) {
+        console.error("[v0] Error loading teams with captains:", teamsError)
+      } else {
+        setTeamsWithCaptains(teams || [])
+        console.log("[v0] Teams with captains:", teams?.length || 0, "Required:", maxTeams)
+      }
+
       const { data: existingDraft } = await supabase
         .from("captain_drafts")
         .select("id, status")
@@ -89,7 +114,6 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
     try {
       console.log("[v0] Starting tournament draft with enhanced player pool integration")
 
-      // Check if any participants are already in active drafts
       const participantIds = participants.map((p) => p.user_id)
       const { data: existingDraftParticipants, error: conflictError } = await supabase
         .from("captain_draft_participants")
@@ -176,7 +200,6 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
       if (draftError) throw draftError
 
-      // Update all tournament participants to drafting status
       const { error: poolUpdateError } = await supabase
         .from("tournament_participants")
         .update({
@@ -190,7 +213,6 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
         console.error("[v0] Error updating player pool status:", poolUpdateError)
       }
 
-      // Mark captains specifically
       await supabase
         .from("tournament_participants")
         .update({
@@ -265,9 +287,11 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
   const currentParticipants = participants.length
   const isCreator = tournament.created_by === user?.id
-  const canStartDraft = currentParticipants >= 4 && tournament.status === "registration"
+  const hasEnoughTeamsWithCaptains = teamsWithCaptains.length >= requiredTeams
+  const hasEnoughPlayers =
+    currentParticipants >= requiredTeams * (tournament?.player_pool_settings?.players_per_team || 4)
+  const canStartDraft = hasEnoughTeamsWithCaptains && hasEnoughPlayers && tournament.status === "registration"
 
-  // Sort participants by ELO for preview
   const sortedParticipants = [...participants].sort(
     (a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200),
   )
@@ -308,9 +332,14 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Draft Readiness</span>
-              <span className="font-medium">{Math.min(currentParticipants, 4)}/4 minimum players</span>
+              <span className="font-medium">
+                {Math.min(currentParticipants, requiredTeams * 4)}/{requiredTeams * 4} minimum players
+              </span>
             </div>
-            <Progress value={(Math.min(currentParticipants, 4) / 4) * 100} className="h-2" />
+            <Progress
+              value={(Math.min(currentParticipants, requiredTeams * 4) / (requiredTeams * 4)) * 100}
+              className="h-2"
+            />
           </div>
 
           {canStartDraft && isCreator && (
@@ -323,13 +352,15 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
           {!canStartDraft && (
             <div className="text-center p-4 bg-muted/50 rounded-lg">
               <p className="text-muted-foreground">
-                {currentParticipants < 4
-                  ? `Need ${4 - currentParticipants} more players to start draft`
-                  : tournament.status !== "registration"
-                    ? "Tournament has already started"
-                    : !isCreator
-                      ? "Only the tournament creator can start the draft"
-                      : "Ready to start draft"}
+                {!hasEnoughTeamsWithCaptains
+                  ? `Need ${requiredTeams - teamsWithCaptains.length} more teams with captains assigned (${teamsWithCaptains.length}/${requiredTeams})`
+                  : !hasEnoughPlayers
+                    ? `Need ${requiredTeams * (tournament?.player_pool_settings?.players_per_team || 4) - currentParticipants} more players to fill all teams`
+                    : tournament.status !== "registration"
+                      ? "Tournament has already started"
+                      : !isCreator
+                        ? "Only the tournament creator can start the draft"
+                        : "Ready to start draft"}
               </p>
             </div>
           )}

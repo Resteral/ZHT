@@ -32,6 +32,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
   const supabase = createClient()
 
   const [tournamentSettings, setTournamentSettings] = useState<any>(null)
+  const [teamsWithCaptains, setTeamsWithCaptains] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
       try {
         const { data, error } = await supabase
           .from("tournaments")
-          .select("player_pool_settings, max_teams")
+          .select("player_pool_settings, max_teams, max_participants, tournament_type")
           .eq("id", tournament.id)
           .single()
 
@@ -47,6 +48,24 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
 
         console.log("[v0] Loaded tournament settings:", data)
         setTournamentSettings(data)
+
+        const { data: teams, error: teamsError } = await supabase
+          .from("tournament_teams")
+          .select(`
+            id,
+            team_name,
+            captain_id,
+            users:captain_id(username)
+          `)
+          .eq("tournament_id", tournament.id)
+          .not("captain_id", "is", null)
+
+        if (teamsError) {
+          console.error("[v0] Error loading teams with captains:", teamsError)
+        } else {
+          setTeamsWithCaptains(teams || [])
+          console.log("[v0] Teams with captains loaded:", teams?.length || 0)
+        }
       } catch (error) {
         console.error("[v0] Error loading tournament settings:", error)
       } finally {
@@ -57,13 +76,21 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
     loadTournamentSettings()
   }, [tournament.id])
 
-  const getMinimumPlayers = () => {
+  const getRequiredTeams = () => {
     if (!tournamentSettings) {
-      console.log("[v0] No tournament settings, using defaults")
-      return 16 // Default: 4 teams × 4 players
+      return 4
     }
 
-    const maxTeams = tournamentSettings.max_teams || 4
+    return tournamentSettings.player_pool_settings?.max_teams || tournamentSettings.max_teams || 4
+  }
+
+  const getMinimumPlayers = () => {
+    if (!tournamentSettings) {
+      console.log("[v0] No tournament settings loaded, using fallback")
+      return 16 // 4 teams × 4 players
+    }
+
+    const maxTeams = tournamentSettings.player_pool_settings?.max_teams || tournamentSettings.max_teams || 4
     const playersPerTeam = tournamentSettings.player_pool_settings?.players_per_team || 4
 
     const minPlayers = maxTeams * playersPerTeam
@@ -72,15 +99,21 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
       maxTeams,
       playersPerTeam,
       minPlayers,
-      tournamentSettings,
+      settings: tournamentSettings.player_pool_settings,
     })
 
     return minPlayers
   }
 
+  const requiredTeams = getRequiredTeams()
   const minParticipants = getMinimumPlayers()
+  const hasEnoughTeamsWithCaptains = teamsWithCaptains.length >= requiredTeams
+  const hasEnoughPlayers = participantCount >= minParticipants
   const canStart =
-    tournament.status === "registration" && participantCount >= minParticipants && tournament.created_by === user?.id
+    tournament.status === "registration" &&
+    hasEnoughTeamsWithCaptains &&
+    hasEnoughPlayers &&
+    tournament.created_by === user?.id
 
   const handleStartTournament = async () => {
     if (!user || !canStart) return
@@ -197,7 +230,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
             <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
             <div className="text-2xl font-bold text-green-700">{minParticipants}</div>
             <div className="text-sm text-green-600">
-              Minimum Required ({tournamentSettings?.max_teams || 4} teams ×{" "}
+              Minimum Required ({tournamentSettings?.player_pool_settings?.max_teams || 4} teams ×{" "}
               {tournamentSettings?.player_pool_settings?.players_per_team || 4} players)
             </div>
           </div>
@@ -232,12 +265,21 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
               </Button>
             ) : (
               <div className="space-y-2">
-                {participantCount < minParticipants && (
+                {!hasEnoughTeamsWithCaptains && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      Need {requiredTeams - teamsWithCaptains.length} more teams with captains assigned. Currently:{" "}
+                      {teamsWithCaptains.length}/{requiredTeams} teams have captains.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {!hasEnoughPlayers && (
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
                       Need {minParticipants - participantCount} more players to start the tournament. Minimum:{" "}
-                      {minParticipants} players ({tournamentSettings?.max_teams || 4} teams of{" "}
+                      {minParticipants} players ({requiredTeams} teams of{" "}
                       {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each). Maximum allowed:{" "}
                       {tournament.max_participants} players.
                     </AlertDescription>

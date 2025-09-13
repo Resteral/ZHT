@@ -12,6 +12,8 @@ export interface CSVPlayerStats {
   possession: number
   savesAllowed: number
   saves: number
+  savePercentage: number
+  saveAmount: number // Total save attempts
   goalTended: number
   skatingTime: number
   matchId: string
@@ -107,6 +109,8 @@ export class CSVStatsService {
         saves: this.parseNumber(parts[11], 0),
         goalTended: this.parseNumber(parts[12], 0),
         skatingTime: this.parseNumber(parts[13], 0),
+        saveAmount: this.parseNumber(parts[11], 0) + this.parseNumber(parts[10], 0), // Total save attempts
+        savePercentage: this.calculateSavePercentage(this.parseNumber(parts[11], 0), this.parseNumber(parts[10], 0)),
         matchId,
         matchName,
         submittedAt: new Date().toISOString(),
@@ -114,7 +118,9 @@ export class CSVStatsService {
       }
 
       stats.push(stat)
-      console.log(`[v0] Added stats for ${accountId}: ${stat.goals}G ${stat.assists}A ${stat.steals}S`)
+      console.log(
+        `[v0] Added stats for ${accountId}: ${stat.goals}G ${stat.assists}A ${stat.saves}S ${stat.savePercentage.toFixed(1)}%`,
+      )
     }
 
     console.log(`[v0] Successfully parsed ${stats.length} player stats from CSV`)
@@ -133,6 +139,12 @@ export class CSVStatsService {
     }
 
     return parsed
+  }
+
+  private static calculateSavePercentage(saves: number, savesAllowed: number): number {
+    const totalShots = saves + savesAllowed
+    if (totalShots === 0) return 0
+    return (saves / totalShots) * 100
   }
 
   static async getPlayerCSVStats(supabase: any, playerId?: string) {
@@ -195,7 +207,10 @@ export class CSVStatsService {
           existing.saves += stat.saves
           existing.goalTended += stat.goalTended
           existing.skatingTime += stat.skatingTime
+          existing.saveAmount += stat.saveAmount
           existing.gamesPlayed += 1
+          // Recalculate save percentage
+          existing.savePercentage = this.calculateSavePercentage(existing.saves, existing.savesAllowed)
           console.log(`[v0] Aggregated stats for ${stat.accountId}`)
         } else {
           playerStatsMap.set(stat.accountId, { ...stat })

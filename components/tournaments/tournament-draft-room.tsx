@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
-import { Gavel, Users, MessageCircle, Trophy, Star, Target, Crown, Timer, Zap } from "lucide-react"
+import { Gavel, Users, MessageCircle, Trophy, Star, Target, Crown, Timer, Zap, Settings } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useTournamentDraft, useTournamentDraftChat } from "@/lib/hooks/use-tournament-draft"
+import { CaptainTeamCustomization } from "./captain-team-customization"
 
 interface TournamentDraftRoomProps {
   tournamentId: string
@@ -28,6 +29,7 @@ export function TournamentDraftRoom({
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null)
   const [bidAmount, setBidAmount] = useState("")
   const [newMessage, setNewMessage] = useState("")
+  const [showTeamCustomization, setShowTeamCustomization] = useState(false)
 
   const {
     draftState,
@@ -56,6 +58,11 @@ export function TournamentDraftRoom({
   const isUserTurn = () => {
     const currentTeam = getCurrentTeam()
     return currentTeam && user && currentTeam.captain_id === user.id
+  }
+
+  const isUserCaptain = () => {
+    if (!user || !teams.length) return false
+    return teams.some((team) => team.captain_id === user.id)
   }
 
   const handleDraftPlayer = async (playerId: string) => {
@@ -151,6 +158,12 @@ export function TournamentDraftRoom({
                   {((draftState.time_remaining || 0) % 60).toString().padStart(2, "0")}
                 </Badge>
               )}
+              {isUserCaptain() && (
+                <Button variant="outline" size="sm" onClick={() => setShowTeamCustomization(!showTeamCustomization)}>
+                  <Settings className="h-3 w-3 mr-1" />
+                  Team Settings
+                </Button>
+              )}
             </div>
           </CardTitle>
           <CardDescription>
@@ -181,6 +194,36 @@ export function TournamentDraftRoom({
           </CardContent>
         )}
       </Card>
+
+      {/* Team Customization Panel */}
+      {showTeamCustomization && isUserCaptain() && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-yellow-500" />
+                Captain Team Customization
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowTeamCustomization(false)}>
+                ×
+              </Button>
+            </CardTitle>
+            <CardDescription>
+              Customize your team's name, logo, colors, and draft strategy as the team captain.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CaptainTeamCustomization
+              tournamentId={tournamentId}
+              tournament={tournament}
+              onCustomizationSaved={() => {
+                // Refresh team data after customization is saved
+                window.location.reload()
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Current Turn Indicator */}
       {draftState?.status === "active" && (
