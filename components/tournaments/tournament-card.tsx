@@ -64,7 +64,10 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
     switch (status) {
       case "registration":
         return "bg-blue-500"
+      case "drafting":
+        return "bg-yellow-500"
       case "in_progress":
+      case "active":
         return "bg-green-500"
       case "completed":
         return "bg-gray-500"
@@ -77,7 +80,10 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
     switch (status) {
       case "registration":
         return "Registration Open"
+      case "drafting":
+        return "Draft in Progress"
       case "in_progress":
+      case "active":
         return "In Progress"
       case "completed":
         return "Completed"
@@ -151,7 +157,11 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
 
         <Button className="w-full" onClick={() => router.push(`/tournaments/${tournament.id}`)}>
           <Eye className="h-4 w-4 mr-2" />
-          View Tournament
+          {tournament.status === "drafting"
+            ? "Join Draft"
+            : tournament.status === "active"
+              ? "View Matches"
+              : "View Tournament"}
         </Button>
       </CardContent>
     </Card>

@@ -1,10 +1,105 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trophy, Users, Calendar, Target, Plus, Search } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Trophy, Users, Calendar, Target, Plus, Search, Edit, Eye } from "lucide-react"
 import Link from "next/link"
+import { tournamentService } from "@/lib/services/tournament-service"
+
+interface Tournament {
+  id: string
+  name: string
+  game: string
+  status: string
+  participant_count: number
+  prize_pool: number
+  start_date: string
+  end_date: string
+  tournament_type: string
+  max_participants: number
+}
 
 export default function AdminTournamentsPage() {
+  const [tournaments, setTournaments] = useState<Tournament[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    active: 0,
+    totalParticipants: 0,
+    totalPrizePool: 0,
+    endingSoon: 0,
+  })
+
+  useEffect(() => {
+    fetchTournaments()
+  }, [])
+
+  const fetchTournaments = async () => {
+    try {
+      console.log("[v0] Admin page fetching tournaments...")
+      const data = await tournamentService.getTournaments()
+      console.log("[v0] Admin page received tournaments:", data.length)
+
+      setTournaments(data)
+
+      // Calculate stats from real data
+      const activeTournaments = data.filter(
+        (t) => t.status === "registration" || t.status === "in_progress" || t.status === "drafting",
+      )
+      const totalParticipants = data.reduce((sum, t) => sum + (t.participant_count || 0), 0)
+      const totalPrizePool = data.reduce((sum, t) => sum + (t.prize_pool || 0), 0)
+      const endingSoon = data.filter((t) => {
+        const endDate = new Date(t.end_date)
+        const now = new Date()
+        const daysUntilEnd = (endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        return daysUntilEnd <= 7 && daysUntilEnd > 0
+      }).length
+
+      setStats({
+        active: activeTournaments.length,
+        totalParticipants,
+        totalPrizePool,
+        endingSoon,
+      })
+    } catch (error) {
+      console.error("[v0] Error fetching tournaments in admin page:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "registration":
+        return "secondary"
+      case "drafting":
+        return "default"
+      case "in_progress":
+        return "default"
+      case "completed":
+        return "outline"
+      default:
+        return "destructive"
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "registration":
+        return "Registration"
+      case "drafting":
+        return "Drafting"
+      case "in_progress":
+        return "In Progress"
+      case "completed":
+        return "Completed"
+      default:
+        return status
+    }
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -33,7 +128,7 @@ export default function AdminTournamentsPage() {
             <Trophy className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23</div>
+            <div className="text-2xl font-bold">{stats.active}</div>
             <p className="text-xs text-muted-foreground">Currently running</p>
           </CardContent>
         </Card>
@@ -44,7 +139,7 @@ export default function AdminTournamentsPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,847</div>
+            <div className="text-2xl font-bold">{stats.totalParticipants}</div>
             <p className="text-xs text-muted-foreground">Across all tournaments</p>
           </CardContent>
         </Card>
@@ -55,7 +150,7 @@ export default function AdminTournamentsPage() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$45,200</div>
+            <div className="text-2xl font-bold">${stats.totalPrizePool}</div>
             <p className="text-xs text-muted-foreground">Total active prizes</p>
           </CardContent>
         </Card>
@@ -66,7 +161,7 @@ export default function AdminTournamentsPage() {
             <Calendar className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
+            <div className="text-2xl font-bold">{stats.endingSoon}</div>
             <p className="text-xs text-muted-foreground">Next 7 days</p>
           </CardContent>
         </Card>
@@ -108,10 +203,10 @@ export default function AdminTournamentsPage() {
             </select>
             <select className="px-3 py-2 border rounded-md">
               <option>All Status</option>
-              <option>Active</option>
               <option>Registration</option>
+              <option>Drafting</option>
+              <option>In Progress</option>
               <option>Completed</option>
-              <option>Cancelled</option>
             </select>
           </div>
         </CardContent>
@@ -124,83 +219,61 @@ export default function AdminTournamentsPage() {
           <CardDescription>Manage existing tournaments and their settings</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {[
-              {
-                name: "Winter Championship 2024",
-                game: "Counter Strike",
-                status: "Active",
-                participants: 64,
-                prize: "$5,000",
-                startDate: "2024-01-20",
-                endDate: "2024-02-15",
-              },
-              {
-                name: "Rainbow Six Pro League",
-                game: "Rainbow Six Siege",
-                status: "Registration",
-                participants: 32,
-                prize: "$3,000",
-                startDate: "2024-02-01",
-                endDate: "2024-02-28",
-              },
-              {
-                name: "Call of Duty Masters",
-                game: "Call of Duty",
-                status: "Active",
-                participants: 128,
-                prize: "$10,000",
-                startDate: "2024-01-15",
-                endDate: "2024-03-01",
-              },
-              {
-                name: "Zealot Hockey Cup",
-                game: "Zealot Hockey",
-                status: "Completed",
-                participants: 16,
-                prize: "$1,500",
-                startDate: "2024-01-01",
-                endDate: "2024-01-14",
-              },
-            ].map((tournament, index) => (
-              <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <Trophy className="h-8 w-8 text-muted-foreground" />
-                  <div>
-                    <h3 className="font-semibold">{tournament.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {tournament.game} • {tournament.participants} participants • {tournament.startDate} to{" "}
-                      {tournament.endDate}
-                    </p>
+          {loading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : tournaments.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">No tournaments found</h3>
+              <p className="text-sm mb-4">Create your first tournament to get started!</p>
+              <Button asChild>
+                <Link href="/tournaments/create">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Tournament
+                </Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {tournaments.map((tournament) => (
+                <div key={tournament.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <Trophy className="h-8 w-8 text-muted-foreground" />
+                    <div>
+                      <h3 className="font-semibold">{tournament.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {tournament.game} • {tournament.participant_count}/{tournament.max_participants} participants •{" "}
+                        {new Date(tournament.start_date).toLocaleDateString()} to{" "}
+                        {new Date(tournament.end_date).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={getStatusColor(tournament.status)}>{getStatusLabel(tournament.status)}</Badge>
+                    <span className="font-semibold text-green-600">${tournament.prize_pool}</span>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/tournaments/${tournament.id}/manage`}>
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Link>
+                      </Button>
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/tournaments/${tournament.id}`}>
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge
-                    variant={
-                      tournament.status === "Active"
-                        ? "default"
-                        : tournament.status === "Registration"
-                          ? "secondary"
-                          : tournament.status === "Completed"
-                            ? "outline"
-                            : "destructive"
-                    }
-                  >
-                    {tournament.status}
-                  </Badge>
-                  <span className="font-semibold text-green-600">{tournament.prize}</span>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline">
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="outline">
-                      View
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

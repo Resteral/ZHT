@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client"
 import { TournamentDraftRoom } from "@/components/tournaments/tournament-draft-room"
 import { TournamentBracket } from "@/components/tournaments/tournament-bracket"
 import { liveBracketIntegrationService } from "@/lib/services/live-bracket-integration-service"
+import { TournamentDraftIntegration } from "@/components/tournaments/tournament-draft-integration"
 
 interface TournamentDraftPageProps {
   params: {
@@ -108,8 +109,21 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
         throw tournamentError
       }
 
-      console.log("[v0] Tournament loaded:", tournamentData.name, "Type:", tournamentData.tournament_type)
+      console.log("[v0] Tournament loaded:", tournamentData.name, "Status:", tournamentData.status)
       setTournament(tournamentData)
+
+      const { data: existingDraft } = await supabase
+        .from("captain_drafts")
+        .select("id, status")
+        .eq("tournament_id", params.id)
+        .eq("status", "drafting")
+        .single()
+
+      if (existingDraft) {
+        console.log("[v0] Found existing draft, redirecting:", existingDraft.id)
+        router.push(`/draft/room/${existingDraft.id}`)
+        return
+      }
 
       await validateTeamOwnership(tournamentData)
 
@@ -131,7 +145,7 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
           console.log("[v0] User is tournament organizer")
         } else {
           const { data: participation } = await supabase
-            .from("tournament_player_pool")
+            .from("tournament_participants")
             .select("id, status")
             .eq("tournament_id", params.id)
             .eq("user_id", user.id)
@@ -139,7 +153,7 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
 
           if (participation) {
             setUserRole("participant")
-            console.log("[v0] User is participant in player pool")
+            console.log("[v0] User is participant in tournament")
           } else {
             const { data: teamMembership } = await supabase
               .from("tournament_teams")
@@ -364,6 +378,17 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
           )}
         </CardContent>
       </Card>
+
+      {tournament.status === "drafting" && (
+        <TournamentDraftIntegration
+          tournamentId={params.id}
+          onDraftStarted={(draftId) => {
+            console.log("[v0] Draft started with ID:", draftId)
+            // Refresh tournament data to show updated status
+            loadTournamentData()
+          }}
+        />
+      )}
 
       {isLongTournament ? (
         <div className="space-y-6">

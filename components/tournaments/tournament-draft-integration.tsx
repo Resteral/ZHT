@@ -29,20 +29,19 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
     try {
       console.log("[v0] Loading tournament data for draft integration:", tournamentId)
 
-      // Load tournament details
       const { data: tournamentData, error: tournamentError } = await supabase
-        .from("matches")
+        .from("tournaments")
         .select(`
           id,
           name,
-          match_type,
+          tournament_type,
           max_participants,
           prize_pool,
           status,
-          tournament_mode,
-          creator_id,
-          match_participants (
+          created_by,
+          tournament_participants (
             user_id,
+            status,
             users (
               username,
               elo_rating
@@ -55,13 +54,13 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
       if (tournamentError) throw tournamentError
 
       setTournament(tournamentData)
-      setParticipants(tournamentData.match_participants || [])
+      setParticipants(tournamentData.tournament_participants || [])
 
       // Check if there's already an active captain draft
       const { data: existingDraft } = await supabase
         .from("captain_drafts")
         .select("id, status")
-        .eq("match_id", tournamentId)
+        .eq("tournament_id", tournamentId)
         .single()
 
       if (existingDraft && existingDraft.status === "drafting") {
@@ -158,10 +157,10 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
       const { data: captainDraft, error: draftError } = await supabase
         .from("captain_drafts")
         .insert({
-          match_id: tournament.id,
+          tournament_id: tournament.id,
           captain1_id: lowestElo.user_id,
           captain2_id: highestElo.user_id,
-          format: tournament.match_type.replace("_draft", ""),
+          format: tournament.tournament_type.replace("_draft", ""),
           max_rounds: Math.floor(participants.length / 2),
           current_round: 1,
           current_pick: 1,
@@ -214,7 +213,7 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
       if (participantsError) throw participantsError
 
       const { error: statusError } = await supabase
-        .from("matches")
+        .from("tournaments")
         .update({
           status: "drafting",
           start_date: new Date().toISOString(),
@@ -265,8 +264,8 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
   }
 
   const currentParticipants = participants.length
-  const isCreator = tournament.creator_id === user?.id
-  const canStartDraft = currentParticipants >= 4 && tournament.status === "waiting"
+  const isCreator = tournament.created_by === user?.id
+  const canStartDraft = currentParticipants >= 4 && tournament.status === "registration"
 
   // Sort participants by ELO for preview
   const sortedParticipants = [...participants].sort(
@@ -326,7 +325,7 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
               <p className="text-muted-foreground">
                 {currentParticipants < 4
                   ? `Need ${4 - currentParticipants} more players to start draft`
-                  : tournament.status !== "waiting"
+                  : tournament.status !== "registration"
                     ? "Tournament has already started"
                     : !isCreator
                       ? "Only the tournament creator can start the draft"

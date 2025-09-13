@@ -14,6 +14,7 @@ import { UnifiedTournamentJoin } from "@/components/tournaments/unified-tourname
 import { PlayerPoolManagement } from "@/components/tournaments/player-pool-management"
 import { RoundRobinBracket } from "@/components/tournaments/round-robin-bracket"
 import { TournamentBettingInterface } from "@/components/tournaments/tournament-betting-interface"
+import { TournamentStartButton } from "@/components/tournaments/tournament-start-button"
 import { useAuth } from "@/lib/auth-context"
 
 interface TournamentPageProps {
@@ -252,6 +253,28 @@ export default function TournamentPage({ params }: TournamentPageProps) {
         </div>
       </div>
 
+      {(user?.id === tournament.created_by || user?.username === "Resteral") && (
+        <div className="mb-6">
+          <TournamentStartButton
+            tournament={{
+              id: tournament.id,
+              name: tournament.name,
+              status: tournament.status,
+              max_participants: tournament.max_teams,
+              created_by: tournament.created_by,
+              start_date: tournament.start_date,
+              tournament_type: tournament.league_mode,
+            }}
+            participantCount={tournament.participant_count || 0}
+            onStatusChange={(newStatus) => {
+              setTournament((prev) => (prev ? { ...prev, status: newStatus } : null))
+              // Refresh tournament data to get updated info
+              fetchTournament()
+            }}
+          />
+        </div>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -363,6 +386,25 @@ export default function TournamentPage({ params }: TournamentPageProps) {
                         <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                           Games begin immediately after draft completion
                         </div>
+                      </div>
+                    )}
+                    {tournament.status === "drafting" && (
+                      <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Trophy className="h-4 w-4 text-yellow-600" />
+                          <span className="font-medium text-yellow-900 dark:text-yellow-100">Draft in Progress</span>
+                        </div>
+                        <div className="text-sm text-yellow-700 dark:text-yellow-300">
+                          Players are currently drafting teams
+                        </div>
+                        <Button
+                          onClick={() => router.push(`/tournaments/${tournament.id}/draft`)}
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                        >
+                          View Draft Room
+                        </Button>
                       </div>
                     )}
                     {(tournament.status === "registration" || tournament.status === "active") && (
