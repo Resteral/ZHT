@@ -58,7 +58,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
   const getMinimumPlayers = () => {
     if (!tournamentSettings) return 4
 
-    const maxTeams = tournamentSettings.max_teams || tournamentSettings.player_pool_settings?.max_teams || 8
+    const maxTeams = tournamentSettings.max_teams || 4 // Default to 4 teams, not 8
     const playersPerTeam = tournamentSettings.player_pool_settings?.players_per_team || 4
 
     return maxTeams * playersPerTeam
@@ -183,13 +183,13 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
             <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
             <div className="text-2xl font-bold text-green-700">{minParticipants}</div>
             <div className="text-sm text-green-600">
-              Minimum Required ({tournamentSettings?.max_teams || 8} teams ×{" "}
+              Minimum Required ({tournamentSettings?.max_teams || 4} teams ×{" "}
               {tournamentSettings?.player_pool_settings?.players_per_team || 4} players)
             </div>
           </div>
           <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
             <Star className="h-8 w-8 mx-auto mb-2 text-purple-500" />
-            <div className="text-2xl font-bold text-purple-700">{tournamentSettings?.max_teams || 8}</div>
+            <div className="text-2xl font-bold text-purple-700">{tournamentSettings?.max_teams || 4}</div>
             <div className="text-sm text-purple-600">Teams Needed</div>
           </div>
         </div>
@@ -224,7 +224,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
                       Need {minParticipants - participantCount} more players to start the tournament (
-                      {tournamentSettings?.max_teams || 8} teams of{" "}
+                      {tournamentSettings?.max_teams || 4} teams of{" "}
                       {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each)
                     </AlertDescription>
                   </Alert>

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Users, Crown, Star, Shuffle, Target, AlertTriangle } from "lucide-react"
+import { Users, Crown, Star, Shuffle, Target, AlertTriangle, ArrowRight } from "lucide-react"
 import { captainSelectionService } from "@/lib/services/captain-selection-service"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
@@ -52,14 +52,14 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
   const loadPlayerPool = async () => {
     try {
       const { data } = await captainSelectionService.supabase
-        .from("tournament_player_pool")
+        .from("tournament_participants")
         .select(`
           user_id,
           status,
           users(username, elo_rating)
         `)
         .eq("tournament_id", tournament.id)
-        .eq("status", "available")
+        .eq("status", "registered")
         .order("users(elo_rating)", { ascending: false })
 
       if (data) {
@@ -221,16 +221,20 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
                 </div>
               ))}
             </div>
-            {canSelectCaptains && (
+            <div className="flex gap-2">
               <Button
-                onClick={handleResetCaptains}
-                disabled={loading}
-                variant="outline"
-                className="w-full bg-transparent"
+                onClick={() => (window.location.href = `/tournaments/${tournament.id}/draft`)}
+                className="flex-1 bg-green-600 hover:bg-green-700"
               >
-                Reset Captain Selection
+                <ArrowRight className="h-4 w-4 mr-2" />
+                Move to Draft Screen
               </Button>
-            )}
+              {canSelectCaptains && (
+                <Button onClick={handleResetCaptains} disabled={loading} variant="outline" className="bg-transparent">
+                  Reset Captains
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -320,7 +324,7 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
           <div className="pt-4 border-t">
             <h4 className="font-medium mb-3 flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Available Players ({playerPool.length})
+              Registered Players ({playerPool.length})
             </h4>
             <div className="max-h-32 overflow-y-auto space-y-2">
               {playerPool.slice(0, 10).map((player) => (

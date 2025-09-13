@@ -12,6 +12,7 @@ import { TournamentDraftRoom } from "@/components/tournaments/tournament-draft-r
 import { TournamentBracket } from "@/components/tournaments/tournament-bracket"
 import { liveBracketIntegrationService } from "@/lib/services/live-bracket-integration-service"
 import { TournamentDraftIntegration } from "@/components/tournaments/tournament-draft-integration"
+import { TournamentAuctionDraft } from "@/components/tournaments/tournament-auction-draft"
 
 interface TournamentDraftPageProps {
   params: {
@@ -30,6 +31,8 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
   const [showScheduleEditor, setShowScheduleEditor] = useState(false)
   const [bracketStats, setBracketStats] = useState<any>(null)
   const [showLiveBracket, setShowLiveBracket] = useState(false)
+  const [captains, setCaptains] = useState<any[]>([])
+  const [playerPool, setPlayerPool] = useState<any[]>([])
 
   const supabase = createClient()
 
@@ -380,14 +383,24 @@ export default function TournamentDraftPage({ params }: TournamentDraftPageProps
       </Card>
 
       {tournament.status === "drafting" && (
-        <TournamentDraftIntegration
-          tournamentId={params.id}
-          onDraftStarted={(draftId) => {
-            console.log("[v0] Draft started with ID:", draftId)
-            // Refresh tournament data to show updated status
-            loadTournamentData()
-          }}
-        />
+        <div className="space-y-6">
+          <TournamentDraftIntegration
+            tournamentId={params.id}
+            onDraftStarted={(draftId) => {
+              console.log("[v0] Draft started with ID:", draftId)
+              // Refresh tournament data to show updated status
+              loadTournamentData()
+            }}
+          />
+
+          {tournament.tournament_type === "auction_draft" && (
+            <TournamentAuctionDraft
+              tournamentId={params.id}
+              captains={captains} // Will be loaded from tournament data
+              playerPool={playerPool} // Will be loaded from tournament participants
+            />
+          )}
+        </div>
       )}
 
       {isLongTournament ? (
