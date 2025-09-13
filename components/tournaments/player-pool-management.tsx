@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { captainSelectionService } from "@/lib/services/captain-selection-service"
 import { toast } from "sonner"
+import { CaptainSelectionInterface } from "./captain-selection-interface"
 
 interface PlayerPoolManagementProps {
   tournamentId: string
@@ -574,104 +575,16 @@ export function PlayerPoolManagement({ tournamentId, tournament, isOrganizer = f
         </TabsContent>
 
         <TabsContent value="captains" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gavel className="h-5 w-5 text-yellow-500" />
-                Captain Selection Management
-              </CardTitle>
-              <CardDescription>
-                Select team captains from the player pool. Captains will draft their teams when the tournament starts.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isOrganizer && (
-                <div className="space-y-4">
-                  <div className="flex gap-2">
-                    <Button onClick={selectCaptainsAutomatically} className="flex-1">
-                      <Gavel className="h-4 w-4 mr-2" />
-                      Auto-Select Captains
-                    </Button>
-                    <Button onClick={resetCaptains} variant="outline">
-                      <Gavel className="h-4 w-4 mr-2" />
-                      Reset Captains
-                    </Button>
-                  </div>
-
-                  <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Gavel className="h-4 w-4 text-blue-600" />
-                      <span className="font-medium text-blue-900 dark:text-blue-100">Captain Selection Status</span>
-                    </div>
-                    <div className="text-sm text-blue-700 dark:text-blue-300">
-                      {players.filter((p) => p.status === "captain").length > 0
-                        ? `${players.filter((p) => p.status === "captain").length} captains selected. Ready to start tournament formation.`
-                        : "No captains selected yet. Use auto-select to choose captains based on ELO ratings."}
-                    </div>
-                    {players.filter((p) => p.status === "captain").length > 0 &&
-                      tournament?.status === "registration" && (
-                        <div className="mt-3">
-                          <Button
-                            onClick={() => {
-                              // This would trigger tournament status change to drafting
-                              toast.success("Tournament formation ready! Switch to Auction Draft tab to begin.")
-                            }}
-                            size="sm"
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            <Gavel className="h-3 w-3 mr-1" />
-                            Ready for Draft
-                          </Button>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {players
-                  .filter((p) => p.status === "captain")
-                  .map((captain) => (
-                    <div
-                      key={captain.id}
-                      className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
-                    >
-                      <Gavel className="h-5 w-5 text-yellow-500" />
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="bg-yellow-100 text-yellow-800">
-                          {captain.username.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <div className="font-medium">{captain.username}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {captain.elo_rating} ELO • {captain.captain_type?.replace("_", " ")} Captain
-                        </div>
-                      </div>
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                        Captain
-                      </Badge>
-                    </div>
-                  ))}
-
-                {players.filter((p) => p.status === "captain").length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Gavel className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No captains selected yet</p>
-                    <p className="text-sm">Use auto-select to choose captains based on ELO</p>
-                    {isOrganizer && (
-                      <div className="mt-4">
-                        <Button onClick={selectCaptainsAutomatically} variant="outline">
-                          <Gavel className="h-4 w-4 mr-2" />
-                          Select Captains Now
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <CaptainSelectionInterface
+            tournamentId={tournamentId}
+            tournament={tournament}
+            isOrganizer={isOrganizer}
+            isTournamentCreator={user?.id === tournament?.created_by}
+            onCaptainsSelected={(captains) => {
+              console.log("[v0] Captains selected:", captains)
+              loadPlayerPool() // Refresh the player pool data
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
