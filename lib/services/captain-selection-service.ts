@@ -19,10 +19,10 @@ export interface PlayerPoolEntry {
 }
 
 class CaptainSelectionService {
-  private supabase = createClient()
+  private _supabaseClient = createClient()
 
   get supabase() {
-    return this.supabase
+    return this._supabaseClient
   }
 
   /**
@@ -61,6 +61,7 @@ class CaptainSelectionService {
         `)
         .eq("tournament_id", tournamentId)
         .eq("status", "available")
+        .is("captain_type", null) // Only select players who aren't already captains
         .order("created_at", { ascending: true })
 
       if (poolError) {
@@ -106,7 +107,6 @@ class CaptainSelectionService {
         captainUpdates.push({
           tournament_id: tournamentId,
           user_id: captain.user_id,
-          status: "captain",
           captain_type: i === 0 ? "high_elo" : i === maxTeams - 1 ? "low_elo" : "mid_elo",
           updated_at: new Date().toISOString(),
         })
@@ -117,7 +117,6 @@ class CaptainSelectionService {
         const { error: updateError } = await this.supabase
           .from("tournament_player_pool")
           .update({
-            status: update.status,
             captain_type: update.captain_type,
             updated_at: update.updated_at,
           })
@@ -225,7 +224,6 @@ class CaptainSelectionService {
         const { error: updateError } = await this.supabase
           .from("tournament_player_pool")
           .update({
-            status: "captain",
             captain_type: update.captain_type,
             updated_at: new Date().toISOString(),
           })
@@ -300,6 +298,7 @@ class CaptainSelectionService {
         `)
         .eq("tournament_id", tournamentId)
         .eq("status", "available")
+        .is("captain_type", null) // Only select players who aren't already captains
         .order("created_at", { ascending: true })
 
       if (poolError) {
@@ -340,7 +339,6 @@ class CaptainSelectionService {
         captainUpdates.push({
           tournament_id: tournamentId,
           user_id: captain.user_id,
-          status: "captain",
           captain_type: captainType,
           updated_at: new Date().toISOString(),
         })
@@ -358,7 +356,6 @@ class CaptainSelectionService {
         const { error: updateError } = await this.supabase
           .from("tournament_player_pool")
           .update({
-            status: update.status,
             captain_type: update.captain_type,
             updated_at: update.updated_at,
           })
@@ -404,7 +401,7 @@ class CaptainSelectionService {
           users(username, elo_rating)
         `)
         .eq("tournament_id", tournamentId)
-        .eq("status", "captain")
+        .not("captain_type", "is", null) // Find players with captain_type set instead of status = 'captain'
         .order("captain_type", { ascending: true })
 
       if (error) {
@@ -436,12 +433,11 @@ class CaptainSelectionService {
       const { error } = await this.supabase
         .from("tournament_player_pool")
         .update({
-          status: "available",
           captain_type: null,
           updated_at: new Date().toISOString(),
         })
         .eq("tournament_id", tournamentId)
-        .eq("status", "captain")
+        .not("captain_type", "is", null) // Target players with captain_type set
 
       if (error) {
         console.error("[v0] Error resetting captains:", error)

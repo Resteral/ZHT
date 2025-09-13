@@ -63,7 +63,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
       return 16 // Default: 4 teams × 4 players
     }
 
-    const maxTeams = tournamentSettings.max_teams || tournamentSettings.player_pool_settings?.max_teams || 4
+    const maxTeams = tournamentSettings.max_teams || 4
     const playersPerTeam = tournamentSettings.player_pool_settings?.players_per_team || 4
 
     const minPlayers = maxTeams * playersPerTeam
@@ -197,8 +197,7 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
             <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
             <div className="text-2xl font-bold text-green-700">{minParticipants}</div>
             <div className="text-sm text-green-600">
-              Minimum Required (
-              {tournamentSettings?.max_teams || tournamentSettings?.player_pool_settings?.max_teams || 4} teams ×{" "}
+              Minimum Required ({tournamentSettings?.max_teams || 4} teams ×{" "}
               {tournamentSettings?.player_pool_settings?.players_per_team || 4} players)
             </div>
           </div>
@@ -238,10 +237,9 @@ export function TournamentStartButton({ tournament, participantCount, onStatusCh
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
                       Need {minParticipants - participantCount} more players to start the tournament. Minimum:{" "}
-                      {minParticipants} players (
-                      {tournamentSettings?.max_teams || tournamentSettings?.player_pool_settings?.max_teams || 4} teams
-                      of {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each). Maximum
-                      allowed: {tournament.max_participants} players.
+                      {minParticipants} players ({tournamentSettings?.max_teams || 4} teams of{" "}
+                      {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each). Maximum allowed:{" "}
+                      {tournament.max_participants} players.
                     </AlertDescription>
                   </Alert>
                 )}
