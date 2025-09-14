@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Clock, DollarSign, Users, Trophy, Gavel, Wifi, WifiOff } from "lucide-react"
+import { Clock, DollarSign, Users, Trophy, Gavel, Wifi, WifiOff, Crown } from "lucide-react"
 import { useAuctionRealtime } from "@/hooks/use-auction-realtime"
 import { toast } from "sonner"
 
@@ -304,7 +304,8 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
               <div>
                 <h1 className="text-2xl font-bold">Tournament Auction Draft</h1>
                 <p className="text-background/80">
-                  Round {auctionSession?.auction_round} of {auctionSession?.total_rounds}
+                  Round {auctionSession?.auction_round} of {auctionSession?.total_rounds} - Select captains and build
+                  teams
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -330,6 +331,52 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
+            {(isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") && !auctionSession?.status && (
+              <Card className="auction-card border-blue-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Crown className="h-5 w-5 text-blue-500" />
+                    Select Team Captains
+                  </CardTitle>
+                  <CardDescription>
+                    Choose 4 captains from the player pool to lead teams in the auction draft
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-2 max-h-64 overflow-y-auto">
+                    {playerPool.map((player) => (
+                      <div
+                        key={player.id}
+                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted cursor-pointer"
+                        onClick={() => {
+                          // Toggle captain selection
+                          console.log(`[v0] Selecting captain: ${player.username}`)
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{player.username}</p>
+                            <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm">
+                          Make Captain
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t">
+                    <Button className="w-full" disabled={teams.length < 4}>
+                      Start Auction with Selected Captains
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card className="auction-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -369,7 +416,9 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
                   </div>
                 ) : (
                   <div className="text-center py-12">
-                    <p className="text-muted-foreground">No player currently up for auction</p>
+                    <p className="text-muted-foreground">
+                      {teams.length < 4 ? "Select 4 captains to begin auction" : "No player currently up for auction"}
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -497,27 +546,29 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-primary" />
-                  Remaining Players
+                  All Players Available
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {playerPool.slice(0, 5).map((player) => (
+                  {playerPool.map((player) => (
                     <div key={player.id} className="flex items-center justify-between p-2 rounded bg-muted">
                       <div>
                         <p className="font-medium text-sm">{player.username}</p>
-                        <p className="text-xs text-muted-foreground">{player.position}</p>
+                        <p className="text-xs text-muted-foreground">{player.elo_rating} ELO</p>
                       </div>
-                      <Badge variant="outline" className="text-xs">
-                        {player.elo_rating}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          {player.elo_rating}
+                        </Badge>
+                        {(isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") && (
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                            <Crown className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
-                  {playerPool.length > 5 && (
-                    <p className="text-xs text-muted-foreground text-center pt-2">
-                      +{playerPool.length - 5} more players
-                    </p>
-                  )}
                 </div>
               </CardContent>
             </Card>

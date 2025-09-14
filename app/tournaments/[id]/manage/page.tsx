@@ -89,7 +89,10 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
       const response = await fetch(`/api/tournaments/${params.id}/auction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start_auction" }),
+        body: JSON.stringify({
+          action: "start_auction_direct",
+          skip_captain_selection: true,
+        }),
       })
 
       if (response.ok) {
@@ -252,7 +255,7 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
               {tournament?.status === "team_building" && (
                 <Button onClick={startAuctionDraft} variant="outline" className="w-full justify-start bg-transparent">
                   <Gavel className="h-4 w-4 mr-2" />
-                  Start Auction Draft
+                  Start Direct Auction Draft
                 </Button>
               )}
               {(tournament?.status === "drafting" || auctionSession) && (

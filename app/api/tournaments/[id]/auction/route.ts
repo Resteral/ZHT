@@ -121,9 +121,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   })
 
   try {
-    const { action } = await request.json()
+    const { action, skip_captain_selection } = await request.json()
 
-    if (action === "start_auction") {
+    if (action === "start_auction" || action === "start_auction_direct") {
       const { data: tournament, error: tournamentError } = await supabase
         .from("tournaments")
         .select("player_pool_settings")
@@ -135,6 +135,40 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const settings = tournament.player_pool_settings || {}
       const auctionBudget = settings.auction_budget || 500
       const playersPerTeam = settings.players_per_team || 4
+
+      if (action === "start_auction_direct" && skip_captain_selection) {
+        console.log("[v0] Starting direct auction draft - captains will be selected in auction room")
+
+        // Update tournament status to drafting
+        const { error: statusError } = await supabase
+          .from("tournaments")
+          .update({ status: "drafting" })
+          .eq("id", params.id)
+
+        if (statusError) {
+          console.error("[v0] Error updating tournament status:", statusError)
+        }
+
+        // Create auction session in waiting_for_captains state
+        const { data: session, error: sessionError } = await supabase
+          .from("tournament_auction_sessions")
+          .insert({
+            tournament_id: params.id,
+            status: "waiting_for_captains",
+            started_at: new Date().toISOString(),
+            auction_round: 1,
+            bid_timer_seconds: 30,
+          })
+          .select()
+          .single()
+
+        if (sessionError) {
+          console.error("[v0] Error creating direct auction session:", sessionError)
+          throw sessionError
+        }
+
+        return NextResponse.json({ success: true, session, direct_mode: true })
+      }
 
       const { error: budgetError } = await supabase
         .from("tournament_teams")
@@ -174,6 +208,48 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
 
       return NextResponse.json({ success: true, session })
+    }
+
+    if (action === "select_captain") {
+      const { player_id, team_name } = await request.json()
+
+      console.log("[v0] Selecting captain for direct auction:", { player_id, team_name })
+
+      // Create a new team with the selected captain
+      const { data: team, error: teamError } = await supabase
+        .from("tournament_teams")
+        .insert({
+          tournament_id: params.id,
+          team_name: team_name || `Team ${Date.now()}`,
+          team_captain: player_id,
+          budget_remaining: 500,
+          max_players: 4,
+          players_acquired: 1,
+        })
+        .select()
+        .single()
+
+      if (teamError) {
+        console.error("[v0] Error creating team:", teamError)
+        throw teamError
+      }
+
+      // Update player status to captain
+      const { error: playerError } = await supabase
+        .from("tournament_player_pool")
+        .update({
+          status: "captain",
+          captain_type: "selected",
+        })
+        .eq("user_id", player_id)
+        .eq("tournament_id", params.id)
+
+      if (playerError) {
+        console.error("[v0] Error updating player status:", playerError)
+        throw playerError
+      }
+
+      return NextResponse.json({ success: true, team })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
