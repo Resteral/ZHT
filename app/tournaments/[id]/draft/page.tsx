@@ -91,15 +91,35 @@ export default function TournamentDraftPage() {
       if (tournamentError) throw tournamentError
       setTournament(tournamentData)
 
+      console.log("[v0] Checking for existing captains...")
       const currentCaptains = await captainSelectionService.getCurrentCaptains(tournamentId)
-      console.log("[v0] Current captains:", currentCaptains.length)
+      console.log("[v0] Current captains found:", currentCaptains.length, currentCaptains)
 
       if (currentCaptains.length === 0) {
-        console.log("[v0] No captains found, selecting automatically...")
-        const result = await captainSelectionService.selectCaptainsAutomatically(tournamentId)
-        if (!result.success) {
-          throw new Error(result.message)
+        console.log("[v0] No captains found, checking if we can select automatically...")
+
+        const { data: poolCheck } = await supabase
+          .from("tournament_player_pool")
+          .select("user_id")
+          .eq("tournament_id", tournamentId)
+          .eq("status", "available")
+
+        const requiredTeams = tournamentData.player_pool_settings?.num_teams || 3
+        console.log("[v0] Players in pool:", poolCheck?.length || 0, "Required teams:", requiredTeams)
+
+        if ((poolCheck?.length || 0) >= requiredTeams) {
+          console.log("[v0] Sufficient players available, selecting captains automatically...")
+          const result = await captainSelectionService.selectCaptainsAutomatically(tournamentId)
+          if (!result.success) {
+            console.error("[v0] Failed to auto-select captains:", result.message)
+            throw new Error(result.message)
+          }
+          console.log("[v0] Auto-selected captains:", result.captains)
+        } else {
+          console.log("[v0] Not enough players to select captains automatically")
         }
+      } else {
+        console.log("[v0] Using existing captains:", currentCaptains)
       }
 
       await ensureTeamsExist(tournamentId, tournamentData)
@@ -136,6 +156,9 @@ export default function TournamentDraftPage() {
       setTeams(transformedTeams)
       console.log("[v0] Teams with captains loaded:", transformedTeams.length)
 
+      const finalCaptains = await captainSelectionService.getCurrentCaptains(tournamentId)
+      console.log("[v0] Final captains after team creation:", finalCaptains.length, finalCaptains)
+
       const { data: poolData, error: poolError } = await supabase
         .from("tournament_player_pool")
         .select(`
@@ -151,6 +174,7 @@ export default function TournamentDraftPage() {
       if (poolError) throw poolError
 
       const captainIds = transformedTeams.map((team) => team.team_captain)
+      console.log("[v0] Captain IDs from teams:", captainIds)
 
       const transformedPlayers = (poolData || [])
         .filter((player) => player.status === "available" && !captainIds.includes(player.user_id))
@@ -169,6 +193,7 @@ export default function TournamentDraftPage() {
 
       console.log("[v0] Loaded teams:", transformedTeams.length)
       console.log("[v0] Loaded available players:", transformedPlayers.length)
+      console.log("[v0] Players who are also captains:", finalCaptains.length)
       console.log("[v0] Captains excluded from player pool:", captainIds.length)
 
       setLoading(false)
@@ -184,7 +209,7 @@ export default function TournamentDraftPage() {
       const requiredTeams = tournament.player_pool_settings?.num_teams || 3
 
       const captains = await captainSelectionService.getCurrentCaptains(tournamentId)
-      console.log("[v0] Creating teams for captains:", captains.length)
+      console.log("[v0] Creating teams for captains:", captains.length, captains)
 
       if (captains.length === 0) {
         throw new Error("No captains selected for tournament")
