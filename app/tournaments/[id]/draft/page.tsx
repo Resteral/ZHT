@@ -81,6 +81,7 @@ export default function TournamentDraftPage() {
     try {
       setLoading(true)
       console.log("[v0] Loading tournament draft data for:", tournamentId)
+      console.log("[v0] Current user ID:", user?.id)
 
       const { data: tournamentData, error: tournamentError } = await supabase
         .from("tournaments")
@@ -94,6 +95,9 @@ export default function TournamentDraftPage() {
       console.log("[v0] Checking for existing captains...")
       const currentCaptains = await captainSelectionService.getCurrentCaptains(tournamentId)
       console.log("[v0] Current captains found:", currentCaptains.length, currentCaptains)
+
+      const userIsCaptain = currentCaptains.some((captain) => captain.id === user?.id)
+      console.log("[v0] Current user is captain:", userIsCaptain, "User ID:", user?.id)
 
       if (currentCaptains.length === 0) {
         console.log("[v0] No captains found, checking if we can select automatically...")
@@ -155,6 +159,20 @@ export default function TournamentDraftPage() {
 
       setTeams(transformedTeams)
       console.log("[v0] Teams with captains loaded:", transformedTeams.length)
+
+      transformedTeams.forEach((team) => {
+        console.log(
+          "[v0] Team:",
+          team.team_name,
+          "Captain ID:",
+          team.team_captain,
+          "Captain Name:",
+          team.captain_username,
+        )
+        if (team.team_captain === user?.id) {
+          console.log("[v0] Current user is captain of team:", team.team_name)
+        }
+      })
 
       const finalCaptains = await captainSelectionService.getCurrentCaptains(tournamentId)
       console.log("[v0] Final captains after team creation:", finalCaptains.length, finalCaptains)
@@ -288,13 +306,29 @@ export default function TournamentDraftPage() {
     if (!currentPlayer || !user) return
 
     try {
+      console.log("[v0] Attempting to place bid - User ID:", user.id, "Team ID:", teamId, "Amount:", amount)
+
       const team = teams.find((t) => t.id === teamId)
-      if (!team || team.budget_remaining < amount) {
+      if (!team) {
+        console.error("[v0] Team not found:", teamId)
+        setError("Team not found")
+        return
+      }
+
+      if (team.team_captain !== user.id) {
+        console.error("[v0] User is not captain of this team. User ID:", user.id, "Team Captain:", team.team_captain)
+        setError("You are not the captain of this team")
+        return
+      }
+
+      if (team.budget_remaining < amount) {
+        console.error("[v0] Insufficient budget. Available:", team.budget_remaining, "Requested:", amount)
         setError("Insufficient budget for this bid")
         return
       }
 
       if (amount <= (currentPlayer.current_bid || 0)) {
+        console.error("[v0] Bid too low. Current bid:", currentPlayer.current_bid, "New bid:", amount)
         setError("Bid must be higher than current bid")
         return
       }
@@ -308,7 +342,7 @@ export default function TournamentDraftPage() {
       setBidTimer(30)
       setError(null)
 
-      console.log("[v0] Bid placed:", amount, "by team", team.team_name)
+      console.log("[v0] Bid placed successfully:", amount, "by team", team.team_name, "Captain:", team.captain_username)
     } catch (err) {
       console.error("[v0] Error placing bid:", err)
       setError("Failed to place bid")
@@ -466,6 +500,14 @@ export default function TournamentDraftPage() {
   const draftMode = tournament.player_pool_settings?.draft_mode || "auction_draft"
   const isHost = user?.id === tournament.created_by
 
+  console.log("[v0] Captain status check - User ID:", user?.id)
+  console.log("[v0] Is user captain:", isUserCaptain)
+  console.log("[v0] User team:", userTeam?.team_name || "None")
+  console.log(
+    "[v0] All teams:",
+    teams.map((t) => ({ name: t.team_name, captain: t.team_captain })),
+  )
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -570,6 +612,15 @@ export default function TournamentDraftPage() {
                     Bid ${bidAmount}
                   </Button>
                   <p className="text-sm text-muted-foreground">Budget: ${userTeam.budget_remaining}</p>
+                </div>
+              )}
+
+              {!isUserCaptain && (
+                <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                  <p className="text-red-800 font-medium">Debug: You are not recognized as a captain</p>
+                  <p className="text-xs text-red-600 mt-1">
+                    Your ID: {user?.id} | Teams: {teams.map((t) => `${t.team_name}(${t.team_captain})`).join(", ")}
+                  </p>
                 </div>
               )}
             </div>
