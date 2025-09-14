@@ -308,8 +308,23 @@ export default function TournamentLobbyPage() {
 
   const isUserInTournament = players.some((p) => p.id === currentUser?.id)
   const totalPlayersNeeded =
-    tournament.player_pool_settings.num_teams * tournament.player_pool_settings.players_per_team
-  const progressPercentage = (players.length / totalPlayersNeeded) * 100
+    tournament?.player_pool_settings?.num_teams && tournament?.player_pool_settings?.players_per_team
+      ? tournament.player_pool_settings.num_teams * tournament.player_pool_settings.players_per_team
+      : 0
+  const progressPercentage = totalPlayersNeeded > 0 ? (players.length / totalPlayersNeeded) * 100 : 0
+
+  if (loading || !tournament) {
+    return (
+      <div className="container mx-auto py-6 max-w-6xl">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="text-lg font-medium">Loading tournament...</div>
+            <div className="text-sm text-muted-foreground mt-2">Please wait while we load the tournament data</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const isPlayerCaptain = (playerId: string) => {
     return captains.some((captain) => captain.id === playerId)
@@ -349,15 +364,15 @@ export default function TournamentLobbyPage() {
                 </span>
                 <span className="text-sm text-muted-foreground">
                   {tournamentStarted
-                    ? `${tournament.player_pool_settings.num_teams} teams formed`
+                    ? `${tournament.player_pool_settings?.num_teams || 0} teams formed`
                     : `${players.length} / ${totalPlayersNeeded} needed`}
                 </span>
               </div>
               <Progress value={tournamentStarted ? 100 : progressPercentage} className="h-3" />
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {tournament.player_pool_settings.num_teams} teams × {tournament.player_pool_settings.players_per_team}{" "}
-                  players each
+                  {tournament.player_pool_settings?.num_teams || 0} teams ×{" "}
+                  {tournament.player_pool_settings?.players_per_team || 0} players each
                 </span>
                 <span className="font-medium">
                   {tournamentStarted
@@ -454,15 +469,15 @@ export default function TournamentLobbyPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Format:</span>
-                      <span className="font-medium">{tournament.player_pool_settings.bracket_type}</span>
+                      <span className="font-medium">{tournament.player_pool_settings?.bracket_type || "N/A"}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Teams:</span>
-                      <span className="font-medium">{tournament.player_pool_settings.num_teams}</span>
+                      <span className="font-medium">{tournament.player_pool_settings?.num_teams || 0}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Players per team:</span>
-                      <span className="font-medium">{tournament.player_pool_settings.players_per_team}</span>
+                      <span className="font-medium">{tournament.player_pool_settings?.players_per_team || 0}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Start time:</span>
@@ -493,7 +508,7 @@ export default function TournamentLobbyPage() {
                   {currentUser &&
                     tournament.created_by === currentUser.id &&
                     !tournamentStarted &&
-                    players.length >= tournament.player_pool_settings.num_teams && (
+                    players.length >= (tournament.player_pool_settings?.num_teams || 0) && (
                       <Button onClick={startDraft} className="w-full" size="lg" variant="default">
                         <Target className="h-4 w-4 mr-2" />
                         Select Captains & Start Draft ({players.length} players ready)
@@ -532,18 +547,19 @@ export default function TournamentLobbyPage() {
                   <div className="text-sm text-yellow-700">
                     <p className="mb-2">
                       <strong>Method:</strong>{" "}
-                      {tournament.player_pool_settings.captain_selection_method?.replace("_", " ") || "Highest ELO"}
+                      {tournament.player_pool_settings?.captain_selection_method?.replace("_", " ") || "Highest ELO"}
                     </p>
                     <p className="mb-2">
                       The{" "}
                       <strong>
-                        {captains.length > 0 ? captains.length : tournament.player_pool_settings.num_teams} captains
+                        {captains.length > 0 ? captains.length : tournament.player_pool_settings?.num_teams || 0}{" "}
+                        captains
                       </strong>{" "}
                       will be selected automatically when the tournament starts.
                     </p>
                     <p>
                       Captains will then draft their teams using{" "}
-                      {tournament.player_pool_settings.draft_mode?.replace("_", " ") || "snake draft"} format.
+                      {tournament.player_pool_settings?.draft_mode?.replace("_", " ") || "snake draft"} format.
                     </p>
                   </div>
                 </CardContent>

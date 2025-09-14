@@ -44,7 +44,7 @@ class CaptainSelectionService {
         throw tournamentError
       }
 
-      const numTeams = tournament.player_pool_settings?.num_teams || tournament.max_teams || 2
+      const numTeams = tournament.player_pool_settings?.num_teams || 3
       console.log("[v0] Tournament requires", numTeams, "captains")
 
       const { data: poolPlayers, error: poolError } = await this.supabase

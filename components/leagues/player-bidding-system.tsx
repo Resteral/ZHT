@@ -398,7 +398,7 @@ export function PlayerBiddingSystem() {
   const getBetTypeColor = (betType: string) => {
     switch (betType) {
       case "performance":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200"
+        return "bg-yellow-100 text-yellow-900 border-yellow-200"
       case "match_outcome":
         return "bg-blue-100 text-blue-800 border-blue-200"
       case "elo_change":
@@ -506,9 +506,9 @@ export function PlayerBiddingSystem() {
                       </Avatar>
                       <div>
                         <CardTitle className="text-lg">{auction.player_username}</CardTitle>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 text-sm">
                           <Star className="h-3 w-3" />
-                          <span>{auction.player_elo} ELO</span>
+                          <span className="text-slate-600 font-medium">{auction.player_elo} ELO</span>
                           {auction.auto_bid_enabled && (
                             <Badge variant="outline" className="text-xs">
                               <Zap className="h-3 w-3 mr-1" />
@@ -528,7 +528,7 @@ export function PlayerBiddingSystem() {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-muted-foreground">Current Bid</p>
-                      <p className="text-2xl font-bold text-green-600">${auction.current_bid}</p>
+                      <p className="text-2xl font-bold text-green-700">${auction.current_bid}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Time Left</p>
@@ -644,9 +644,9 @@ export function PlayerBiddingSystem() {
                       </Avatar>
                       <div>
                         <CardTitle className="text-lg">{bet.player_username}</CardTitle>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 text-sm">
                           <Star className="h-3 w-3" />
-                          <span>{bet.player_elo} ELO</span>
+                          <span className="text-slate-600 font-medium">{bet.player_elo} ELO</span>
                         </div>
                       </div>
                     </div>
@@ -668,11 +668,11 @@ export function PlayerBiddingSystem() {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-muted-foreground">Min Bet</p>
-                      <p className="font-bold text-green-600">${bet.min_bet}</p>
+                      <p className="font-bold text-green-700">${bet.min_bet}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Max Bet</p>
-                      <p className="font-bold text-red-600">${bet.max_bet}</p>
+                      <p className="font-bold text-red-700">${bet.max_bet}</p>
                     </div>
                   </div>
 

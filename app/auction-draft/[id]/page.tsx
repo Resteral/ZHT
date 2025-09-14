@@ -276,7 +276,7 @@ export default function AuctionLeaguePage() {
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-lg">{bidder.elo_rating}</div>
-                      <div className="text-sm text-muted-foreground">ELO Rating</div>
+                      <div className="text-sm text-slate-600 font-medium">ELO Rating</div>
                     </div>
                   </div>
                 ))}
@@ -324,7 +324,7 @@ export default function AuctionLeaguePage() {
                       </div>
                       <div className="text-right">
                         <div className="font-bold">{participant.elo_rating}</div>
-                        <div className="text-xs text-muted-foreground">ELO</div>
+                        <div className="text-xs text-slate-600 font-medium">ELO</div>
                       </div>
                     </div>
                   ))}

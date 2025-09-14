@@ -85,19 +85,13 @@ class LiveBracketIntegrationService {
         bracket.map((match) => ({
           id: match.id,
           tournament_id: match.tournament_id,
-          round_number: match.round_number,
           match_number: match.match_number,
-          team1_id: match.team1_id,
-          team2_id: match.team2_id,
-          team1_captain: match.team1_captain,
-          team2_captain: match.team2_captain,
+          team1_captain_id: match.team1_captain, // Use correct column name
+          team2_captain_id: match.team2_captain, // Use correct column name
           team1_score: match.team1_score,
           team2_score: match.team2_score,
-          winner_team_id: match.winner_team_id,
+          winner_captain_id: match.winner_team_id, // Use correct column name
           status: match.status,
-          bracket_position: match.bracket_position,
-          scheduled_time: match.scheduled_time,
-          spectator_count: 0,
           created_at: new Date().toISOString(),
         })),
       )
@@ -133,8 +127,8 @@ class LiveBracketIntegrationService {
         .from("tournament_teams")
         .select(`
           *,
-          captain:users!captain_id(username, elo_rating),
-          team_members(
+          captain:users!team_captain(username, elo_rating),
+          tournament_team_members(
             user_id,
             position,
             users(username, elo_rating)
@@ -152,10 +146,10 @@ class LiveBracketIntegrationService {
         id: team.id,
         tournament_id: team.tournament_id,
         team_name: team.team_name,
-        captain_id: team.captain_id,
+        captain_id: team.team_captain, // Use team_captain column
         captain_username: team.captain?.username || "Unknown",
         captain_elo: team.captain?.elo_rating || 1200,
-        members: (team.team_members || []).map((member: any) => ({
+        members: (team.tournament_team_members || []).map((member: any) => ({
           user_id: member.user_id,
           username: member.users?.username || "Unknown",
           elo_rating: member.users?.elo_rating || 1200,
