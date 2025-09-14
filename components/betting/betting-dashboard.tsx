@@ -241,7 +241,8 @@ export function BettingDashboard() {
                   <span>Live Markets</span>
                 </TabsTrigger>
                 <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-                <TabsTrigger value="elo-draft">ELO Draft</TabsTrigger>
+                <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
+                <TabsTrigger value="elo-lobbies">ELO Lobbies</TabsTrigger>
                 <TabsTrigger value="results" className="flex items-center space-x-2">
                   <Trophy className="h-4 w-4" />
                   <span>Results</span>
@@ -252,6 +253,9 @@ export function BettingDashboard() {
                 <Badge variant="secondary">Real-time odds</Badge>
                 <Button size="sm" variant="outline" onClick={refreshStats}>
                   Refresh Markets
+                </Button>
+                <Button size="sm" variant="default">
+                  Create Market
                 </Button>
               </div>
             </div>
@@ -264,8 +268,28 @@ export function BettingDashboard() {
               <UpcomingBets />
             </TabsContent>
 
-            <TabsContent value="elo-draft" className="space-y-6">
-              <ELODraftBetting />
+            <TabsContent value="tournaments" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tournament Betting Markets</CardTitle>
+                  <CardDescription>Bet on tournament outcomes and player performances</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ELODraftBetting />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="elo-lobbies" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>ELO Lobby Betting Markets</CardTitle>
+                  <CardDescription>Bet on ELO lobby matches and player statistics</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ELODraftBetting />
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="results" className="space-y-6">
@@ -280,6 +304,24 @@ export function BettingDashboard() {
 
         <div className="space-y-6">
           <BetSlip />
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Create Betting Market</CardTitle>
+              <CardDescription>Anyone can create betting markets</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button className="w-full bg-transparent" variant="outline">
+                Create Tournament Market
+              </Button>
+              <Button className="w-full bg-transparent" variant="outline">
+                Create ELO Lobby Market
+              </Button>
+              <Button className="w-full bg-transparent" variant="outline">
+                Create Custom Market
+              </Button>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

@@ -5,11 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Users, Clock, DollarSign, Crown, Gamepad2, Target, Zap, Play } from "lucide-react"
+import { Trophy, Users, Clock, Crown, Gamepad2, Target, Zap, Download, TrendingUp } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
 import Link from "next/link"
 import { UnifiedDraftSelector } from "@/components/draft/unified-draft-selector"
-import { SeasonalTournamentDashboard } from "@/components/tournaments/seasonal-tournament-dashboard"
 
 interface Lobby {
   id: string
@@ -25,10 +24,27 @@ interface Lobby {
   tournament_type?: string
 }
 
+interface ELOLeaguePlayer {
+  id: string
+  username: string
+  elo_rating: number
+  wins: number
+  losses: number
+  goals: number
+  assists: number
+  steals: number
+  turnovers: number
+  goals_saved: number
+  goals_allowed: number
+  pick_ups: number
+  total_games: number
+  win_percentage: number
+  rank: number
+}
+
 export default function LobbiesPage() {
-  const [lobbies, setLobbies] = useState<Lobby[]>([])
-  const [tournaments, setTournaments] = useState<Lobby[]>([])
-  const [activeGames, setActiveGames] = useState<Lobby[]>([])
+  const [activeLobbies, setActiveLobbies] = useState<Lobby[]>([])
+  const [eloLeaguePlayers, setEloLeaguePlayers] = useState<ELOLeaguePlayer[]>([])
   const [loading, setLoading] = useState(true)
 
   const supabase = createBrowserClient(
@@ -36,58 +52,17 @@ export default function LobbiesPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
-  const fetchLiveContent = useCallback(async () => {
+  const fetchActiveLobbies = useCallback(async () => {
     try {
-      // Fetch lobbies
-      const { data: lobbiesData } = await supabase
-        .from("lobbies")
-        .select("*")
-        .in("status", ["waiting", "active"])
-        .order("created_at", { ascending: false })
-
-      // Fetch tournaments
-      const { data: tournamentsData } = await supabase
-        .from("tournaments")
-        .select("*")
-        .in("status", ["registration", "team_building", "active"])
-        .order("created_at", { ascending: false })
-
       const { data: matchesData } = await supabase
         .from("matches")
         .select("*")
-        .in("status", ["active", "drafting"])
+        .eq("status", "waiting") // Only waiting lobbies
         .order("created_at", { ascending: false })
 
-      const formattedLobbies = (lobbiesData || []).map((lobby) => ({
-        id: lobby.id,
-        name: lobby.name || `${lobby.game_mode} Lobby`,
-        game_mode: lobby.game_mode,
-        max_participants: lobby.max_participants,
-        current_participants: lobby.current_participants || 0,
-        entry_fee: lobby.entry_fee || 0,
-        prize_pool: lobby.prize_pool || 0,
-        status: lobby.status,
-        created_at: lobby.created_at,
-        type: "lobby" as const,
-      }))
-
-      const formattedTournaments = (tournamentsData || []).map((tournament) => ({
-        id: tournament.id,
-        name: tournament.name,
-        game_mode: tournament.game || "Rocket League",
-        max_participants: tournament.max_participants || 32,
-        current_participants: tournament.current_participants || 0,
-        entry_fee: tournament.entry_fee || 0,
-        prize_pool: tournament.prize_pool || 0,
-        status: tournament.status,
-        created_at: tournament.created_at,
-        type: "tournament" as const,
-        tournament_type: tournament.tournament_type,
-      }))
-
-      const formattedActiveGames = (matchesData || []).map((match) => ({
+      const formattedActiveLobbies = (matchesData || []).map((match) => ({
         id: match.id,
-        name: match.name || `${match.match_type} Match`,
+        name: match.name || `${match.match_type} Lobby`,
         game_mode: match.match_type || "ELO Draft",
         max_participants: match.max_participants || 8,
         current_participants: match.current_participants || 0,
@@ -98,54 +73,143 @@ export default function LobbiesPage() {
         type: "lobby" as const,
       }))
 
-      setLobbies(formattedLobbies)
-      setTournaments(formattedTournaments)
-      setActiveGames(formattedActiveGames)
+      setActiveLobbies(formattedActiveLobbies)
     } catch (error) {
-      console.error("Error fetching live content:", error)
-    } finally {
-      setLoading(false)
+      console.error("Error fetching active lobbies:", error)
+    }
+  }, [])
+
+  const fetchELOLeagueData = useCallback(async () => {
+    try {
+      const { data: playersData } = await supabase
+        .from("users")
+        .select(`
+          id,
+          username,
+          elo_rating,
+          wins,
+          losses,
+          total_games,
+          goals,
+          assists,
+          steals,
+          turnovers,
+          goals_saved,
+          goals_allowed,
+          pick_ups
+        `)
+        .gte("total_games", 1) // Only players who have played games
+        .order("elo_rating", { ascending: false })
+        .limit(100)
+
+      const formattedPlayers: ELOLeaguePlayer[] = (playersData || []).map((player, index) => ({
+        id: player.id,
+        username: player.username || "Unknown",
+        elo_rating: player.elo_rating || 1200,
+        wins: player.wins || 0,
+        losses: player.losses || 0,
+        goals: player.goals || 0,
+        assists: player.assists || 0,
+        steals: player.steals || 0,
+        turnovers: player.turnovers || 0,
+        goals_saved: player.goals_saved || 0,
+        goals_allowed: player.goals_allowed || 0,
+        pick_ups: player.pick_ups || 0,
+        total_games: player.total_games || 0,
+        win_percentage: player.total_games > 0 ? Math.round((player.wins / player.total_games) * 100) : 0,
+        rank: index + 1,
+      }))
+
+      setEloLeaguePlayers(formattedPlayers)
+    } catch (error) {
+      console.error("Error fetching ELO league data:", error)
     }
   }, [])
 
   useEffect(() => {
-    fetchLiveContent()
+    const loadData = async () => {
+      await Promise.all([fetchActiveLobbies(), fetchELOLeagueData()])
+      setLoading(false)
+    }
 
-    const lobbiesSubscription = supabase
-      .channel("lobbies-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "lobbies" }, () => {
-        fetchLiveContent()
-      })
-      .subscribe()
-
-    const tournamentsSubscription = supabase
-      .channel("tournaments-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, () => {
-        fetchLiveContent()
-      })
-      .subscribe()
+    loadData()
 
     const matchesSubscription = supabase
       .channel("matches-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => {
-        fetchLiveContent()
+        fetchActiveLobbies()
+      })
+      .subscribe()
+
+    const usersSubscription = supabase
+      .channel("users-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => {
+        fetchELOLeagueData()
       })
       .subscribe()
 
     return () => {
-      lobbiesSubscription.unsubscribe()
-      tournamentsSubscription.unsubscribe()
       matchesSubscription.unsubscribe()
+      usersSubscription.unsubscribe()
     }
-  }, [fetchLiveContent])
+  }, [fetchActiveLobbies, fetchELOLeagueData])
+
+  const exportToCSV = () => {
+    const headers = [
+      "Rank",
+      "Username",
+      "ELO Rating",
+      "Wins",
+      "Losses",
+      "Win %",
+      "Total Games",
+      "Goals",
+      "Assists",
+      "Steals",
+      "Turnovers",
+      "Goals Saved",
+      "Goals Allowed",
+      "Pick Ups",
+    ]
+
+    const csvContent = [
+      headers.join(","),
+      ...eloLeaguePlayers.map((player) =>
+        [
+          player.rank,
+          player.username,
+          player.elo_rating,
+          player.wins,
+          player.losses,
+          player.win_percentage,
+          player.total_games,
+          player.goals,
+          player.assists,
+          player.steals,
+          player.turnovers,
+          player.goals_saved,
+          player.goals_allowed,
+          player.pick_ups,
+        ].join(","),
+      ),
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `elo-league-stats-${new Date().toISOString().split("T")[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "waiting":
-      case "registration":
         return "bg-yellow-500"
       case "active":
-      case "team_building":
       case "drafting":
         return "bg-green-500"
       default:
@@ -180,19 +244,10 @@ export default function LobbiesPage() {
             <Users className="h-4 w-4" />
             {lobby.current_participants}/{lobby.max_participants} Players
           </span>
-          {lobby.type === "tournament" && lobby.tournament_type && (
-            <Badge variant="outline" className="text-xs">
-              {lobby.tournament_type.replace("_", " ").toUpperCase()}
-            </Badge>
-          )}
         </div>
 
-        {lobby.entry_fee > 0 && (
+        {lobby.prize_pool > 0 && (
           <div className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-1">
-              <DollarSign className="h-4 w-4" />
-              Entry: ${lobby.entry_fee}
-            </span>
             <span className="flex items-center gap-1 text-green-600 font-semibold">
               <Trophy className="h-4 w-4" />
               Prize: ${lobby.prize_pool}
@@ -207,9 +262,9 @@ export default function LobbiesPage() {
 
         <div className="flex gap-2 pt-2">
           <Button asChild size="sm" className="flex-1 bg-primary hover:bg-primary/90">
-            <Link href={lobby.type === "tournament" ? `/tournaments/${lobby.id}` : `/lobbies/${lobby.id}`}>
+            <Link href={`/leagues/lobby/${lobby.id}`}>
               <Zap className="h-3 w-3 mr-1" />
-              Join {lobby.type === "tournament" ? "Tournament" : "Lobby"}
+              Join Lobby
             </Link>
           </Button>
         </div>
@@ -222,21 +277,17 @@ export default function LobbiesPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-slate-200">Loading live lobbies...</p>
+          <p className="mt-4 text-slate-200">Loading lobbies...</p>
         </div>
       </div>
     )
   }
 
-  const allContent = [...lobbies, ...tournaments, ...activeGames].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  )
-
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">ELO Draft Lobbies & Active Games</h1>
-        <p className="text-slate-200">Join ELO draft lobbies, active games, and competitive tournaments</p>
+        <h1 className="text-4xl font-bold mb-2">Lobbies & ELO League</h1>
+        <p className="text-slate-200">Join active lobbies and compete in the ELO League</p>
       </div>
 
       <div className="mb-8 grid md:grid-cols-1 gap-6">
@@ -254,112 +305,158 @@ export default function LobbiesPage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="all">All Live ({allContent.length})</TabsTrigger>
+      <Tabs defaultValue="lobbies" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="lobbies">Active Lobbies ({activeLobbies.length})</TabsTrigger>
           <TabsTrigger value="elo-league">ELO League</TabsTrigger>
-          <TabsTrigger value="active">Active Games ({activeGames.length})</TabsTrigger>
-          <TabsTrigger value="lobbies">Lobbies ({lobbies.length})</TabsTrigger>
-          <TabsTrigger value="tournaments">Tournaments ({tournaments.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="elo-league" className="mt-6">
-          <div className="space-y-6">
-            <Card className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5" />
-                  ELO League - Seasonal Competition
-                </CardTitle>
-                <CardDescription>
-                  Compete in the 3-month ELO league with divisions, rankings, and prize pools
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <SeasonalTournamentDashboard />
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="all" className="mt-6">
-          {allContent.length === 0 ? (
+        <TabsContent value="lobbies" className="mt-6">
+          {activeLobbies.length === 0 ? (
             <Card className="text-center py-12">
               <CardContent>
                 <Gamepad2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-xl font-semibold mb-2">No Live Content</h3>
+                <h3 className="text-xl font-semibold mb-2">No Active Lobbies</h3>
                 <p className="text-slate-200 mb-4">Create a new ELO draft lobby to get started!</p>
                 <UnifiedDraftSelector buttonText="Create ELO Draft" mode="create" />
               </CardContent>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allContent.map((item) => (
-                <LobbyCard key={`${item.type}-${item.id}`} lobby={item} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="active" className="mt-6">
-          {activeGames.length === 0 ? (
-            <Card className="text-center py-12">
-              <CardContent>
-                <Play className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-xl font-semibold mb-2">No Active Games</h3>
-                <p className="text-slate-200 mb-4">No games are currently in progress.</p>
-                <UnifiedDraftSelector buttonText="Start New Game" mode="create" />
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeGames.map((game) => (
-                <LobbyCard key={game.id} lobby={game} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="lobbies" className="mt-6">
-          {lobbies.length === 0 ? (
-            <Card className="text-center py-12">
-              <CardContent>
-                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-xl font-semibold mb-2">No Active Lobbies</h3>
-                <p className="text-slate-200 mb-4">Create a new lobby to start playing with others.</p>
-                <Button asChild>
-                  <Link href="/draft">Create Lobby</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {lobbies.map((lobby) => (
+              {activeLobbies.map((lobby) => (
                 <LobbyCard key={lobby.id} lobby={lobby} />
               ))}
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="tournaments" className="mt-6">
-          {tournaments.length === 0 ? (
-            <Card className="text-center py-12">
+        <TabsContent value="elo-league" className="mt-6">
+          <div className="space-y-6">
+            <Card className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5" />
+                      ELO League - Automatic Leaderboard
+                    </CardTitle>
+                    <CardDescription>
+                      Rankings based on win/loss ratio and comprehensive player statistics
+                    </CardDescription>
+                  </div>
+                  <Button onClick={exportToCSV} variant="outline" className="flex items-center gap-2 bg-transparent">
+                    <Download className="h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </div>
+              </CardHeader>
               <CardContent>
-                <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-xl font-semibold mb-2">No Active Tournaments</h3>
-                <p className="text-slate-200 mb-4">Check back later for upcoming tournaments.</p>
-                <Button asChild>
-                  <Link href="/tournaments/create">Create Tournament</Link>
-                </Button>
+                <div className="grid gap-4 md:grid-cols-3 mb-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{eloLeaguePlayers.length}</div>
+                    <div className="text-sm text-muted-foreground">Active Players</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {eloLeaguePlayers.length > 0
+                        ? Math.round(
+                            eloLeaguePlayers.reduce((sum, p) => sum + p.elo_rating, 0) / eloLeaguePlayers.length,
+                          )
+                        : 0}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Average ELO</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {eloLeaguePlayers.reduce((sum, p) => sum + p.total_games, 0)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Total Games</div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Rank</th>
+                        <th className="text-left p-2">Player</th>
+                        <th className="text-left p-2">ELO</th>
+                        <th className="text-left p-2">W/L</th>
+                        <th className="text-left p-2">Win %</th>
+                        <th className="text-left p-2">Goals</th>
+                        <th className="text-left p-2">Assists</th>
+                        <th className="text-left p-2">Steals</th>
+                        <th className="text-left p-2">Turnovers</th>
+                        <th className="text-left p-2">Saves</th>
+                        <th className="text-left p-2">GA</th>
+                        <th className="text-left p-2">Pickups</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eloLeaguePlayers.slice(0, 50).map((player) => (
+                        <tr key={player.id} className="border-b hover:bg-muted/50">
+                          <td className="p-2">
+                            <div className="flex items-center gap-2">
+                              {player.rank <= 3 && (
+                                <Trophy
+                                  className={`h-4 w-4 ${
+                                    player.rank === 1
+                                      ? "text-yellow-500"
+                                      : player.rank === 2
+                                        ? "text-gray-400"
+                                        : "text-amber-600"
+                                  }`}
+                                />
+                              )}
+                              #{player.rank}
+                            </div>
+                          </td>
+                          <td className="p-2 font-medium">{player.username}</td>
+                          <td className="p-2">
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <TrendingUp className="h-3 w-3" />
+                              {player.elo_rating}
+                            </Badge>
+                          </td>
+                          <td className="p-2">
+                            {player.wins}-{player.losses}
+                          </td>
+                          <td className="p-2">
+                            <span
+                              className={`font-medium ${
+                                player.win_percentage >= 70
+                                  ? "text-green-600"
+                                  : player.win_percentage >= 50
+                                    ? "text-yellow-600"
+                                    : "text-red-600"
+                              }`}
+                            >
+                              {player.win_percentage}%
+                            </span>
+                          </td>
+                          <td className="p-2">{player.goals}</td>
+                          <td className="p-2">{player.assists}</td>
+                          <td className="p-2">{player.steals}</td>
+                          <td className="p-2">{player.turnovers}</td>
+                          <td className="p-2">{player.goals_saved}</td>
+                          <td className="p-2">{player.goals_allowed}</td>
+                          <td className="p-2">{player.pick_ups}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {eloLeaguePlayers.length > 50 && (
+                  <div className="text-center mt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Showing top 50 players. Export CSV for complete rankings.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tournaments.map((tournament) => (
-                <LobbyCard key={tournament.id} lobby={tournament} />
-              ))}
-            </div>
-          )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

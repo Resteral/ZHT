@@ -31,6 +31,10 @@ import { InteractiveHockeyNet } from "@/components/interactive-hockey-net"
 import { useAuth } from "@/lib/auth-context"
 import { UserInitializer } from "@/components/auth/user-initializer"
 
+import { EnhancedCard } from "@/components/ui/enhanced-card"
+import { AnimatedButton } from "@/components/ui/animated-button"
+import { ProgressRing } from "@/components/ui/progress-ring"
+
 interface LiveGame {
   id: string
   name: string
@@ -1499,39 +1503,74 @@ export default function Dashboard() {
         </Suspense>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/40">
+          <EnhancedCard className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/40">
             <CardHeader>
               <div className="flex items-center space-x-3">
                 <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Trophy className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <CardTitle>Auction Drafts</CardTitle>
-                  <CardDescription>Real-time bidding system</CardDescription>
+                  <CardTitle>Enhanced Tournaments</CardTitle>
+                  <CardDescription>Advanced bracket system with captain selection</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Participate in live auction drafts with dynamic bidding, player pools, and team roster management.
+                Experience enhanced tournament brackets with animated progression, captain selection, and real-time
+                updates.
               </p>
               <div className="flex items-center justify-between">
                 <div className="text-sm">
-                  <span className="font-medium">Live</span> drafts available
+                  <span className="font-medium">Enhanced</span> features available
                 </div>
-                <Link href="/lobbies">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="group-hover:bg-primary group-hover:text-primary-foreground gaming-button-secondary bg-transparent"
-                  >
-                    Join Live Content
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
+                <ProgressRing progress={85} size={32} />
+              </div>
+              <div className="flex gap-2">
+                <Link href="/tournaments/enhanced" className="flex-1">
+                  <AnimatedButton variant="default" className="w-full">
+                    <Trophy className="h-4 w-4 mr-2" />
+                    View Brackets
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </AnimatedButton>
                 </Link>
               </div>
             </CardContent>
-          </Card>
+          </EnhancedCard>
+
+          <EnhancedCard className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-primary/40">
+            <CardHeader>
+              <div className="flex items-center space-x-3">
+                <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <Crown className="h-5 w-5 text-emerald-500" />
+                </div>
+                <div>
+                  <CardTitle>Captain Selection</CardTitle>
+                  <CardDescription>Advanced team building system</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Enhanced captain selection with ELO-based algorithms, manual picks, and animated team building.
+              </p>
+              <div className="flex items-center justify-between">
+                <div className="text-sm">
+                  <span className="font-medium">Smart</span> selection available
+                </div>
+                <ProgressRing progress={92} size={32} />
+              </div>
+              <div className="flex gap-2">
+                <Link href="/tournaments/captain-selection" className="flex-1">
+                  <AnimatedButton variant="default" className="w-full">
+                    <Crown className="h-4 w-4 mr-2" />
+                    Select Captains
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </AnimatedButton>
+                </Link>
+              </div>
+            </CardContent>
+          </EnhancedCard>
 
           <Card className="gaming-card group hover:shadow-lg transition-all duration-200 border-2 hover:border-secondary/40">
             <CardHeader>
