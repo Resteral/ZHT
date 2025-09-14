@@ -291,7 +291,11 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
         setShowConfirmDialog(false)
         setSelectedCaptains([])
         setPendingCaptains([])
+        setCaptainSelectionMethod("manual")
         await fetchAuctionData()
+        setTimeout(() => {
+          fetchAuctionData()
+        }, 1000)
       } else {
         const error = await response.json()
         console.error("[v0] API Error response:", error)
@@ -385,10 +389,12 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
   const currentBiddingTeam = teams.find((team) => team.id === auctionSession?.current_bidder_id)
   const minBid = (auctionSession?.current_bid_amount || 0) + 5
 
+  const showAuctionInterface = auctionSession?.status === "active" && teams.length > 0
   const showCaptainSelection =
     (isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") &&
     teams.length === 0 &&
-    !auctionSession?.status
+    !auctionSession?.status &&
+    !isStartingAuction
 
   if (loading) {
     return (
@@ -581,7 +587,7 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
               </Card>
             )}
 
-            {auctionSession?.status === "active" && (
+            {showAuctionInterface && (
               <>
                 <Card className="auction-card">
                   <CardHeader>
@@ -712,6 +718,31 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
                   </Card>
                 )}
               </>
+            )}
+
+            {isStartingAuction && (
+              <Card className="auction-card border-green-500">
+                <CardContent className="p-6 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <h3 className="text-lg font-semibold mb-2">Starting Auction Draft</h3>
+                  <p className="text-muted-foreground">
+                    Creating teams with selected captains and initializing the auction...
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {!showCaptainSelection && !showAuctionInterface && !isStartingAuction && (
+              <Card className="auction-card">
+                <CardContent className="p-6 text-center">
+                  <h3 className="text-lg font-semibold mb-2">Auction Draft Room</h3>
+                  <p className="text-muted-foreground">
+                    {teams.length > 0
+                      ? "Waiting for auction to begin..."
+                      : "Waiting for tournament owner to start the auction draft..."}
+                  </p>
+                </CardContent>
+              </Card>
             )}
           </div>
 
