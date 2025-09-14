@@ -112,7 +112,7 @@ export default function TournamentDraftPage() {
         id: team.id,
         team_name: team.team_name,
         team_captain: team.team_captain,
-        budget_remaining: team.budget_remaining || tournamentData.player_pool_settings?.auction_budget || 500,
+        budget_remaining: team.budget_remaining || 1000,
         captain_username: team.users?.username || "Unknown",
         captain_elo: team.users?.elo_rating || 1200,
         players: [],
@@ -194,7 +194,7 @@ export default function TournamentDraftPage() {
           tournament_id: tournamentId,
           team_name: `Team ${captain.username}`,
           team_captain: captain.id,
-          budget_remaining: tournament.player_pool_settings?.auction_budget || 500,
+          budget_remaining: 1000,
           created_at: new Date().toISOString(),
         }))
 
@@ -327,6 +327,30 @@ export default function TournamentDraftPage() {
     }
   }
 
+  const updatePlayerPrice = async (playerId: string, newPrice: number) => {
+    if (!user || tournament.created_by !== user.id) {
+      setError("Only the tournament host can edit prices")
+      return
+    }
+
+    try {
+      setPlayerPool((prev) =>
+        prev.map((player) =>
+          player.user_id === playerId ? { ...player, current_bid: newPrice, highest_bidder: null } : player,
+        ),
+      )
+
+      if (currentPlayer?.user_id === playerId) {
+        setCurrentPlayer((prev) => (prev ? { ...prev, current_bid: newPrice, highest_bidder: null } : null))
+      }
+
+      console.log("[v0] Host updated player price:", newPrice, "for player:", playerId)
+    } catch (err) {
+      console.error("[v0] Error updating player price:", err)
+      setError("Failed to update player price")
+    }
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto py-6">
@@ -357,6 +381,7 @@ export default function TournamentDraftPage() {
   const isUserCaptain = teams.some((team) => team.team_captain === user?.id)
   const userTeam = teams.find((team) => team.team_captain === user?.id)
   const draftMode = tournament.player_pool_settings?.draft_mode || "auction_draft"
+  const isHost = user?.id === tournament.created_by
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -384,6 +409,7 @@ export default function TournamentDraftPage() {
             {tournament.status.replace("_", " ")}
           </Badge>
           <Badge variant="secondary">{teams.length} Teams</Badge>
+          {isHost && <Badge variant="default">Host</Badge>}
         </div>
       </div>
 
@@ -405,6 +431,12 @@ export default function TournamentDraftPage() {
                 <div>
                   <p className="font-bold text-lg">{currentPlayer.username}</p>
                   <p className="text-sm text-muted-foreground">ELO: {currentPlayer.elo_rating}</p>
+                  {currentPlayer.is_captain && (
+                    <Badge variant="outline" className="text-xs mt-1">
+                      <Crown className="h-3 w-3 mr-1" />
+                      Captain
+                    </Badge>
+                  )}
                 </div>
               </div>
               <div className="text-right">
@@ -417,26 +449,49 @@ export default function TournamentDraftPage() {
               </div>
             </div>
 
-            {isUserCaptain && userTeam && (
-              <div className="mt-4 flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={Math.max(1, (currentPlayer.current_bid || 0) + 1)}
-                  max={userTeam.budget_remaining}
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(Number.parseInt(e.target.value) || 1)}
-                  className="w-24"
-                />
-                <Button
-                  onClick={() => placeBid(userTeam.id, bidAmount)}
-                  disabled={bidAmount <= (currentPlayer.current_bid || 0) || bidAmount > userTeam.budget_remaining}
-                >
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Bid ${bidAmount}
-                </Button>
-                <p className="text-sm text-muted-foreground">Budget: ${userTeam.budget_remaining}</p>
-              </div>
-            )}
+            <div className="mt-4 space-y-3">
+              {isHost && (
+                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <span className="text-sm font-medium text-blue-800">Host Controls:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={1000}
+                    placeholder="Set price"
+                    className="w-24"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const value = Number.parseInt((e.target as HTMLInputElement).value) || 0
+                        updatePlayerPrice(currentPlayer.user_id, value)
+                        ;(e.target as HTMLInputElement).value = ""
+                      }
+                    }}
+                  />
+                  <span className="text-xs text-blue-600">Press Enter to set price</span>
+                </div>
+              )}
+
+              {isUserCaptain && userTeam && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={Math.max(1, (currentPlayer.current_bid || 0) + 1)}
+                    max={userTeam.budget_remaining}
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(Number.parseInt(e.target.value) || 1)}
+                    className="w-24"
+                  />
+                  <Button
+                    onClick={() => placeBid(userTeam.id, bidAmount)}
+                    disabled={bidAmount <= (currentPlayer.current_bid || 0) || bidAmount > userTeam.budget_remaining}
+                  >
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Bid ${bidAmount}
+                  </Button>
+                  <p className="text-sm text-muted-foreground">Budget: ${userTeam.budget_remaining}</p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -486,12 +541,21 @@ export default function TournamentDraftPage() {
             </div>
           )}
 
-          {!isUserCaptain && (
+          {!isUserCaptain && !isHost && (
             <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <p className="text-blue-800 font-medium">You are not a team captain</p>
               <p className="text-sm text-blue-600 mt-1">
                 Wait for captains to complete the draft, then you'll be assigned to a team
               </p>
+            </div>
+          )}
+
+          {isHost && !isUserCaptain && !draftStarted && (
+            <div className="mt-6">
+              <Button onClick={startDraft} className="w-full bg-transparent" size="lg" variant="outline">
+                <Play className="h-4 w-4 mr-2" />
+                Start Draft (Host Override)
+              </Button>
             </div>
           )}
         </CardContent>
@@ -588,12 +652,16 @@ export default function TournamentDraftPage() {
             {draftMode === "auction_draft" && (
               <>
                 <p>
-                  <strong>Budget:</strong> Each team has ${tournament.player_pool_settings?.auction_budget || 500} to
-                  spend
+                  <strong>Budget:</strong> Each team has $1000 to spend
                 </p>
                 <p>
                   <strong>Bidding:</strong> Teams bid on players with 30-second timer per player
                 </p>
+                {isHost && (
+                  <p>
+                    <strong>Host Controls:</strong> As the host, you can set player prices during the auction
+                  </p>
+                )}
               </>
             )}
           </div>
