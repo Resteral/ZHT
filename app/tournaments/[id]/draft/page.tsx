@@ -29,6 +29,7 @@ interface Player {
   status: string
   current_bid?: number
   highest_bidder?: string
+  is_captain?: boolean
 }
 
 export default function TournamentDraftPage() {
@@ -119,7 +120,6 @@ export default function TournamentDraftPage() {
 
       setTeams(transformedTeams)
 
-      const captainIds = transformedTeams.map((team) => team.team_captain)
       const { data: poolData, error: poolError } = await supabase
         .from("tournament_player_pool")
         .select(`
@@ -129,11 +129,11 @@ export default function TournamentDraftPage() {
         `)
         .eq("tournament_id", tournamentId)
         .eq("status", "available")
-        .not("user_id", "in", `(${captainIds.join(",")})`)
         .order("created_at")
 
       if (poolError) throw poolError
 
+      const captainIds = transformedTeams.map((team) => team.team_captain)
       const transformedPlayers = (poolData || []).map((player) => ({
         user_id: player.user_id,
         username: player.users?.username || "Unknown",
@@ -141,12 +141,14 @@ export default function TournamentDraftPage() {
         status: player.status,
         current_bid: 0,
         highest_bidder: null,
+        is_captain: captainIds.includes(player.user_id),
       }))
 
       setPlayerPool(transformedPlayers)
 
       console.log("[v0] Loaded teams:", transformedTeams.length)
       console.log("[v0] Loaded available players:", transformedPlayers.length)
+      console.log("[v0] Players who are also captains:", transformedPlayers.filter((p) => p.is_captain).length)
 
       setLoading(false)
     } catch (err) {
@@ -502,7 +504,7 @@ export default function TournamentDraftPage() {
             <Users className="h-5 w-5 text-blue-500" />
             Available Players ({playerPool.length})
           </CardTitle>
-          <CardDescription>Players available for drafting, sorted by ELO rating</CardDescription>
+          <CardDescription>All players available for drafting, including team captains</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-2">
@@ -522,10 +524,18 @@ export default function TournamentDraftPage() {
                     <AvatarFallback className="text-xs">{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <p className="font-medium text-sm">{player.username}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm">{player.username}</p>
+                      {player.is_captain && <Crown className="h-3 w-3 text-yellow-600" title="Team Captain" />}
+                    </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Target className="h-3 w-3" />
                       <span>ELO: {player.elo_rating}</span>
+                      {player.is_captain && (
+                        <Badge variant="outline" className="text-xs">
+                          Captain
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   {player.user_id === user?.id && (
@@ -569,7 +579,11 @@ export default function TournamentDraftPage() {
               players each
             </p>
             <p>
-              <strong>Available Players:</strong> {playerPool.length} players ready to be drafted
+              <strong>Available Players:</strong> {playerPool.length} players ready to be drafted (including team
+              captains)
+            </p>
+            <p>
+              <strong>Team Captains:</strong> Captains can be drafted by other teams and participate as players
             </p>
             {draftMode === "auction_draft" && (
               <>
