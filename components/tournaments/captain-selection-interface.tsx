@@ -140,12 +140,12 @@ export function CaptainSelectionInterface({
   const handleManualSelection = async () => {
     if (!isOrganizer && !isTournamentCreator && user && tournament?.created_by !== user.id) return
 
-    const maxTeams =
-      tournament?.max_teams ||
-      tournament?.player_pool_settings?.max_teams ||
-      tournament?.player_pool_settings?.num_teams ||
-      tournament?.max_participants ||
-      4
+    const requiredCaptains = 4
+
+    if (selectedPlayers.length !== requiredCaptains) {
+      toast.error(`Must select exactly ${requiredCaptains} captains`)
+      return
+    }
 
     setProcessing(true)
     try {
@@ -202,19 +202,26 @@ export function CaptainSelectionInterface({
   }
 
   const handlePlayerSelection = (playerId: string, checked: boolean) => {
-    const maxTeams =
-      tournament?.max_teams ||
-      tournament?.player_pool_settings?.max_teams ||
-      tournament?.player_pool_settings?.num_teams ||
-      tournament?.max_participants ||
-      4
+    const maxCaptains = 4
+
+    console.log("[v0] Captain selection attempt:", {
+      playerId,
+      checked,
+      currentSelected: selectedPlayers.length,
+      maxAllowed: maxCaptains,
+    })
 
     if (checked) {
-      if (selectedPlayers.length < maxTeams) {
+      if (selectedPlayers.length < maxCaptains) {
         setSelectedPlayers([...selectedPlayers, playerId])
+        console.log("[v0] Captain selected, total now:", selectedPlayers.length + 1)
+      } else {
+        console.log("[v0] Cannot select more captains - limit reached:", maxCaptains)
+        toast.error(`Cannot select more than ${maxCaptains} captains`)
       }
     } else {
       setSelectedPlayers(selectedPlayers.filter((id) => id !== playerId))
+      console.log("[v0] Captain deselected, total now:", selectedPlayers.length - 1)
     }
   }
 
@@ -322,13 +329,7 @@ export function CaptainSelectionInterface({
               <div className="text-sm text-muted-foreground">Selected Captains</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-500">
-                {tournament?.max_teams ||
-                  tournament?.player_pool_settings?.max_teams ||
-                  tournament?.player_pool_settings?.num_teams ||
-                  tournament?.max_participants ||
-                  4}
-              </div>
+              <div className="text-2xl font-bold text-green-500">4</div>
               <div className="text-sm text-muted-foreground">Teams Needed</div>
             </div>
           </div>
@@ -390,33 +391,17 @@ export function CaptainSelectionInterface({
                         <h4 className="font-medium">Creator Choice</h4>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Manually choose exactly{" "}
-                        {tournament?.max_teams ||
-                          tournament?.player_pool_settings?.max_teams ||
-                          tournament?.player_pool_settings?.num_teams ||
-                          tournament?.max_participants ||
-                          4}{" "}
-                        captains from {availablePlayers.length} available players. Each captain will lead one team.
+                        Manually choose exactly 4 captains from {availablePlayers.length} available players. Each
+                        captain will lead one team.
                       </p>
                       <Button
                         onClick={handleManualSelection}
-                        disabled={
-                          selectedPlayers.length !==
-                            (tournament?.max_teams ||
-                              tournament?.player_pool_settings?.max_teams ||
-                              tournament?.player_pool_settings?.num_teams ||
-                              tournament?.max_participants ||
-                              4) ||
-                          processing ||
-                          currentCaptains.length > 0
-                        }
+                        disabled={selectedPlayers.length !== 4 || processing || currentCaptains.length > 0}
                         className="w-full"
                         variant="outline"
                       >
                         <Users className="h-4 w-4 mr-2" />
-                        {processing
-                          ? "Selecting..."
-                          : `Select ${selectedPlayers.length}/${tournament?.max_teams || tournament?.player_pool_settings?.max_teams || tournament?.player_pool_settings?.num_teams || tournament?.max_participants || 4} Captains`}
+                        {processing ? "Selecting..." : `Select ${selectedPlayers.length}/4 Captains`}
                       </Button>
                     </div>
                   </Card>
@@ -428,13 +413,7 @@ export function CaptainSelectionInterface({
                         <h4 className="font-medium">Random Selection</h4>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Randomly selects{" "}
-                        {tournament?.max_teams ||
-                          tournament?.player_pool_settings?.max_teams ||
-                          tournament?.player_pool_settings?.num_teams ||
-                          tournament?.max_participants ||
-                          4}{" "}
-                        players from the pool as captains for unpredictable matchups.
+                        Randomly selects 4 players from the pool as captains for unpredictable matchups.
                       </p>
                       <Button
                         onClick={handleRandomSelection}
@@ -475,13 +454,7 @@ export function CaptainSelectionInterface({
                 {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) &&
                   currentCaptains.length === 0 && (
                     <Badge variant="secondary" className="ml-2">
-                      Select{" "}
-                      {tournament?.max_teams ||
-                        tournament?.player_pool_settings?.max_teams ||
-                        tournament?.player_pool_settings?.num_teams ||
-                        tournament?.max_participants ||
-                        4}{" "}
-                      Captains
+                      Select 4 Captains
                     </Badge>
                   )}
               </CardTitle>
@@ -501,15 +474,7 @@ export function CaptainSelectionInterface({
                         <Checkbox
                           checked={selectedPlayers.includes(player.user_id)}
                           onCheckedChange={(checked) => handlePlayerSelection(player.user_id, checked as boolean)}
-                          disabled={
-                            !selectedPlayers.includes(player.user_id) &&
-                            selectedPlayers.length >=
-                              (tournament?.max_teams ||
-                                tournament?.player_pool_settings?.max_teams ||
-                                tournament?.player_pool_settings?.num_teams ||
-                                tournament?.max_participants ||
-                                4)
-                          }
+                          disabled={!selectedPlayers.includes(player.user_id) && selectedPlayers.length >= 4}
                         />
                       )}
 

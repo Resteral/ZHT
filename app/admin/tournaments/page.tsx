@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Trophy, Users, Calendar, Target, Plus, Search, Edit, Eye } from "lucide-react"
+import { Trophy, Users, Calendar, Target, Search, Edit, Eye, Copy } from "lucide-react"
 import Link from "next/link"
 import { tournamentService } from "@/lib/services/tournament-service"
 
@@ -70,6 +70,23 @@ export default function AdminTournamentsPage() {
     }
   }
 
+  const handleDuplicateTournament = (tournament: Tournament) => {
+    // Create URL parameters with tournament settings for duplication
+    const params = new URLSearchParams({
+      duplicate: "true",
+      sourceId: tournament.id,
+      name: `${tournament.name} (Copy)`,
+      game: tournament.game || "zealot_hockey",
+      // Add other tournament settings that should be copied
+      maxParticipants: tournament.max_participants?.toString() || "32",
+      prizePool: tournament.prize_pool?.toString() || "0",
+      tournamentType: tournament.tournament_type || "draft",
+    })
+
+    // Navigate to tournament creation with pre-filled data
+    window.location.href = `/tournaments/create?${params.toString()}`
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "registration":
@@ -108,12 +125,6 @@ export default function AdminTournamentsPage() {
           <p className="text-muted-foreground">Create and manage tournaments across all games</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/tournaments/create">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Tournament
-            </Button>
-          </Link>
           <Link href="/admin">
             <Button variant="outline">Back to Admin</Button>
           </Link>
@@ -167,20 +178,6 @@ export default function AdminTournamentsPage() {
         </Card>
       </div>
 
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3">
-            <Trophy className="h-8 w-8 text-blue-600" />
-            <div>
-              <h3 className="font-semibold text-blue-900">Unified Tournament Creation</h3>
-              <p className="text-sm text-blue-700">
-                All tournament creation now uses the main interface with admin privileges automatically detected.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Search and Filters */}
       <Card>
         <CardHeader>
@@ -230,12 +227,6 @@ export default function AdminTournamentsPage() {
               <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-semibold mb-2">No tournaments found</h3>
               <p className="text-sm mb-4">Create your first tournament to get started!</p>
-              <Button asChild>
-                <Link href="/tournaments/create">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Tournament
-                </Link>
-              </Button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -267,6 +258,15 @@ export default function AdminTournamentsPage() {
                           <Eye className="h-4 w-4 mr-1" />
                           View
                         </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDuplicateTournament(tournament)}
+                        title="Create tournament with same settings"
+                      >
+                        <Copy className="h-4 w-4 mr-1" />
+                        Duplicate
                       </Button>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 "use client"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,10 +22,10 @@ import {
   Zap,
   BarChart3,
   DollarSign,
-  Sparkles,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
+import { tournamentService } from "@/lib/services/tournament-service"
 
 export default function CreateTournamentPage() {
   const router = useRouter()
@@ -34,25 +34,35 @@ export default function CreateTournamentPage() {
   const { user } = useAuth()
 
   const tournamentType = searchParams.get("type")
+  const isDuplicate = searchParams.get("duplicate") === "true"
+  const sourceId = searchParams.get("sourceId")
+  const duplicateName = searchParams.get("name")
+  const duplicateGame = searchParams.get("game")
+  const duplicateMaxParticipants = searchParams.get("maxParticipants")
+  const duplicatePrizePool = searchParams.get("prizePool")
+  const duplicateTournamentType = searchParams.get("tournamentType")
 
   const [formData, setFormData] = useState({
-    name: `${
-      tournamentType === "snake_draft"
-        ? "Snake Draft"
-        : tournamentType === "linear_draft"
-          ? "Linear Draft"
-          : tournamentType === "auction"
-            ? "Auction Draft"
-            : "Snake Draft"
-    } Tournament`,
+    name:
+      isDuplicate && duplicateName
+        ? duplicateName
+        : `${
+            tournamentType === "snake_draft"
+              ? "Snake Draft"
+              : tournamentType === "linear_draft"
+                ? "Linear Draft"
+                : tournamentType === "auction"
+                  ? "Auction Draft"
+                  : "Snake Draft"
+          } Tournament`,
     description: "",
     duration_type: "short" as "short" | "long",
-    tournament_type: "draft",
-    max_participants: 32,
+    tournament_type: isDuplicate && duplicateTournamentType ? duplicateTournamentType : "draft",
+    max_participants: isDuplicate && duplicateMaxParticipants ? Number.parseInt(duplicateMaxParticipants) : 32,
     start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16),
-    game: "zealot_hockey",
+    game: isDuplicate && duplicateGame ? duplicateGame : "zealot_hockey",
     entry_fee: 0,
-    prize_pool: 0,
+    prize_pool: isDuplicate && duplicatePrizePool ? Number.parseInt(duplicatePrizePool) : 0,
     team_buy_in: 50,
     auction_budget: 500,
     registration_opens: new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString().slice(0, 16),
@@ -80,10 +90,9 @@ export default function CreateTournamentPage() {
       // Player organization modes
       player_organization: "solo_draft" as "premade_teams" | "solo_draft" | "hybrid",
 
-      // Team settings
-      num_teams: 8,
+      num_teams: 4,
       players_per_team: 4,
-      max_teams: 8,
+      max_teams: 4,
       games_per_team: 10,
 
       league_tournament_type: "weekly" as "daily" | "weekly" | "biweekly" | "monthly" | "seasonal" | "custom",
@@ -99,6 +108,53 @@ export default function CreateTournamentPage() {
       create_lobbies_on_finish: true,
     },
   })
+
+  useEffect(() => {
+    if (isDuplicate && sourceId) {
+      loadTournamentForDuplication(sourceId)
+    }
+  }, [isDuplicate, sourceId])
+
+  const loadTournamentForDuplication = async (tournamentId: string) => {
+    try {
+      console.log("[v0] Loading tournament for duplication:", tournamentId)
+      const tournament = await tournamentService.getTournament(tournamentId)
+
+      if (tournament) {
+        // Copy all tournament settings while updating name and dates
+        setFormData((prev) => ({
+          ...prev,
+          name: `${tournament.name} (Copy)`,
+          description: tournament.description || "",
+          game: tournament.game || "zealot_hockey",
+          max_participants: tournament.max_participants || 32,
+          entry_fee: tournament.entry_fee || 0,
+          prize_pool: tournament.prize_pool || 0,
+          team_buy_in: tournament.team_buy_in || 50,
+          auction_budget: tournament.auction_budget || 500,
+          // Set new dates (1 hour from now for start, etc.)
+          start_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16),
+          registration_opens: new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString().slice(0, 16),
+          registration_closes: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString().slice(0, 16),
+          auction_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
+          tournament_start: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString().slice(0, 16),
+          // Copy all tournament settings
+          settings: {
+            ...prev.settings,
+            ...tournament.player_pool_settings,
+            // Ensure team settings are properly copied
+            num_teams: tournament.player_pool_settings?.num_teams || tournament.player_pool_settings?.max_teams || 4,
+            max_teams: tournament.player_pool_settings?.max_teams || tournament.player_pool_settings?.num_teams || 4,
+            players_per_team: tournament.player_pool_settings?.players_per_team || 4,
+          },
+        }))
+
+        console.log("[v0] Tournament settings loaded for duplication")
+      }
+    } catch (error) {
+      console.error("[v0] Error loading tournament for duplication:", error)
+    }
+  }
 
   const leagueTournamentTypes = {
     daily: { name: "Daily Tournament", days: 1, icon: "⚡", description: "Fast-paced single day competition" },
@@ -190,41 +246,14 @@ export default function CreateTournamentPage() {
           </Link>
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">Create Tournament</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {isDuplicate ? "Duplicate Tournament" : "Create Tournament"}
+          </h1>
           <p className="text-muted-foreground">
-            Configure{" "}
-            {formData.duration_type === "short" ? "bracket type, draft style" : "draft style, captain selection"}, and
-            team organization
+            {isDuplicate ? "Creating a copy with the same settings" : "Configure your tournament settings"}
           </p>
         </div>
       </div>
-
-      {tournamentType && (
-        <div className="mb-6">
-          <Badge variant="secondary" className="text-sm">
-            {tournamentType === "snake_draft"
-              ? "🐍 Snake Draft"
-              : tournamentType === "linear_draft"
-                ? "📊 Linear Draft"
-                : tournamentType === "auction"
-                  ? "🏛️ Auction Draft"
-                  : "🏆 Tournament"}
-          </Badge>
-        </div>
-      )}
-
-      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800 mb-6">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Sparkles className="h-6 w-6 text-yellow-500" />
-            <h3 className="text-lg font-semibold">Tournament Creation Now Open to Everyone!</h3>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Create your own tournaments with custom formats, team purchasing, and auction drafts. Set your own rules,
-            prize pools, and duration. Perfect for organizing competitions with friends or the community!
-          </p>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -284,7 +313,6 @@ export default function CreateTournamentPage() {
 
                 console.log("[v0] Creating tournament:", tournamentData)
 
-                const { tournamentService } = await import("@/lib/services/tournament-service")
                 const tournament = await tournamentService.createTournament(tournamentData, user?.id)
 
                 console.log("[v0] Tournament created successfully:", tournament)

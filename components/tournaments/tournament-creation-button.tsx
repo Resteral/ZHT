@@ -45,8 +45,7 @@ export function TournamentCreationButton({ tournamentType, className }: Tourname
   const IconComponent = config.icon
 
   const handleCreateTournament = async () => {
-    // Redirect to unified tournament creation page with pre-selected type
-    window.location.href = `/tournaments/create?type=${tournamentType}`
+    window.location.href = `/tournaments/create`
   }
 
   return (
