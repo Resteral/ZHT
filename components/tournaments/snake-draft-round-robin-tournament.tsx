@@ -7,11 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Crown, Users, Target, Clock, Play, CheckCircle, ArrowRight, Zap } from "lucide-react"
+import { Crown, Users, Target, Clock, CheckCircle, ArrowRight, Zap } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
-import { CaptainSelectionInterface } from "./captain-selection-interface"
+import { UnifiedCaptainSelection } from "./unified-captain-selection"
 import { RoundRobinBracket } from "./round-robin-bracket"
 
 interface SnakeDraftRoundRobinTournamentProps {
@@ -39,8 +39,34 @@ export function SnakeDraftRoundRobinTournament({
   const [draftCompleted, setDraftCompleted] = useState(false)
   const [teams, setTeams] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [tournamentSettings, setTournamentSettings] = useState<any>(null)
+  const [requiredCaptains, setRequiredCaptains] = useState(3)
   const supabase = createClient()
   const { user } = useAuth()
+
+  const loadTournamentSettings = async () => {
+    try {
+      const { data: settings, error } = await supabase
+        .from("tournament_settings")
+        .select("player_pool_settings")
+        .eq("tournament_id", tournamentId)
+        .single()
+
+      if (error) {
+        console.log("[v0] No tournament settings found, using defaults")
+        setRequiredCaptains(3)
+        return
+      }
+
+      const numTeams = settings?.player_pool_settings?.num_teams || 3
+      setRequiredCaptains(numTeams)
+      setTournamentSettings(settings)
+      console.log("[v0] Snake draft tournament requires", numTeams, "captains")
+    } catch (error) {
+      console.error("[v0] Error loading tournament settings:", error)
+      setRequiredCaptains(3)
+    }
+  }
 
   const initializePhases = () => {
     const tournamentPhases: TournamentPhase[] = [
@@ -54,9 +80,9 @@ export function SnakeDraftRoundRobinTournament({
       {
         id: "captain_selection",
         name: "Captain Selection",
-        description: "Select team captains for the draft",
-        status: captains.length === 0 ? "pending" : captains.length < 2 ? "active" : "completed",
-        progress: captains.length === 0 ? 0 : (captains.length / 2) * 100,
+        description: `Select ${requiredCaptains} team captains for the snake draft`,
+        status: captains.length === 0 ? "pending" : captains.length < requiredCaptains ? "active" : "completed",
+        progress: captains.length === 0 ? 0 : (captains.length / requiredCaptains) * 100,
       },
       {
         id: "snake_draft",
@@ -76,7 +102,6 @@ export function SnakeDraftRoundRobinTournament({
 
     setPhases(tournamentPhases)
 
-    // Determine current active phase
     const activePhase = tournamentPhases.find((p) => p.status === "active")
     if (activePhase) {
       setCurrentPhase(activePhase.id)
@@ -86,21 +111,29 @@ export function SnakeDraftRoundRobinTournament({
   const loadTournamentData = async () => {
     let teamData: any[] = []
     try {
-      console.log("[v0] Loading tournament data for:", tournamentId)
+      console.log("[v0] Loading snake draft tournament data for:", tournamentId)
 
       const { data: captainData, error: captainError } = await supabase
-        .from("tournament_captains")
+        .from("tournament_player_pool")
         .select(`
-          *,
+          user_id,
+          captain_type,
           users (username, elo_rating)
         `)
         .eq("tournament_id", tournamentId)
+        .eq("status", "captain")
 
       if (captainError) {
         console.error("[v0] Error loading captains:", captainError)
       } else {
-        setCaptains(captainData || [])
-        console.log("[v0] Loaded captains:", captainData?.length || 0)
+        const processedCaptains = (captainData || []).map((entry: any) => ({
+          id: entry.user_id,
+          username: entry.users?.username || "Unknown",
+          elo_rating: entry.users?.elo_rating || 1200,
+          captain_type: entry.captain_type || "high_elo",
+        }))
+        setCaptains(processedCaptains)
+        console.log("[v0] Loaded snake draft captains:", processedCaptains.length)
       }
 
       const { data: draftData, error: draftError } = await supabase
@@ -114,7 +147,7 @@ export function SnakeDraftRoundRobinTournament({
       } else {
         const completed = draftData?.status === "completed"
         setDraftCompleted(completed)
-        console.log("[v0] Draft completed:", completed)
+        console.log("[v0] Snake draft completed:", completed)
       }
 
       if (draftData?.status === "completed") {
@@ -132,11 +165,11 @@ export function SnakeDraftRoundRobinTournament({
           console.error("[v0] Error loading teams:", teamError)
         } else {
           teamData = data || []
-          console.log("[v0] Loaded teams:", teamData.length)
+          console.log("[v0] Loaded snake draft teams:", teamData.length)
         }
       }
     } catch (error) {
-      console.error("[v0] Error loading tournament data:", error)
+      console.error("[v0] Error loading snake draft tournament data:", error)
     } finally {
       setLoading(false)
       setTeams(teamData)
@@ -144,12 +177,14 @@ export function SnakeDraftRoundRobinTournament({
   }
 
   const startSnakeDraft = async () => {
-    if (captains.length < 2) {
-      toast.error("Need at least 2 captains to start draft")
+    if (captains.length < requiredCaptains) {
+      toast.error(`Need ${requiredCaptains} captains to start snake draft`)
       return
     }
 
     try {
+      console.log("[v0] Starting snake draft with", captains.length, "captains")
+
       const { data: draftRoom, error } = await supabase
         .from("tournament_drafts")
         .insert({
@@ -157,8 +192,8 @@ export function SnakeDraftRoundRobinTournament({
           draft_type: "snake_draft",
           status: "active",
           current_pick: 1,
-          current_captain: captains[0].user_id,
-          pick_time_limit: tournament.player_pool_settings?.pick_time_limit || 60,
+          current_captain: captains[0].id,
+          pick_time_limit: tournamentSettings?.player_pool_settings?.pick_time_limit || 60,
           created_at: new Date().toISOString(),
         })
         .select()
@@ -166,7 +201,6 @@ export function SnakeDraftRoundRobinTournament({
 
       if (error) throw error
 
-      // Update tournament status
       await supabase.from("tournaments").update({ status: "drafting" }).eq("id", tournamentId)
 
       toast.success("Snake draft started! Captains can now draft players.")
@@ -208,7 +242,6 @@ export function SnakeDraftRoundRobinTournament({
 
       if (error) throw error
 
-      // Update tournament to round robin phase
       await supabase.from("tournaments").update({ status: "in_progress" }).eq("id", tournamentId)
 
       toast.success(`Generated ${matches.length} round robin matches!`)
@@ -220,19 +253,23 @@ export function SnakeDraftRoundRobinTournament({
   }
 
   useEffect(() => {
-    loadTournamentData()
+    const loadData = async () => {
+      await loadTournamentSettings()
+      await loadTournamentData()
+    }
+    loadData()
   }, [tournamentId])
 
   useEffect(() => {
     initializePhases()
-  }, [tournament, captains, draftCompleted])
+  }, [tournament, captains, draftCompleted, requiredCaptains])
 
   if (loading) {
     return (
       <Card>
         <CardContent className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading tournament...</p>
+          <p className="mt-2 text-muted-foreground">Loading snake draft tournament...</p>
         </CardContent>
       </Card>
     )
@@ -240,11 +277,10 @@ export function SnakeDraftRoundRobinTournament({
 
   return (
     <div className="space-y-6">
-      {/* Tournament Progress Header */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-blue-500" />
+            <Zap className="h-5 w-5 text-green-500" />
             Snake Draft + Round Robin Tournament
           </CardTitle>
         </CardHeader>
@@ -257,7 +293,7 @@ export function SnakeDraftRoundRobinTournament({
                     phase.status === "completed"
                       ? "bg-green-500 border-green-500 text-white"
                       : phase.status === "active"
-                        ? "bg-blue-500 border-blue-500 text-white"
+                        ? "bg-green-500 border-green-500 text-white"
                         : "border-gray-300 text-gray-400"
                   }`}
                 >
@@ -292,7 +328,6 @@ export function SnakeDraftRoundRobinTournament({
         </CardContent>
       </Card>
 
-      {/* Phase-specific Content */}
       <Tabs value={currentPhase} onValueChange={setCurrentPhase}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="registration">Registration</TabsTrigger>
@@ -340,23 +375,15 @@ export function SnakeDraftRoundRobinTournament({
         </TabsContent>
 
         <TabsContent value="captain_selection" className="space-y-4">
-          <CaptainSelectionInterface
+          <UnifiedCaptainSelection
             tournamentId={tournamentId}
             tournament={tournament}
+            draftType="snake"
             isOrganizer={isOrganizer}
+            isTournamentCreator={tournament?.created_by === user?.id}
             onCaptainsSelected={setCaptains}
+            onStartDraft={startSnakeDraft}
           />
-
-          {captains.length >= 2 && isOrganizer && (
-            <Card>
-              <CardContent className="text-center py-6">
-                <Button onClick={startSnakeDraft} size="lg" className="bg-gradient-to-r from-blue-500 to-purple-600">
-                  <Play className="h-4 w-4 mr-2" />
-                  Start Snake Draft
-                </Button>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
         <TabsContent value="snake_draft" className="space-y-4">
@@ -397,7 +424,6 @@ export function SnakeDraftRoundRobinTournament({
             </CardContent>
           </Card>
 
-          {/* Show formed teams */}
           {teams.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {teams.map((team) => (
