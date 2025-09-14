@@ -1,4 +1,7 @@
+"use client"
+
 import { Suspense } from "react"
+import { useAuth } from "@/lib/auth-context"
 import TournamentAuctionRoom from "@/components/tournaments/tournament-auction-room"
 
 interface AuctionPageProps {
@@ -8,9 +11,21 @@ interface AuctionPageProps {
 }
 
 export default function AuctionPage({ params }: AuctionPageProps) {
-  // TODO: Get current user ID from auth
-  const currentUserId = "944b281e-89d5-46f7-b10b-2439f275e179" // Mock user ID
-  const isOwner = true // TODO: Check if user is tournament owner
+  const { user } = useAuth()
+
+  const currentUserId = user?.id || ""
+  const isOwner = user?.username === "Resteral" // TODO: Check if user is tournament owner/creator
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
+          <p className="text-muted-foreground">Please log in to access the auction room.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <Suspense

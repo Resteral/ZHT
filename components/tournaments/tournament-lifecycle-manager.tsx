@@ -130,6 +130,8 @@ export function TournamentLifecycleManager({
     switch (status) {
       case "registration":
         return "bg-blue-500"
+      case "team_building":
+        return "bg-orange-500"
       case "drafting":
         return "bg-yellow-500"
       case "active":
@@ -149,6 +151,8 @@ export function TournamentLifecycleManager({
     switch (status) {
       case "registration":
         return <Clock className="h-4 w-4" />
+      case "team_building":
+        return <Settings className="h-4 w-4" />
       case "drafting":
         return <Play className="h-4 w-4" />
       case "active":
@@ -170,12 +174,18 @@ export function TournamentLifecycleManager({
     const actions = []
     switch (lifecycleState.status) {
       case "registration":
+        actions.push({ label: "Start Team Building", value: "team_building", icon: Play })
         actions.push({ label: "Start Draft", value: "drafting", icon: Play })
+        actions.push({ label: "Cancel", value: "cancelled", icon: Square })
+        break
+      case "team_building":
+        actions.push({ label: "Start Draft", value: "drafting", icon: Play })
+        actions.push({ label: "Back to Registration", value: "registration", icon: RotateCcw })
         actions.push({ label: "Cancel", value: "cancelled", icon: Square })
         break
       case "drafting":
         actions.push({ label: "Start Tournament", value: "active", icon: Play })
-        actions.push({ label: "Back to Registration", value: "registration", icon: RotateCcw })
+        actions.push({ label: "Back to Team Building", value: "team_building", icon: RotateCcw })
         actions.push({ label: "Cancel", value: "cancelled", icon: Square })
         break
       case "active":

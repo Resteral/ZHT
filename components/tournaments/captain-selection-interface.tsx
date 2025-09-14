@@ -38,8 +38,36 @@ export function CaptainSelectionInterface({
   const [canSelect, setCanSelect] = useState(false)
   const [playerCount, setPlayerCount] = useState(0)
   const [selectionMessage, setSelectionMessage] = useState("")
+  const [tournamentSettings, setTournamentSettings] = useState<any>(null)
+  const [requiredCaptains, setRequiredCaptains] = useState(3) // Default to 3 based on debug logs
   const supabase = createClient()
   const { user } = useAuth()
+
+  const loadTournamentSettings = async () => {
+    try {
+      console.log("[v0] Loading tournament settings for captain count:", tournamentId)
+
+      const { data: settings, error } = await supabase
+        .from("tournament_settings")
+        .select("player_pool_settings")
+        .eq("tournament_id", tournamentId)
+        .single()
+
+      if (error) {
+        console.log("[v0] No tournament settings found, using default of 3 teams")
+        setRequiredCaptains(3)
+        return
+      }
+
+      const numTeams = settings?.player_pool_settings?.num_teams || 3
+      setRequiredCaptains(numTeams)
+      setTournamentSettings(settings)
+      console.log("[v0] Tournament requires", numTeams, "captains based on settings")
+    } catch (error) {
+      console.error("[v0] Error loading tournament settings:", error)
+      setRequiredCaptains(3) // Fallback to 3
+    }
+  }
 
   const loadAvailablePlayers = async () => {
     try {
@@ -140,8 +168,6 @@ export function CaptainSelectionInterface({
   const handleManualSelection = async () => {
     if (!isOrganizer && !isTournamentCreator && user && tournament?.created_by !== user.id) return
 
-    const requiredCaptains = 4
-
     if (selectedPlayers.length !== requiredCaptains) {
       toast.error(`Must select exactly ${requiredCaptains} captains`)
       return
@@ -209,25 +235,23 @@ export function CaptainSelectionInterface({
   }
 
   const handlePlayerSelection = (playerId: string, checked: boolean) => {
-    const maxCaptains = 4
-
     console.log("[v0] Captain selection attempt:", {
       playerId,
       checked,
       currentSelected: selectedPlayers.length,
-      maxAllowed: maxCaptains,
+      maxAllowed: requiredCaptains,
     })
 
     setSelectedPlayers((prevSelected) => {
       if (checked) {
-        if (prevSelected.length < maxCaptains && !prevSelected.includes(playerId)) {
+        if (prevSelected.length < requiredCaptains && !prevSelected.includes(playerId)) {
           const newSelected = [...prevSelected, playerId]
           console.log("[v0] Captain selected, total now:", newSelected.length)
           return newSelected
         } else {
-          console.log("[v0] Cannot select more captains - limit reached or already selected:", maxCaptains)
-          if (prevSelected.length >= maxCaptains) {
-            toast.error(`Cannot select more than ${maxCaptains} captains`)
+          console.log("[v0] Cannot select more captains - limit reached or already selected:", requiredCaptains)
+          if (prevSelected.length >= requiredCaptains) {
+            toast.error(`Cannot select more than ${requiredCaptains} captains`)
           }
           return prevSelected
         }
@@ -269,6 +293,7 @@ export function CaptainSelectionInterface({
     setLoading(true)
     try {
       await Promise.all([
+        loadTournamentSettings(), // Added tournament settings loading
         loadAvailablePlayers(),
         loadCurrentCaptains(),
         loadSelectionHistory(),
@@ -343,7 +368,7 @@ export function CaptainSelectionInterface({
               <div className="text-sm text-muted-foreground">Selected Captains</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-500">4</div>
+              <div className="text-2xl font-bold text-green-500">{requiredCaptains}</div>
               <div className="text-sm text-muted-foreground">Teams Needed</div>
             </div>
           </div>
@@ -405,17 +430,19 @@ export function CaptainSelectionInterface({
                         <h4 className="font-medium">Creator Choice</h4>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Manually choose exactly 4 captains from {availablePlayers.length} available players. Each
-                        captain will lead one team.
+                        Manually choose exactly {requiredCaptains} captains from {availablePlayers.length} available
+                        players. Each captain will lead one team.
                       </p>
                       <Button
                         onClick={handleManualSelection}
-                        disabled={selectedPlayers.length !== 4 || processing || currentCaptains.length > 0}
+                        disabled={
+                          selectedPlayers.length !== requiredCaptains || processing || currentCaptains.length > 0
+                        }
                         className="w-full"
                         variant="outline"
                       >
                         <Users className="h-4 w-4 mr-2" />
-                        {processing ? "Selecting..." : `Select ${selectedPlayers.length}/4 Captains`}
+                        {processing ? "Selecting..." : `Select ${selectedPlayers.length}/${requiredCaptains} Captains`}
                       </Button>
                     </div>
                   </Card>
@@ -427,7 +454,8 @@ export function CaptainSelectionInterface({
                         <h4 className="font-medium">Random Selection</h4>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Randomly selects 4 players from the pool as captains for unpredictable matchups.
+                        Randomly selects {requiredCaptains} players from the pool as captains for unpredictable
+                        matchups.
                       </p>
                       <Button
                         onClick={handleRandomSelection}
@@ -468,13 +496,13 @@ export function CaptainSelectionInterface({
                 {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) &&
                   currentCaptains.length === 0 && (
                     <Badge variant="secondary" className="ml-2">
-                      Select 4 Captains
+                      Select {requiredCaptains} Captains
                     </Badge>
                   )}
               </CardTitle>
               <CardDescription>
-                Players available for captain selection, sorted by ELO rating. Tournament structure: 4 teams with 4
-                players each (16 total players, 4 captains).
+                Players available for captain selection, sorted by ELO rating. Tournament structure: {requiredCaptains}{" "}
+                teams with {tournamentSettings?.player_pool_settings?.players_per_team || 4} players each.
                 {(isOrganizer || isTournamentCreator || (user && tournament?.created_by === user.id)) &&
                   " Check players for manual captain selection."}
               </CardDescription>
@@ -488,7 +516,9 @@ export function CaptainSelectionInterface({
                         <Checkbox
                           checked={selectedPlayers.includes(player.user_id)}
                           onCheckedChange={(checked) => handlePlayerSelection(player.user_id, checked as boolean)}
-                          disabled={!selectedPlayers.includes(player.user_id) && selectedPlayers.length >= 4}
+                          disabled={
+                            !selectedPlayers.includes(player.user_id) && selectedPlayers.length >= requiredCaptains
+                          }
                         />
                       )}
 

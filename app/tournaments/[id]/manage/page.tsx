@@ -252,22 +252,22 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
                 <Users className="h-4 w-4 mr-2" />
                 Manage Participants
               </Button>
-              {tournament?.status === "team_building" && (
+              {(tournament?.status === "team_building" ||
+                tournament?.status === "drafting" ||
+                tournament?.status === "registration") && (
                 <Button onClick={startAuctionDraft} variant="outline" className="w-full justify-start bg-transparent">
                   <Gavel className="h-4 w-4 mr-2" />
                   Start Direct Auction Draft
                 </Button>
               )}
-              {(tournament?.status === "drafting" || auctionSession) && (
-                <Button
-                  onClick={() => router.push(`/tournaments/${params.id}/auction`)}
-                  variant="outline"
-                  className="w-full justify-start"
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Auction Room
-                </Button>
-              )}
+              <Button
+                onClick={() => router.push(`/tournaments/${params.id}/auction`)}
+                variant="outline"
+                className="w-full justify-start"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Auction Room
+              </Button>
               {tournament?.status === "drafting" && (
                 <Button
                   onClick={() => router.push(`/tournaments/${params.id}/draft`)}
