@@ -211,18 +211,25 @@ export function CaptainSelectionInterface({
       maxAllowed: maxCaptains,
     })
 
-    if (checked) {
-      if (selectedPlayers.length < maxCaptains) {
-        setSelectedPlayers([...selectedPlayers, playerId])
-        console.log("[v0] Captain selected, total now:", selectedPlayers.length + 1)
+    setSelectedPlayers((prevSelected) => {
+      if (checked) {
+        if (prevSelected.length < maxCaptains && !prevSelected.includes(playerId)) {
+          const newSelected = [...prevSelected, playerId]
+          console.log("[v0] Captain selected, total now:", newSelected.length)
+          return newSelected
+        } else {
+          console.log("[v0] Cannot select more captains - limit reached or already selected:", maxCaptains)
+          if (prevSelected.length >= maxCaptains) {
+            toast.error(`Cannot select more than ${maxCaptains} captains`)
+          }
+          return prevSelected
+        }
       } else {
-        console.log("[v0] Cannot select more captains - limit reached:", maxCaptains)
-        toast.error(`Cannot select more than ${maxCaptains} captains`)
+        const newSelected = prevSelected.filter((id) => id !== playerId)
+        console.log("[v0] Captain deselected, total now:", newSelected.length)
+        return newSelected
       }
-    } else {
-      setSelectedPlayers(selectedPlayers.filter((id) => id !== playerId))
-      console.log("[v0] Captain deselected, total now:", selectedPlayers.length - 1)
-    }
+    })
   }
 
   const handleRandomSelection = async () => {
