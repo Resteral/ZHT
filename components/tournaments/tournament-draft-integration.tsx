@@ -112,14 +112,34 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
     setStarting(true)
     try {
-      console.log("[v0] Starting tournament draft with enhanced player pool integration")
+      console.log("[v0] Starting tournament draft with enhanced captain validation")
+
+      const { data: captainsCheck, error: captainsError } = await supabase
+        .from("tournament_player_pool")
+        .select("user_id, captain_type, users(username, elo_rating)")
+        .eq("tournament_id", tournamentId)
+        .not("captain_type", "is", null)
+
+      if (captainsError) {
+        console.error("[v0] Error checking captains:", captainsError)
+        toast.error("Failed to validate captains")
+        return
+      }
+
+      if (!captainsCheck || captainsCheck.length < 2) {
+        toast.error("Need at least 2 captains selected before starting draft")
+        return
+      }
+
+      console.log("[v0] Found captains:", captainsCheck.length)
 
       const participantIds = participants.map((p) => p.user_id)
+
       const { data: existingDraftParticipants, error: conflictError } = await supabase
         .from("captain_draft_participants")
         .select(`
           user_id,
-          captain_drafts!inner(status)
+          captain_drafts!inner(status, id)
         `)
         .in("user_id", participantIds)
         .in("captain_drafts.status", ["waiting", "drafting", "active"])
@@ -139,66 +159,52 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
         return
       }
 
-      const { data: poolValidation, error: poolError } = await supabase
-        .from("tournament_participants")
-        .select("user_id, status")
-        .eq("tournament_id", tournamentId)
-        .in("user_id", participantIds)
-
-      if (poolError) {
-        console.error("[v0] Error validating player pool:", poolError)
-        toast.error("Failed to validate player pool status")
-        return
-      }
-
-      const unavailablePlayers = poolValidation?.filter((p) => p.status !== "registered") || []
-      if (unavailablePlayers.length > 0) {
-        toast.error("Some players are no longer available for draft")
-        return
-      }
-
-      const sortedByElo = participants.sort((a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200))
-
-      if (sortedByElo.length < 4) {
-        toast.error("Need at least 4 players to start tournament draft")
-        return
-      }
-
-      const highestElo = sortedByElo[0]
-      const lowestElo = sortedByElo[sortedByElo.length - 1]
+      const sortedCaptains = captainsCheck.sort((a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200))
+      const highestEloCaptain = sortedCaptains[0]
+      const lowestEloCaptain = sortedCaptains[sortedCaptains.length - 1]
 
       console.log(
-        "[v0] Selected captains - Owner (highest ELO):",
-        highestElo.users?.username,
+        "[v0] Using selected captains - Owner (highest ELO):",
+        highestEloCaptain.users?.username,
         "ELO:",
-        highestElo.users?.elo_rating,
+        highestEloCaptain.users?.elo_rating,
         "First pick (lowest ELO):",
-        lowestElo.users?.username,
+        lowestEloCaptain.users?.username,
         "ELO:",
-        lowestElo.users?.elo_rating,
+        lowestEloCaptain.users?.elo_rating,
       )
 
       const { data: captainDraft, error: draftError } = await supabase
         .from("captain_drafts")
         .insert({
           tournament_id: tournament.id,
-          captain1_id: lowestElo.user_id,
-          captain2_id: highestElo.user_id,
+          captain1_id: lowestEloCaptain.user_id,
+          captain2_id: highestEloCaptain.user_id,
           format: tournament.tournament_type.replace("_draft", ""),
           max_rounds: Math.floor(participants.length / 2),
           current_round: 1,
           current_pick: 1,
-          current_captain: lowestElo.user_id,
+          current_captain: lowestEloCaptain.user_id,
           status: "drafting",
-          tournament_owner: highestElo.user_id,
+          tournament_owner: highestEloCaptain.user_id,
           tournament_mode: true,
-          elo_difference: (highestElo.users?.elo_rating || 1200) - (lowestElo.users?.elo_rating || 1200),
+          elo_difference: (highestEloCaptain.users?.elo_rating || 1200) - (lowestEloCaptain.users?.elo_rating || 1200),
           created_at: new Date().toISOString(),
         })
         .select()
         .single()
 
       if (draftError) throw draftError
+
+      const { error: statusError } = await supabase
+        .from("tournaments")
+        .update({
+          status: "drafting",
+          start_date: new Date().toISOString(),
+        })
+        .eq("id", tournament.id)
+
+      if (statusError) throw statusError
 
       const { error: poolUpdateError } = await supabase
         .from("tournament_participants")
@@ -220,12 +226,12 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
           updated_at: new Date().toISOString(),
         })
         .eq("tournament_id", tournamentId)
-        .in("user_id", [highestElo.user_id, lowestElo.user_id])
+        .in("user_id", [highestEloCaptain.user_id, lowestEloCaptain.user_id])
 
       const draftParticipants = participants.map((p) => ({
         draft_id: captainDraft.id,
         user_id: p.user_id,
-        is_captain: p.user_id === highestElo.user_id || p.user_id === lowestElo.user_id,
+        is_captain: captainsCheck.some((c) => c.user_id === p.user_id),
         team: null,
         elo_rating: p.users?.elo_rating || 1200,
       }))
@@ -234,17 +240,7 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
       if (participantsError) throw participantsError
 
-      const { error: statusError } = await supabase
-        .from("tournaments")
-        .update({
-          status: "drafting",
-          start_date: new Date().toISOString(),
-        })
-        .eq("id", tournament.id)
-
-      if (statusError) throw statusError
-
-      console.log("[v0] Tournament draft created successfully - all players moved to draft system:", captainDraft.id)
+      console.log("[v0] Tournament draft created successfully with proper captain validation:", captainDraft.id)
       toast.success("Tournament draft started! All players moved to draft system...")
 
       if (onDraftStarted) {
@@ -287,10 +283,13 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
 
   const currentParticipants = participants.length
   const isCreator = tournament.created_by === user?.id
-  const hasEnoughTeamsWithCaptains = teamsWithCaptains.length >= requiredTeams
+  const hasEnoughTeamsWithCaptains = teamsWithCaptains.length >= requiredTeams || captains.length >= 2
   const hasEnoughPlayers =
     currentParticipants >= requiredTeams * (tournament?.player_pool_settings?.players_per_team || 4)
-  const canStartDraft = hasEnoughTeamsWithCaptains && hasEnoughPlayers && tournament.status === "registration"
+  const canStartDraft =
+    hasEnoughTeamsWithCaptains &&
+    hasEnoughPlayers &&
+    (tournament.status === "registration" || tournament.status === "captain_selection")
 
   const sortedParticipants = [...participants].sort(
     (a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200),
@@ -356,8 +355,8 @@ export function TournamentDraftIntegration({ tournamentId, onDraftStarted }: Tou
                   ? `Need ${requiredTeams - teamsWithCaptains.length} more teams with captains assigned (${teamsWithCaptains.length}/${requiredTeams})`
                   : !hasEnoughPlayers
                     ? `Need ${requiredTeams * (tournament?.player_pool_settings?.players_per_team || 4) - currentParticipants} more players to fill all teams`
-                    : tournament.status !== "registration"
-                      ? "Tournament has already started"
+                    : tournament.status !== "registration" && tournament.status !== "captain_selection"
+                      ? "Tournament has already started or captain selection is not complete"
                       : !isCreator
                         ? "Only the tournament creator can start the draft"
                         : "Ready to start draft"}

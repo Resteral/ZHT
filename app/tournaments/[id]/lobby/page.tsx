@@ -30,6 +30,8 @@ interface Tournament {
     num_teams: number
     players_per_team: number
     bracket_type: string
+    captain_selection_method: string
+    draft_mode: string
   }
   status: string
   created_by: string
@@ -154,68 +156,87 @@ export default function TournamentLobbyPage() {
     if (!tournament) return
 
     try {
-      console.log("[v0] Initiating draft phase...")
-      const numCaptains = tournament.player_pool_settings.num_teams
-      const captains = players.slice(0, numCaptains)
+      console.log("[v0] Initiating captain selection and draft phase...")
 
-      const totalPlayersNeeded =
-        tournament.player_pool_settings.num_teams * tournament.player_pool_settings.players_per_team
+      const settings = tournament.player_pool_settings
+      const numTeams = settings?.num_teams || settings?.max_teams || 4
+      const playersPerTeam = settings?.players_per_team || 4
+      const captainMethod = settings?.captain_selection_method || "highest_elo"
 
+      console.log("[v0] Tournament settings:", { numTeams, playersPerTeam, captainMethod })
+
+      // Select captains based on method
+      let captains = []
+      if (captainMethod === "highest_elo") {
+        // Sort by ELO and take top players as captains
+        const sortedPlayers = [...players].sort((a, b) => b.elo_rating - a.elo_rating)
+        captains = sortedPlayers.slice(0, numTeams)
+      } else if (captainMethod === "random") {
+        // Randomly select captains
+        const shuffled = [...players].sort(() => Math.random() - 0.5)
+        captains = shuffled.slice(0, numTeams)
+      } else {
+        // Creator choice - use highest ELO as fallback
+        const sortedPlayers = [...players].sort((a, b) => b.elo_rating - a.elo_rating)
+        captains = sortedPlayers.slice(0, numTeams)
+      }
+
+      const totalPlayersNeeded = numTeams * playersPerTeam
       const selectedPlayers = players.slice(0, totalPlayersNeeded)
       const excessPlayers = players.slice(totalPlayersNeeded)
 
-      console.log("[v0] Starting draft with captains:", captains)
+      console.log(
+        "[v0] Selected captains:",
+        captains.map((c) => c.username),
+      )
+      console.log("[v0] Total players needed:", totalPlayersNeeded)
       console.log("[v0] Selected players:", selectedPlayers.length)
       console.log("[v0] Removing excess players:", excessPlayers.length)
 
-      await supabase.from("tournaments").update({ status: "drafting" }).eq("id", tournamentId)
+      await supabase.from("tournaments").update({ status: "captain_selection" }).eq("id", tournamentId)
 
-      const { data: captainDraft, error: draftError } = await supabase
-        .from("captain_drafts")
-        .insert({
-          match_id: tournamentId,
-          captain1_id: captains[0]?.id, // Highest ELO captain
-          captain2_id: captains[1]?.id || captains[0]?.id, // Second highest or same if only one team
-          format: tournament.player_pool_settings.bracket_type || "tournament",
-          max_rounds: Math.ceil(selectedPlayers.length / numCaptains),
-          current_round: 1,
-          current_pick: 1,
-          current_captain: captains[0]?.id,
-          status: "drafting",
-          tournament_owner: captains[0]?.id,
-          tournament_mode: true,
-          elo_difference: captains.length > 1 ? captains[0].elo_rating - captains[1].elo_rating : 0,
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single()
-
-      if (draftError) throw draftError
-
-      const draftParticipants = selectedPlayers.map((player, index) => ({
-        draft_id: captainDraft.id,
-        user_id: player.id,
-        is_captain: index < numCaptains,
-        team: null, // Will be assigned during draft
-        elo_rating: player.elo_rating,
+      const teamInserts = captains.map((captain, index) => ({
+        tournament_id: tournamentId,
+        team_name: `Team ${index + 1}`,
+        team_captain: captain.id,
+        created_at: new Date().toISOString(),
       }))
 
-      const { error: participantsError } = await supabase.from("captain_draft_participants").insert(draftParticipants)
+      const { data: createdTeams, error: teamsError } = await supabase
+        .from("tournament_teams")
+        .insert(teamInserts)
+        .select()
 
-      if (participantsError) throw participantsError
+      if (teamsError) throw teamsError
 
-      await supabase
-        .from("tournament_participants")
-        .update({ status: "drafting" })
-        .eq("tournament_id", tournamentId)
-        .in(
-          "user_id",
-          selectedPlayers.map((p) => p.id),
-        )
+      for (let i = 0; i < captains.length; i++) {
+        await supabase
+          .from("tournament_player_pool")
+          .update({
+            status: "captain",
+            captain_type: i === 0 ? "high_elo" : "low_elo",
+          })
+          .eq("tournament_id", tournamentId)
+          .eq("user_id", captains[i].id)
+      }
 
+      // Mark remaining selected players as available for draft
+      const nonCaptainPlayers = selectedPlayers.filter((p) => !captains.some((c) => c.id === p.id))
+      if (nonCaptainPlayers.length > 0) {
+        await supabase
+          .from("tournament_player_pool")
+          .update({ status: "available" })
+          .eq("tournament_id", tournamentId)
+          .in(
+            "user_id",
+            nonCaptainPlayers.map((p) => p.id),
+          )
+      }
+
+      // Remove excess players
       if (excessPlayers.length > 0) {
         await supabase
-          .from("tournament_participants")
+          .from("tournament_player_pool")
           .update({ status: "removed_excess" })
           .eq("tournament_id", tournamentId)
           .in(
@@ -224,13 +245,12 @@ export default function TournamentLobbyPage() {
           )
       }
 
-      setTournamentStarted(true)
-      await loadBracketAndDraftInfo(tournamentId)
+      await supabase.from("tournaments").update({ status: "drafting" }).eq("id", tournamentId)
 
-      console.log("[v0] All players moved to draft system, transitioning to draft page...")
+      console.log("[v0] Captain selection complete, redirecting to draft...")
       router.push(`/tournaments/${tournamentId}/draft`)
     } catch (error) {
-      console.error("[v0] Error starting draft:", error)
+      console.error("[v0] Error in captain selection and draft start:", error)
     }
   }
 
@@ -450,7 +470,7 @@ export default function TournamentLobbyPage() {
                     players.length >= tournament.player_pool_settings.num_teams && (
                       <Button onClick={startDraft} className="w-full" size="lg" variant="default">
                         <Target className="h-4 w-4 mr-2" />
-                        Start Draft System ({players.length} players ready)
+                        Select Captains & Start Draft ({players.length} players ready)
                       </Button>
                     )}
 
@@ -485,10 +505,17 @@ export default function TournamentLobbyPage() {
                 <CardContent>
                   <div className="text-sm text-yellow-700">
                     <p className="mb-2">
-                      The <strong>{tournament.player_pool_settings.num_teams} highest ELO players</strong> will be
-                      selected as team captains.
+                      <strong>Method:</strong>{" "}
+                      {tournament.player_pool_settings.captain_selection_method?.replace("_", " ") || "Highest ELO"}
                     </p>
-                    <p>Captains will draft teams, then score live bracket games after the tournament.</p>
+                    <p className="mb-2">
+                      The <strong>{tournament.player_pool_settings.num_teams} captains</strong> will be selected
+                      automatically when the tournament starts.
+                    </p>
+                    <p>
+                      Captains will then draft their teams using{" "}
+                      {tournament.player_pool_settings.draft_mode?.replace("_", " ") || "snake draft"} format.
+                    </p>
                   </div>
                 </CardContent>
               </Card>

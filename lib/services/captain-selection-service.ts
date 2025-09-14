@@ -44,12 +44,8 @@ class CaptainSelectionService {
         throw tournamentError
       }
 
-      const maxTeams =
-        tournament.max_teams ||
-        tournament.player_pool_settings?.max_teams ||
-        tournament.player_pool_settings?.num_teams ||
-        8
-      console.log("[v0] Tournament requires", maxTeams, "captains (one per team)")
+      const maxTeams = tournament.max_teams || tournament.player_pool_settings?.max_teams || 2
+      console.log("[v0] Tournament requires", maxTeams, "captains")
 
       // Get all available players in the tournament pool
       const { data: poolPlayers, error: poolError } = await this.supabase
@@ -66,7 +62,108 @@ class CaptainSelectionService {
 
       if (poolError) {
         console.error("[v0] Error fetching player pool:", poolError)
-        throw poolError
+
+        console.log("[v0] Player pool not found, attempting to populate from participants...")
+        await this.populatePlayerPoolFromParticipants(tournamentId)
+
+        // Retry fetching after population
+        const { data: retryPoolPlayers, error: retryError } = await this.supabase
+          .from("tournament_player_pool")
+          .select(`
+            user_id,
+            status,
+            users(username, elo_rating)
+          `)
+          .eq("tournament_id", tournamentId)
+          .eq("status", "available")
+          .is("captain_type", null)
+          .order("created_at", { ascending: true })
+
+        if (retryError || !retryPoolPlayers) {
+          throw new Error("Failed to populate or access player pool")
+        }
+
+        // Use the retry data
+        const processedPlayers = retryPoolPlayers
+          .map((entry: any) => ({
+            user_id: entry.user_id,
+            username: entry.users?.username || "Unknown",
+            elo_rating: entry.users?.elo_rating || 1200,
+            status: entry.status,
+          }))
+          .sort((a, b) => b.elo_rating - a.elo_rating)
+
+        if (processedPlayers.length < maxTeams) {
+          return {
+            captains: [],
+            success: false,
+            message: `Need at least ${maxTeams} players to select ${maxTeams} captains (found ${processedPlayers.length})`,
+          }
+        }
+
+        // Select highest and lowest ELO as captains
+        const selectedCaptains = []
+        const captainUpdates = []
+
+        // Highest ELO captain (tournament owner)
+        const highestElo = processedPlayers[0]
+        selectedCaptains.push({
+          id: highestElo.user_id,
+          username: highestElo.username,
+          elo_rating: highestElo.elo_rating,
+          captain_type: "high_elo" as const,
+        })
+
+        captainUpdates.push({
+          tournament_id: tournamentId,
+          user_id: highestElo.user_id,
+          captain_type: "high_elo",
+          updated_at: new Date().toISOString(),
+        })
+
+        // Lowest ELO captain (first pick advantage)
+        const lowestElo = processedPlayers[processedPlayers.length - 1]
+        selectedCaptains.push({
+          id: lowestElo.user_id,
+          username: lowestElo.username,
+          elo_rating: lowestElo.elo_rating,
+          captain_type: "low_elo" as const,
+        })
+
+        captainUpdates.push({
+          tournament_id: tournamentId,
+          user_id: lowestElo.user_id,
+          captain_type: "low_elo",
+          updated_at: new Date().toISOString(),
+        })
+
+        // Update the tournament_player_pool table
+        for (const update of captainUpdates) {
+          const { error: updateError } = await this.supabase
+            .from("tournament_player_pool")
+            .update({
+              captain_type: update.captain_type,
+              updated_at: update.updated_at,
+            })
+            .eq("tournament_id", update.tournament_id)
+            .eq("user_id", update.user_id)
+
+          if (updateError) {
+            console.error("[v0] Error updating captain status:", updateError)
+            throw updateError
+          }
+        }
+
+        console.log("[v0] Successfully selected captains after pool population:", selectedCaptains)
+
+        // Log captain selection activity
+        await this.logCaptainSelection(tournamentId, selectedCaptains, "automatic")
+
+        return {
+          captains: selectedCaptains,
+          success: true,
+          message: `Successfully selected ${selectedCaptains.length} captains (highest and lowest ELO)`,
+        }
       }
 
       if (!poolPlayers || poolPlayers.length < maxTeams) {
@@ -576,6 +673,42 @@ class CaptainSelectionService {
     } catch (error) {
       console.error("[v0] Error getting captain selection history:", error)
       return []
+    }
+  }
+
+  // Helper method to populate player pool from tournament participants
+  private async populatePlayerPoolFromParticipants(tournamentId: string) {
+    try {
+      console.log("[v0] Populating player pool from tournament participants...")
+
+      const { data: participants } = await this.supabase
+        .from("tournament_participants")
+        .select(`
+          user_id,
+          status,
+          users(username, elo_rating)
+        `)
+        .eq("tournament_id", tournamentId)
+        .eq("status", "registered")
+
+      if (participants && participants.length > 0) {
+        const poolEntries = participants.map((participant: any) => ({
+          tournament_id: tournamentId,
+          user_id: participant.user_id,
+          status: "available",
+          created_at: new Date().toISOString(),
+        }))
+
+        const { error: insertError } = await this.supabase.from("tournament_player_pool").insert(poolEntries)
+
+        if (insertError) {
+          console.error("[v0] Error populating player pool:", insertError)
+        } else {
+          console.log("[v0] Successfully populated player pool with", poolEntries.length, "players")
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error populating player pool:", error)
     }
   }
 }

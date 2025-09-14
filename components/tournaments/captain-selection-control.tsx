@@ -163,6 +163,21 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
       if (result.success) {
         toast.success(result.message)
         setCaptains(result.captains)
+
+        const { error: statusError } = await captainSelectionService.supabase
+          .from("tournaments")
+          .update({
+            status: "captain_selection",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", tournament.id)
+
+        if (statusError) {
+          console.error("[v0] Error updating tournament status:", statusError)
+        } else {
+          console.log("[v0] Tournament status updated to captain_selection")
+        }
+
         onCaptainsSelected?.(result.captains)
         await loadPlayerPool()
       } else {
@@ -273,9 +288,15 @@ export function CaptainSelectionControl({ tournament, onCaptainsSelected }: Capt
               ))}
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => onCaptainsSelected?.(captains)} className="flex-1 bg-green-600 hover:bg-green-700">
+              <Button
+                onClick={() => {
+                  console.log("[v0] Proceeding to draft with captains:", captains)
+                  onCaptainsSelected?.(captains)
+                }}
+                className="flex-1 bg-green-600 hover:bg-green-700"
+              >
                 <ArrowRight className="h-4 w-4 mr-2" />
-                Start Tournament Formation
+                Proceed to Draft ({captains.length} Captains Ready)
               </Button>
               {canSelectCaptains && (
                 <Button onClick={handleResetCaptains} disabled={loading} variant="outline" className="bg-transparent">
