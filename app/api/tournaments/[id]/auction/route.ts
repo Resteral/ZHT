@@ -18,6 +18,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     console.log("[v0] Fetching auction session for tournament:", params.id)
 
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select("player_pool_settings")
+      .eq("id", params.id)
+      .single()
+
+    if (tournamentError) {
+      console.log("[v0] No tournament settings loaded, using fallback of 4 teams")
+    } else {
+      console.log("[v0] Loaded tournament settings:", tournament)
+    }
+
     const { data: auctionSession, error: sessionError } = await supabase
       .from("tournament_auction_sessions")
       .select("*")
@@ -52,7 +64,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         id,
         team_name,
         team_captain,
-        budget_remaining
+        budget_remaining,
+        max_players,
+        players_acquired,
+        users!tournament_teams_team_captain_fkey(username)
       `)
       .eq("tournament_id", params.id)
 
@@ -62,22 +77,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     let teamBudgets = []
     if (tournamentTeams && tournamentTeams.length > 0) {
-      const captainIds = tournamentTeams.map((team) => team.team_captain).filter(Boolean)
-
-      const { data: captains, error: captainsError } = await supabase
-        .from("users")
-        .select("id, username")
-        .in("id", captainIds)
-
-      if (!captainsError) {
-        // Combine team data with captain usernames
-        teamBudgets = tournamentTeams.map((team) => ({
-          ...team,
-          captain_username: captains.find((captain) => captain.id === team.team_captain)?.username || "Unknown",
-        }))
-      } else {
-        teamBudgets = tournamentTeams
-      }
+      teamBudgets = tournamentTeams.map((team) => ({
+        team_id: team.id,
+        team: {
+          team_name: team.team_name,
+          team_captain: team.team_captain,
+          users: team.users,
+        },
+        current_budget: team.budget_remaining,
+        max_players: team.max_players,
+        players_acquired: team.players_acquired,
+      }))
     }
 
     const { data: playerPool, error: poolError } = await supabase
@@ -99,6 +109,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       auctionSession: auctionSession ? { ...auctionSession, current_player: currentPlayer } : null,
       teamBudgets: teamBudgets || [],
       playerPool: playerPool || [],
+      tournamentSettings: tournament || null,
     })
   } catch (error) {
     console.error("[v0] Error fetching auction data:", error)
@@ -121,9 +132,128 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   })
 
   try {
-    const { action, skip_captain_selection } = await request.json()
+    const body = await request.json()
+    const { action } = body
+
+    if (action === "start_auction_with_captains") {
+      const { captainIds, userId } = body
+
+      console.log("[v0] Starting auction with captains:", captainIds)
+
+      // Load tournament settings
+      const { data: tournament, error: tournamentError } = await supabase
+        .from("tournaments")
+        .select("player_pool_settings")
+        .eq("id", params.id)
+        .single()
+
+      if (tournamentError) throw tournamentError
+
+      const settings = tournament.player_pool_settings || {}
+      const auctionBudget = settings.auction_budget || 500
+      const playersPerTeam = settings.players_per_team || 4
+
+      // Create teams for each selected captain
+      const teamPromises = captainIds.map(async (captainId: string, index: number) => {
+        // Get captain user info
+        const { data: captainUser, error: userError } = await supabase
+          .from("tournament_player_pool")
+          .select("users(username)")
+          .eq("user_id", captainId)
+          .eq("tournament_id", params.id)
+          .single()
+
+        if (userError) {
+          console.error("[v0] Error fetching captain user:", userError)
+          throw userError
+        }
+
+        const teamName = `Team ${captainUser.users?.username || index + 1}`
+
+        // Create team
+        const { data: team, error: teamError } = await supabase
+          .from("tournament_teams")
+          .insert({
+            tournament_id: params.id,
+            team_name: teamName,
+            team_captain: captainId,
+            budget_remaining: auctionBudget,
+            max_players: playersPerTeam,
+            players_acquired: 1,
+          })
+          .select()
+          .single()
+
+        if (teamError) {
+          console.error("[v0] Error creating team:", teamError)
+          throw teamError
+        }
+
+        // Update player status to captain
+        const { error: playerError } = await supabase
+          .from("tournament_player_pool")
+          .update({
+            status: "captain",
+            captain_type: "selected",
+          })
+          .eq("user_id", captainId)
+          .eq("tournament_id", params.id)
+
+        if (playerError) {
+          console.error("[v0] Error updating player status:", playerError)
+          throw playerError
+        }
+
+        return team
+      })
+
+      const teams = await Promise.all(teamPromises)
+
+      // Get first available non-captain player for auction
+      const { data: firstPlayer } = await supabase
+        .from("tournament_player_pool")
+        .select("id")
+        .eq("tournament_id", params.id)
+        .eq("status", "available")
+        .limit(1)
+        .single()
+
+      // Create auction session
+      const { data: session, error: sessionError } = await supabase
+        .from("tournament_auction_sessions")
+        .insert({
+          tournament_id: params.id,
+          status: "active",
+          current_player_id: firstPlayer?.id,
+          bid_deadline: new Date(Date.now() + 30000).toISOString(),
+          started_at: new Date().toISOString(),
+          auction_round: 1,
+          bid_timer_seconds: 30,
+        })
+        .select()
+        .single()
+
+      if (sessionError) {
+        console.error("[v0] Error creating auction session:", sessionError)
+        throw sessionError
+      }
+
+      // Update tournament status to drafting
+      const { error: statusError } = await supabase
+        .from("tournaments")
+        .update({ status: "drafting" })
+        .eq("id", params.id)
+
+      if (statusError) {
+        console.error("[v0] Error updating tournament status:", statusError)
+      }
+
+      return NextResponse.json({ success: true, session, teams })
+    }
 
     if (action === "start_auction" || action === "start_auction_direct") {
+      const { skip_captain_selection } = body
+
       const { data: tournament, error: tournamentError } = await supabase
         .from("tournaments")
         .select("player_pool_settings")
@@ -211,7 +341,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     if (action === "select_captain") {
-      const { player_id, team_name } = await request.json()
+      const { player_id, team_name } = body
 
       console.log("[v0] Selecting captain for direct auction:", { player_id, team_name })
 

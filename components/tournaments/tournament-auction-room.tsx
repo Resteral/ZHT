@@ -42,6 +42,9 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
   const [timeRemaining, setTimeRemaining] = useState<number>(30)
   const [loading, setLoading] = useState(true)
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
+  const [selectedCaptains, setSelectedCaptains] = useState<string[]>([])
+  const [tournamentSettings, setTournamentSettings] = useState<any>(null)
+  const [requiredTeams, setRequiredTeams] = useState<number>(3)
 
   const {
     auctionSession,
@@ -116,6 +119,13 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
       if (response.ok) {
         const data = await response.json()
 
+        if (data.tournamentSettings) {
+          setTournamentSettings(data.tournamentSettings)
+          const numTeams = data.tournamentSettings.player_pool_settings?.num_teams || 3
+          setRequiredTeams(numTeams)
+          console.log("[v0] Required teams from settings:", numTeams)
+        }
+
         if (data.auctionSession) {
           setAuctionSession(data.auctionSession)
           setTimeRemaining(data.auctionSession.bid_timer_seconds || 30)
@@ -133,6 +143,7 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
           }))
           setTeams(formattedTeams)
           setTeamBudgets(data.teamBudgets)
+          console.log("[v0] Teams with captains loaded:", formattedTeams.length)
         }
 
         if (data.playerPool) {
@@ -143,65 +154,96 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
             position: "Player",
           }))
           setPlayerPool(formattedPlayers)
+          console.log("[v0] Player pool size:", formattedPlayers.length)
         }
       } else {
-        console.log("[v0] No auction session found, using mock data")
-        initializeMockData()
+        console.log("[v0] No auction session found, initializing for captain selection")
+        await loadPlayerPoolForCaptainSelection()
       }
     } catch (error) {
       console.error("[v0] Error fetching auction data:", error)
-      initializeMockData()
+      await loadPlayerPoolForCaptainSelection()
     } finally {
       setLoading(false)
     }
   }
 
-  const initializeMockData = () => {
-    const mockSession = {
-      id: "auction-1",
-      tournament_id: tournamentId,
-      status: "active" as const,
-      current_player_id: "player-1",
-      current_bid_amount: 75,
-      current_bidder_id: "team-2",
-      bid_timer_seconds: 30,
-      auction_round: 1,
-      total_rounds: 4,
+  const loadPlayerPoolForCaptainSelection = async () => {
+    try {
+      const response = await fetch(`/api/tournaments/${tournamentId}/players`)
+      if (response.ok) {
+        const data = await response.json()
+
+        if (data.tournament?.player_pool_settings) {
+          setTournamentSettings(data.tournament)
+          const numTeams = data.tournament.player_pool_settings.num_teams || 3
+          setRequiredTeams(numTeams)
+          console.log("[v0] Required teams from tournament:", numTeams)
+        }
+
+        if (data.players) {
+          const formattedPlayers = data.players.map((player: any) => ({
+            id: player.id,
+            username: player.users?.username || "Unknown Player",
+            elo_rating: player.users?.elo_rating || 1000,
+            position: "Player",
+          }))
+          setPlayerPool(formattedPlayers)
+          console.log("[v0] Loaded player pool for captain selection:", formattedPlayers.length)
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error loading player pool:", error)
+    }
+  }
+
+  const handleCaptainSelection = (playerId: string) => {
+    setSelectedCaptains((prev) => {
+      if (prev.includes(playerId)) {
+        const updated = prev.filter((id) => id !== playerId)
+        console.log("[v0] Removed captain, now have:", updated.length)
+        return updated
+      } else if (prev.length < requiredTeams) {
+        const updated = [...prev, playerId]
+        console.log("[v0] Added captain, now have:", updated.length, "of", requiredTeams)
+        return updated
+      }
+      return prev
+    })
+  }
+
+  const startAuctionWithCaptains = async () => {
+    if (selectedCaptains.length !== requiredTeams) {
+      toast.error(`Please select exactly ${requiredTeams} captains`)
+      return
     }
 
-    setAuctionSession(mockSession)
-    setCurrentPlayer({
-      id: "player-1",
-      username: "ProGamer123",
-      elo_rating: 1850,
-      position: "DPS",
-    })
+    try {
+      console.log("[v0] Starting auction with captains:", selectedCaptains)
 
-    setTeams([
-      {
-        id: "team-1",
-        team_name: "Thunder Hawks",
-        team_captain: currentUserId,
-        captain_username: "Captain1",
-        budget_remaining: 425,
-        players_acquired: 1,
-        max_players: 4,
-      },
-      {
-        id: "team-2",
-        team_name: "Storm Riders",
-        team_captain: "user-2",
-        captain_username: "Captain2",
-        budget_remaining: 350,
-        players_acquired: 2,
-        max_players: 4,
-      },
-    ])
+      const response = await fetch(`/api/tournaments/${tournamentId}/auction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "start_auction_with_captains",
+          captainIds: selectedCaptains,
+          userId: currentUserId,
+        }),
+      })
 
-    setPlayerPool([
-      { id: "player-1", username: "ProGamer123", elo_rating: 1850, position: "DPS" },
-      { id: "player-2", username: "SkillMaster", elo_rating: 1720, position: "Support" },
-    ])
+      if (response.ok) {
+        const data = await response.json()
+        toast.success("Auction started with selected captains!")
+
+        await fetchAuctionData()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to start auction")
+      }
+    } catch (error) {
+      console.error("[v0] Error starting auction:", error)
+      toast.error("Failed to start auction")
+    }
   }
 
   const handleBid = async (amount: number) => {
@@ -304,8 +346,8 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
               <div>
                 <h1 className="text-2xl font-bold">Tournament Auction Draft</h1>
                 <p className="text-background/80">
-                  Round {auctionSession?.auction_round} of {auctionSession?.total_rounds} - Select captains and build
-                  teams
+                  Round {auctionSession?.auction_round} of {auctionSession?.total_rounds} - Select {requiredTeams}{" "}
+                  captains and build teams
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -331,7 +373,7 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {(isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") && !auctionSession?.status && (
+            {(isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") && teams.length === 0 && (
               <Card className="auction-card border-blue-500">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -339,38 +381,64 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
                     Select Team Captains
                   </CardTitle>
                   <CardDescription>
-                    Choose 4 captains from the player pool to lead teams in the auction draft
+                    Choose {requiredTeams} captains from the player pool to lead teams in the auction draft
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  <div className="mb-4">
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {selectedCaptains.length} of {requiredTeams} captains
+                    </p>
+                    <Progress value={(selectedCaptains.length / requiredTeams) * 100} className="h-2 mt-2" />
+                  </div>
                   <div className="grid gap-2 max-h-64 overflow-y-auto">
-                    {playerPool.map((player) => (
-                      <div
-                        key={player.id}
-                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted cursor-pointer"
-                        onClick={() => {
-                          // Toggle captain selection
-                          console.log(`[v0] Selecting captain: ${player.username}`)
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{player.username}</p>
-                            <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
+                    {playerPool.map((player) => {
+                      const isSelected = selectedCaptains.includes(player.id)
+                      return (
+                        <div
+                          key={player.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                            isSelected ? "bg-blue-50 border-blue-500 dark:bg-blue-950" : "hover:bg-muted"
+                          }`}
+                          onClick={() => handleCaptainSelection(player.id)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">{player.username}</p>
+                              <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
+                            </div>
                           </div>
+                          <Button
+                            variant={isSelected ? "default" : "outline"}
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCaptainSelection(player.id)
+                            }}
+                          >
+                            {isSelected ? (
+                              <>
+                                <Crown className="h-4 w-4 mr-1" />
+                                Captain
+                              </>
+                            ) : (
+                              "Make Captain"
+                            )}
+                          </Button>
                         </div>
-                        <Button variant="outline" size="sm">
-                          Make Captain
-                        </Button>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                   <div className="mt-4 pt-4 border-t">
-                    <Button className="w-full" disabled={teams.length < 4}>
-                      Start Auction with Selected Captains
+                    <Button
+                      className="w-full"
+                      disabled={selectedCaptains.length !== requiredTeams}
+                      onClick={startAuctionWithCaptains}
+                    >
+                      Start Auction with Selected Captains ({selectedCaptains.length}/{requiredTeams})
                     </Button>
                   </div>
                 </CardContent>
@@ -417,7 +485,9 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
                 ) : (
                   <div className="text-center py-12">
                     <p className="text-muted-foreground">
-                      {teams.length < 4 ? "Select 4 captains to begin auction" : "No player currently up for auction"}
+                      {teams.length < requiredTeams
+                        ? `Select ${requiredTeams} captains to begin auction`
+                        : "No player currently up for auction"}
                     </p>
                   </div>
                 )}
