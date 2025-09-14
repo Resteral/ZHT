@@ -60,6 +60,7 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
   const [captainSelectionMethod, setCaptainSelectionMethod] = useState<string>("manual")
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [pendingCaptains, setPendingCaptains] = useState<string[]>([])
+  const [isStartingAuction, setIsStartingAuction] = useState(false)
 
   const {
     auctionSession,
@@ -266,6 +267,7 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
 
   const confirmStartAuction = async () => {
     try {
+      setIsStartingAuction(true)
       console.log("[v0] Starting auction with captains:", pendingCaptains)
       console.log("[v0] Tournament ID:", tournamentId)
       console.log("[v0] Current User ID:", currentUserId)
@@ -287,6 +289,8 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
         console.log("[v0] API Response data:", data)
         toast.success("Auction started with selected captains!")
         setShowConfirmDialog(false)
+        setSelectedCaptains([])
+        setPendingCaptains([])
         await fetchAuctionData()
       } else {
         const error = await response.json()
@@ -296,6 +300,8 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
     } catch (error) {
       console.error("[v0] Error starting auction:", error)
       toast.error("Failed to start auction")
+    } finally {
+      setIsStartingAuction(false)
     }
   }
 
@@ -379,6 +385,11 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
   const currentBiddingTeam = teams.find((team) => team.id === auctionSession?.current_bidder_id)
   const minBid = (auctionSession?.current_bid_amount || 0) + 5
 
+  const showCaptainSelection =
+    (isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") &&
+    teams.length === 0 &&
+    !auctionSession?.status
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -399,8 +410,9 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
               <div>
                 <h1 className="text-2xl font-bold">Tournament Auction Draft</h1>
                 <p className="text-background/80">
-                  Round {auctionSession?.auction_round || 1} of {auctionSession?.total_rounds || 1} - Select{" "}
-                  {requiredTeams} captains and build teams
+                  {auctionSession?.status === "active"
+                    ? `Round ${auctionSession?.auction_round || 1} of ${auctionSession?.total_rounds || 1} - Active Auction`
+                    : `Select ${requiredTeams} captains to begin auction draft`}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -426,7 +438,7 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {(isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") && teams.length === 0 && (
+            {showCaptainSelection && (
               <Card className="auction-card border-blue-500">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -474,86 +486,67 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
                     <Progress value={(selectedCaptains.length / requiredTeams) * 100} className="h-2 mt-2" />
                   </div>
 
-                  {captainSelectionMethod === "manual" && (
-                    <div className="grid gap-2 max-h-64 overflow-y-auto">
-                      {playerPool.map((player) => {
-                        const isSelected = selectedCaptains.includes(player.id)
-                        return (
-                          <div
-                            key={player.id}
-                            className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                              isSelected ? "bg-blue-50 border-blue-500 dark:bg-blue-950" : "hover:bg-muted"
-                            }`}
-                            onClick={() => handleCaptainSelection(player.id)}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10">
-                                <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">{player.username}</p>
-                                <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
-                              </div>
+                  <div className="grid gap-2 max-h-64 overflow-y-auto">
+                    {playerPool.map((player) => {
+                      const isSelected = selectedCaptains.includes(player.id)
+                      const showAsSelected = captainSelectionMethod !== "manual" ? isSelected : isSelected
+
+                      return (
+                        <div
+                          key={player.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                            showAsSelected
+                              ? "bg-blue-50 border-blue-500 dark:bg-blue-950"
+                              : captainSelectionMethod === "manual"
+                                ? "hover:bg-muted cursor-pointer"
+                                : "bg-muted"
+                          }`}
+                          onClick={
+                            captainSelectionMethod === "manual" ? () => handleCaptainSelection(player.id) : undefined
+                          }
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">{player.username}</p>
+                              <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
                             </div>
+                          </div>
+                          {showAsSelected ? (
+                            <Badge variant="default">
+                              <Crown className="h-4 w-4 mr-1" />
+                              Captain
+                            </Badge>
+                          ) : captainSelectionMethod === "manual" ? (
                             <Button
-                              variant={isSelected ? "default" : "outline"}
+                              variant="outline"
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleCaptainSelection(player.id)
                               }}
                             >
-                              {isSelected ? (
-                                <>
-                                  <Crown className="h-4 w-4 mr-1" />
-                                  Captain
-                                </>
-                              ) : (
-                                "Make Captain"
-                              )}
+                              Make Captain
                             </Button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {captainSelectionMethod !== "manual" && (
-                    <div className="grid gap-2 max-h-64 overflow-y-auto">
-                      {playerPool
-                        .filter((player) => selectedCaptains.includes(player.id))
-                        .map((player) => (
-                          <div
-                            key={player.id}
-                            className="flex items-center justify-between p-3 rounded-lg border bg-blue-50 border-blue-500 dark:bg-blue-950"
-                          >
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10">
-                                <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">{player.username}</p>
-                                <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
-                              </div>
-                            </div>
-                            <Badge variant="default">
-                              <Crown className="h-4 w-4 mr-1" />
-                              Captain
-                            </Badge>
-                          </div>
-                        ))}
-                    </div>
-                  )}
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
 
                   <div className="mt-4 pt-4 border-t">
                     <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
                       <AlertDialogTrigger asChild>
                         <Button
                           className="w-full"
-                          disabled={selectedCaptains.length !== requiredTeams}
+                          disabled={selectedCaptains.length !== requiredTeams || isStartingAuction}
                           onClick={handleStartAuctionClick}
                         >
-                          Start Auction with Selected Captains ({selectedCaptains.length}/{requiredTeams})
+                          {isStartingAuction
+                            ? "Starting Auction..."
+                            : `Start Auction with Selected Captains (${selectedCaptains.length}/${requiredTeams})`}
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
@@ -576,8 +569,10 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={confirmStartAuction}>Start Auction</AlertDialogAction>
+                          <AlertDialogCancel disabled={isStartingAuction}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={confirmStartAuction} disabled={isStartingAuction}>
+                            {isStartingAuction ? "Starting..." : "Start Auction"}
+                          </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
@@ -586,200 +581,207 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
               </Card>
             )}
 
-            <Card className="auction-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Gavel className="h-5 w-5 text-primary" />
-                  Current Player
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {currentPlayer ? (
-                  <div className="text-center space-y-4">
-                    <Avatar className="h-24 w-24 mx-auto">
-                      <AvatarFallback className="text-2xl">
-                        {currentPlayer.username.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h3 className="text-2xl font-bold">{currentPlayer.username}</h3>
-                      <div className="flex items-center justify-center gap-4 mt-2">
-                        <Badge variant="secondary">{currentPlayer.position}</Badge>
-                        <Badge variant="outline">{currentPlayer.elo_rating} ELO</Badge>
-                      </div>
-                    </div>
-                    <div className="bg-muted p-4 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Current Bid</span>
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-accent" />
-                          <span className="text-2xl font-bold text-accent">
-                            {auctionSession?.current_bid_amount || 0}
-                          </span>
+            {auctionSession?.status === "active" && (
+              <>
+                <Card className="auction-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Gavel className="h-5 w-5 text-primary" />
+                      Current Player
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {currentPlayer ? (
+                      <div className="text-center space-y-4">
+                        <Avatar className="h-24 w-24 mx-auto">
+                          <AvatarFallback className="text-2xl">
+                            {currentPlayer.username.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <h3 className="text-2xl font-bold">{currentPlayer.username}</h3>
+                          <div className="flex items-center justify-center gap-4 mt-2">
+                            <Badge variant="secondary">{currentPlayer.position}</Badge>
+                            <Badge variant="outline">{currentPlayer.elo_rating} ELO</Badge>
+                          </div>
+                        </div>
+                        <div className="bg-muted p-4 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">Current Bid</span>
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4 text-accent" />
+                              <span className="text-2xl font-bold text-accent">
+                                {auctionSession?.current_bid_amount || 0}
+                              </span>
+                            </div>
+                          </div>
+                          {currentBiddingTeam && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Leading: {currentBiddingTeam.team_name}
+                            </p>
+                          )}
                         </div>
                       </div>
-                      {currentBiddingTeam && (
-                        <p className="text-sm text-muted-foreground mt-1">Leading: {currentBiddingTeam.team_name}</p>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground">
-                      {teams.length < requiredTeams
-                        ? `Select ${requiredTeams} captains to begin auction`
-                        : "No player currently up for auction"}
-                    </p>
-                  </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <p className="text-muted-foreground">No player currently up for auction</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {currentUserTeam && (
+                  <Card className="auction-card">
+                    <CardHeader>
+                      <CardTitle>Place Your Bid</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleBid(minBid)}
+                            disabled={minBid > currentUserTeam.budget_remaining}
+                            className="auction-button-primary flex-1"
+                          >
+                            Bid ${minBid}
+                          </Button>
+                          <Button
+                            onClick={() => handleBid(minBid + 10)}
+                            disabled={minBid + 10 > currentUserTeam.budget_remaining}
+                            className="auction-button-primary flex-1"
+                          >
+                            Bid ${minBid + 10}
+                          </Button>
+                          <Button
+                            onClick={() => handleBid(minBid + 25)}
+                            disabled={minBid + 25 > currentUserTeam.budget_remaining}
+                            className="auction-button-primary flex-1"
+                          >
+                            Bid ${minBid + 25}
+                          </Button>
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            type="number"
+                            placeholder="Custom amount"
+                            value={bidAmount}
+                            onChange={(e) => setBidAmount(e.target.value)}
+                            min={minBid}
+                            max={currentUserTeam.budget_remaining}
+                            className="flex-1"
+                          />
+                          <Button
+                            onClick={handleCustomBid}
+                            disabled={
+                              !bidAmount || Number.parseInt(bidAmount) <= (auctionSession?.current_bid_amount || 0)
+                            }
+                            className="auction-button-secondary"
+                          >
+                            Custom Bid
+                          </Button>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Your remaining budget: ${currentUserTeam.budget_remaining}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
                 )}
-              </CardContent>
-            </Card>
 
-            {currentUserTeam && auctionSession?.status === "active" && (
-              <Card className="auction-card">
-                <CardHeader>
-                  <CardTitle>Place Your Bid</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleBid(minBid)}
-                        disabled={minBid > currentUserTeam.budget_remaining}
-                        className="auction-button-primary flex-1"
-                      >
-                        Bid ${minBid}
-                      </Button>
-                      <Button
-                        onClick={() => handleBid(minBid + 10)}
-                        disabled={minBid + 10 > currentUserTeam.budget_remaining}
-                        className="auction-button-primary flex-1"
-                      >
-                        Bid ${minBid + 10}
-                      </Button>
-                      <Button
-                        onClick={() => handleBid(minBid + 25)}
-                        disabled={minBid + 25 > currentUserTeam.budget_remaining}
-                        className="auction-button-primary flex-1"
-                      >
-                        Bid ${minBid + 25}
-                      </Button>
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        placeholder="Custom amount"
-                        value={bidAmount}
-                        onChange={(e) => setBidAmount(e.target.value)}
-                        min={minBid}
-                        max={currentUserTeam.budget_remaining}
-                        className="flex-1"
-                      />
-                      <Button
-                        onClick={handleCustomBid}
-                        disabled={!bidAmount || Number.parseInt(bidAmount) <= (auctionSession?.current_bid_amount || 0)}
-                        className="auction-button-secondary"
-                      >
-                        Custom Bid
-                      </Button>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Your remaining budget: ${currentUserTeam.budget_remaining}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {recentBids.length > 0 && (
-              <Card className="auction-card">
-                <CardHeader>
-                  <CardTitle>Recent Bids</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {recentBids.slice(0, 5).map((bid) => {
-                      const team = teams.find((t) => t.id === bid.team_id)
-                      return (
-                        <div key={bid.id} className="flex items-center justify-between text-sm p-2 bg-muted rounded">
-                          <span>{team?.team_name || "Unknown Team"}</span>
-                          <span className="font-medium">${bid.bid_amount}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+                {recentBids.length > 0 && (
+                  <Card className="auction-card">
+                    <CardHeader>
+                      <CardTitle>Recent Bids</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 max-h-32 overflow-y-auto">
+                        {recentBids.slice(0, 5).map((bid) => {
+                          const team = teams.find((t) => t.id === bid.team_id)
+                          return (
+                            <div
+                              key={bid.id}
+                              className="flex items-center justify-between text-sm p-2 bg-muted rounded"
+                            >
+                              <span>{team?.team_name || "Unknown Team"}</span>
+                              <span className="font-medium">${bid.bid_amount}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             )}
           </div>
 
           <div className="space-y-6">
-            <Card className="auction-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-primary" />
-                  Team Budgets
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {teams.map((team) => (
-                  <div
-                    key={team.id}
-                    className={`p-3 rounded-lg border ${
-                      team.team_captain === currentUserId ? "auction-bid-active" : "bg-card"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm">{team.team_name}</h4>
-                      <Badge variant="outline" className="text-xs">
-                        {team.captain_username}
-                      </Badge>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Budget</span>
-                        <span className="font-medium">${team.budget_remaining}</span>
+            {teams.length > 0 && (
+              <Card className="auction-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-primary" />
+                    Team Budgets
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {teams.map((team) => (
+                    <div
+                      key={team.id}
+                      className={`p-3 rounded-lg border ${
+                        team.team_captain === currentUserId ? "auction-bid-active" : "bg-card"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-sm">{team.team_name}</h4>
+                        <Badge variant="outline" className="text-xs">
+                          {team.captain_username}
+                        </Badge>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Players</span>
-                        <span className="font-medium">
-                          {team.players_acquired}/{team.max_players}
-                        </span>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Budget</span>
+                          <span className="font-medium">${team.budget_remaining}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Players</span>
+                          <span className="font-medium">
+                            {team.players_acquired}/{team.max_players}
+                          </span>
+                        </div>
+                        <Progress value={(team.players_acquired / team.max_players) * 100} className="h-2" />
                       </div>
-                      <Progress value={(team.players_acquired / team.max_players) * 100} className="h-2" />
                     </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="auction-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-primary" />
-                  All Players Available
+                  Player Pool
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {playerPool.map((player) => (
+                  {playerPool.slice(0, 10).map((player) => (
                     <div key={player.id} className="flex items-center justify-between p-2 rounded bg-muted">
                       <div>
                         <p className="font-medium text-sm">{player.username}</p>
                         <p className="text-xs text-muted-foreground">{player.elo_rating} ELO</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          {player.elo_rating}
-                        </Badge>
-                        {(isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") && (
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                            <Crown className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {player.elo_rating}
+                      </Badge>
                     </div>
                   ))}
+                  {playerPool.length > 10 && (
+                    <p className="text-xs text-muted-foreground text-center pt-2">
+                      +{playerPool.length - 10} more players
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
