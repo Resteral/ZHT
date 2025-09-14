@@ -159,28 +159,27 @@ export default function TournamentLobbyPage() {
       console.log("[v0] Initiating captain selection and draft phase...")
 
       const settings = tournament.player_pool_settings
-      const numTeams = settings?.num_teams || settings?.max_teams || 4
+      const numTeams = settings?.num_teams || 4
       const playersPerTeam = settings?.players_per_team || 4
       const captainMethod = settings?.captain_selection_method || "highest_elo"
 
       console.log("[v0] Tournament settings:", { numTeams, playersPerTeam, captainMethod })
 
-      // Select captains based on method
-      let captains = []
-      if (captainMethod === "highest_elo") {
-        // Sort by ELO and take top players as captains
-        const sortedPlayers = [...players].sort((a, b) => b.elo_rating - a.elo_rating)
-        captains = sortedPlayers.slice(0, numTeams)
-      } else if (captainMethod === "random") {
-        // Randomly select captains
-        const shuffled = [...players].sort(() => Math.random() - 0.5)
-        captains = shuffled.slice(0, numTeams)
+      const { captainSelectionService } = await import("@/lib/services/captain-selection-service")
+
+      let captainResult
+      if (captainMethod === "random") {
+        captainResult = await captainSelectionService.selectCaptainsRandomly(tournamentId)
       } else {
-        // Creator choice - use highest ELO as fallback
-        const sortedPlayers = [...players].sort((a, b) => b.elo_rating - a.elo_rating)
-        captains = sortedPlayers.slice(0, numTeams)
+        captainResult = await captainSelectionService.selectCaptainsAutomatically(tournamentId)
       }
 
+      if (!captainResult.success) {
+        console.error("[v0] Captain selection failed:", captainResult.message)
+        return
+      }
+
+      const captains = captainResult.captains
       const totalPlayersNeeded = numTeams * playersPerTeam
       const selectedPlayers = players.slice(0, totalPlayersNeeded)
       const excessPlayers = players.slice(totalPlayersNeeded)
@@ -209,18 +208,6 @@ export default function TournamentLobbyPage() {
 
       if (teamsError) throw teamsError
 
-      for (let i = 0; i < captains.length; i++) {
-        await supabase
-          .from("tournament_player_pool")
-          .update({
-            status: "captain",
-            captain_type: i === 0 ? "high_elo" : "low_elo",
-          })
-          .eq("tournament_id", tournamentId)
-          .eq("user_id", captains[i].id)
-      }
-
-      // Mark remaining selected players as available for draft
       const nonCaptainPlayers = selectedPlayers.filter((p) => !captains.some((c) => c.id === p.id))
       if (nonCaptainPlayers.length > 0) {
         await supabase
@@ -233,7 +220,6 @@ export default function TournamentLobbyPage() {
           )
       }
 
-      // Remove excess players
       if (excessPlayers.length > 0) {
         await supabase
           .from("tournament_player_pool")
