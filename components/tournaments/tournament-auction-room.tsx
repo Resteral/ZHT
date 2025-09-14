@@ -267,6 +267,8 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
   const confirmStartAuction = async () => {
     try {
       console.log("[v0] Starting auction with captains:", pendingCaptains)
+      console.log("[v0] Tournament ID:", tournamentId)
+      console.log("[v0] Current User ID:", currentUserId)
 
       const response = await fetch(`/api/tournaments/${tournamentId}/auction`, {
         method: "POST",
@@ -278,13 +280,17 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
         }),
       })
 
+      console.log("[v0] API Response status:", response.status)
+
       if (response.ok) {
         const data = await response.json()
+        console.log("[v0] API Response data:", data)
         toast.success("Auction started with selected captains!")
         setShowConfirmDialog(false)
         await fetchAuctionData()
       } else {
         const error = await response.json()
+        console.error("[v0] API Error response:", error)
         toast.error(error.error || "Failed to start auction")
       }
     } catch (error) {

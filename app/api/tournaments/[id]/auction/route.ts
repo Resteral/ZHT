@@ -139,6 +139,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { captainIds, userId } = body
 
       console.log("[v0] Starting auction with captains:", captainIds)
+      console.log("[v0] Tournament ID:", params.id)
+      console.log("[v0] User ID:", userId)
 
       // Load tournament settings
       const { data: tournament, error: tournamentError } = await supabase
@@ -147,13 +149,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         .eq("id", params.id)
         .single()
 
-      if (tournamentError) throw tournamentError
+      if (tournamentError) {
+        console.error("[v0] Tournament error:", tournamentError)
+        throw tournamentError
+      }
+
+      console.log("[v0] Tournament settings loaded:", tournament)
 
       const settings = tournament.player_pool_settings || {}
       const auctionBudget = settings.auction_budget || 500
       const playersPerTeam = settings.players_per_team || 4
 
+      console.log("[v0] Auction settings:", { auctionBudget, playersPerTeam })
+
       const teamPromises = captainIds.map(async (captainPlayerId: string, index: number) => {
+        console.log("[v0] Processing captain:", captainPlayerId)
+
         // Get captain player info from tournament_player_pool
         const { data: captainPlayer, error: playerError } = await supabase
           .from("tournament_player_pool")
@@ -170,6 +181,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           console.error("[v0] Error fetching captain player:", playerError)
           throw playerError
         }
+
+        console.log("[v0] Captain player data:", captainPlayer)
 
         const teamName = `Team ${captainPlayer.users?.username || index + 1}`
 
@@ -192,6 +205,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           throw teamError
         }
 
+        console.log("[v0] Team created:", team)
+
         // Update player status to captain using the player pool ID
         const { error: statusError } = await supabase
           .from("tournament_player_pool")
@@ -207,10 +222,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           throw statusError
         }
 
+        console.log("[v0] Player status updated to captain")
+
         return team
       })
 
       const teams = await Promise.all(teamPromises)
+      console.log("[v0] All teams created:", teams.length)
 
       // Get first available non-captain player for auction
       const { data: firstPlayer } = await supabase
@@ -220,6 +238,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         .eq("status", "available")
         .limit(1)
         .single()
+
+      console.log("[v0] First available player:", firstPlayer)
 
       // Create auction session
       const { data: session, error: sessionError } = await supabase
@@ -241,6 +261,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         throw sessionError
       }
 
+      console.log("[v0] Auction session created:", session)
+
       // Update tournament status to drafting
       const { error: statusError } = await supabase
         .from("tournaments")
@@ -249,8 +271,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       if (statusError) {
         console.error("[v0] Error updating tournament status:", statusError)
+      } else {
+        console.log("[v0] Tournament status updated to drafting")
       }
 
+      console.log("[v0] Auction start completed successfully")
       return NextResponse.json({ success: true, session, teams })
     }
 
