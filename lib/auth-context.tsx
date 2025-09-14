@@ -2,14 +2,17 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 interface User {
-  id: string // Back to using UUID as primary identifier
+  id: string // Supabase UUID as primary identifier
   username: string
   account_id: string
   balance: number
   elo_rating: number
   created_at: string
+  role?: string // Added role field for permissions
+  email?: string // Added email from Supabase auth
 }
 
 interface AuthContextType {
@@ -19,125 +22,195 @@ interface AuthContextType {
   isLoading: boolean
   refreshUser: () => Promise<void>
   isAuthenticated: boolean
+  supabaseUser: SupabaseUser | null // Added Supabase user for session management
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const supabase = createClient()
 
-  const validateAndRefreshSession = async (storedUser: User) => {
+  const validateAndRefreshSession = async (storedUser?: User) => {
     try {
-      const supabase = createClient()
-      let query = supabase.from("users").select("*")
+      // First check Supabase session
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
 
-      if (storedUser.id && storedUser.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-        query = query.eq("id", storedUser.id)
-      } else if (storedUser.account_id) {
-        query = query.eq("account_id", storedUser.account_id)
-      } else {
-        query = query.eq("username", storedUser.username)
-      }
-
-      const { data, error } = await query.single()
-
-      if (error || !data) {
+      if (sessionError) {
+        console.error("[v0] Supabase session error:", sessionError)
         localStorage.removeItem("fantasy_user")
         setUser(null)
+        setSupabaseUser(null)
         return false
       }
 
-      const updatedUser = {
-        id: data.id, // Use actual UUID from database
+      if (!session?.user) {
+        console.log("[v0] No active Supabase session")
+        localStorage.removeItem("fantasy_user")
+        setUser(null)
+        setSupabaseUser(null)
+        return false
+      }
+
+      setSupabaseUser(session.user)
+
+      // Now get user data from our database using Supabase user ID
+      let { data, error } = await supabase.from("users").select("*").eq("id", session.user.id).single()
+
+      if (error || !data) {
+        console.error("[v0] User not found in database:", error)
+        // Try to create user record if it doesn't exist
+        if (session.user.email) {
+          const newUser = {
+            id: session.user.id,
+            username: session.user.user_metadata?.username || session.user.email.split("@")[0],
+            email: session.user.email,
+            account_id: session.user.id, // Use Supabase ID as account_id
+            balance: 1000,
+            elo_rating: 1200,
+            role: "user",
+          }
+
+          const { data: createdUser, error: createError } = await supabase
+            .from("users")
+            .insert(newUser)
+            .select()
+            .single()
+
+          if (createError) {
+            console.error("[v0] Error creating user:", createError)
+            return false
+          }
+
+          data = createdUser
+        } else {
+          return false
+        }
+      }
+
+      const updatedUser: User = {
+        id: data.id,
         username: data.username,
         account_id: data.account_id,
         balance: data.balance,
         elo_rating: data.elo_rating,
         created_at: data.created_at,
+        role: data.role || "user",
+        email: session.user.email,
       }
+
+      console.log("[v0] User authenticated:", {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        role: updatedUser.role,
+      })
 
       setUser(updatedUser)
       localStorage.setItem("fantasy_user", JSON.stringify(updatedUser))
       return true
     } catch (error) {
-      console.error("Error validating session:", error)
+      console.error("[v0] Error validating session:", error)
       localStorage.removeItem("fantasy_user")
       setUser(null)
+      setSupabaseUser(null)
       return false
     }
   }
 
   const refreshUser = useCallback(async () => {
-    if (!user) return
+    if (!supabaseUser) return
 
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase.from("users").select("*").eq("id", user.id).single()
+      const { data, error } = await supabase.from("users").select("*").eq("id", supabaseUser.id).single()
 
       if (!error && data) {
-        const updatedUser = {
-          id: data.id, // Keep using UUID
+        const updatedUser: User = {
+          id: data.id,
           username: data.username,
           account_id: data.account_id,
           balance: data.balance,
           elo_rating: data.elo_rating,
           created_at: data.created_at,
+          role: data.role || "user",
+          email: supabaseUser.email,
         }
         setUser(updatedUser)
         localStorage.setItem("fantasy_user", JSON.stringify(updatedUser))
+        console.log("[v0] User refreshed:", { id: updatedUser.id, username: updatedUser.username })
       }
     } catch (error) {
-      console.error("Error refreshing user:", error)
+      console.error("[v0] Error refreshing user:", error)
     }
-  }, [user])
+  }, [supabaseUser, supabase])
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const storedUser = localStorage.getItem("fantasy_user")
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser)
-          await validateAndRefreshSession(parsedUser)
-        } catch (error) {
-          console.error("Error parsing stored user:", error)
-          localStorage.removeItem("fantasy_user")
-        }
-      }
+      console.log("[v0] Initializing auth...")
+
+      // Check for existing session first
+      await validateAndRefreshSession()
+
       setIsLoading(false)
     }
 
     initializeAuth()
-  }, [])
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("[v0] Auth state changed:", event, session?.user?.id || "none")
+
+      if (event === "SIGNED_OUT" || !session) {
+        setUser(null)
+        setSupabaseUser(null)
+        localStorage.removeItem("fantasy_user")
+      } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        await validateAndRefreshSession()
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase.auth])
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !supabaseUser) return
 
     const interval = setInterval(
       () => {
         refreshUser()
       },
       5 * 60 * 1000,
-    )
+    ) // Refresh every 5 minutes
 
     return () => clearInterval(interval)
-  }, [user, refreshUser])
+  }, [user, supabaseUser, refreshUser])
 
-  const isAuthenticated = !!user && !isLoading
+  const isAuthenticated = !!user && !!supabaseUser && !isLoading
 
   const login = useCallback((userData: User) => {
-    const userWithUUID = {
-      ...userData,
-      id: userData.id, // Keep the UUID as primary identifier
-    }
-    setUser(userWithUUID)
-    localStorage.setItem("fantasy_user", JSON.stringify(userWithUUID))
+    console.log("[v0] Manual login:", userData.username)
+    setUser(userData)
+    localStorage.setItem("fantasy_user", JSON.stringify(userData))
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    console.log("[v0] Logging out...")
+    try {
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error("[v0] Error signing out:", error)
+    }
     setUser(null)
+    setSupabaseUser(null)
     localStorage.removeItem("fantasy_user")
-  }, [])
+  }, [supabase.auth])
 
   return (
     <AuthContext.Provider
@@ -148,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         refreshUser,
         isAuthenticated,
+        supabaseUser,
       }}
     >
       {children}

@@ -17,9 +17,10 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Users, Crown, Target, Trophy, ArrowLeft, Play, DollarSign, Gavel, Settings } from "lucide-react"
-import { useAuth } from "@/lib/hooks/use-auth"
+import { useAuth } from "@/lib/auth-context" // Updated to use consolidated auth context
 import { createClient } from "@/lib/supabase/client"
 import { captainSelectionService } from "@/lib/services/captain-selection-service"
+import PermissionGuard from "@/components/auth/permission-guard" // Added permission guard
 
 interface Team {
   id: string
@@ -44,7 +45,7 @@ interface Player {
 }
 
 export default function TournamentDraftPage() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, supabaseUser } = useAuth() // Updated to use consolidated auth
   const router = useRouter()
   const params = useParams()
   const tournamentId = params.id as string
@@ -65,23 +66,22 @@ export default function TournamentDraftPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    loadTournamentData()
-  }, [tournamentId])
-
-  useEffect(() => {
-    if (draftStarted && bidTimer > 0) {
-      const timer = setTimeout(() => setBidTimer(bidTimer - 1), 1000)
-      return () => clearTimeout(timer)
-    } else if (bidTimer === 0 && currentPlayer) {
-      handleBidTimeout()
+    if (isAuthenticated && user && supabaseUser) {
+      // Enhanced authentication check
+      loadTournamentData()
     }
-  }, [bidTimer, draftStarted, currentPlayer])
+  }, [tournamentId, user, isAuthenticated, supabaseUser]) // Updated dependencies
 
   const loadTournamentData = async () => {
     try {
       setLoading(true)
       console.log("[v0] Loading tournament draft data for:", tournamentId)
-      console.log("[v0] Current user ID:", user?.id)
+      console.log("[v0] Current user:", {
+        id: user?.id,
+        username: user?.username,
+        role: user?.role,
+        supabaseId: supabaseUser?.id,
+      }) // Enhanced user logging
 
       const { data: tournamentData, error: tournamentError } = await supabase
         .from("tournaments")
@@ -303,10 +303,19 @@ export default function TournamentDraftPage() {
   }
 
   const placeBid = async (teamId: string, amount: number) => {
-    if (!currentPlayer || !user) return
+    if (!currentPlayer || !user || !supabaseUser) return // Added supabaseUser check
 
     try {
-      console.log("[v0] Attempting to place bid - User ID:", user.id, "Team ID:", teamId, "Amount:", amount)
+      console.log(
+        "[v0] Attempting to place bid - User ID:",
+        user.id,
+        "Supabase ID:",
+        supabaseUser.id,
+        "Team ID:",
+        teamId,
+        "Amount:",
+        amount,
+      ) // Enhanced logging
 
       const team = teams.find((t) => t.id === teamId)
       if (!team) {
@@ -315,8 +324,15 @@ export default function TournamentDraftPage() {
         return
       }
 
-      if (team.team_captain !== user.id) {
-        console.error("[v0] User is not captain of this team. User ID:", user.id, "Team Captain:", team.team_captain)
+      if (team.team_captain !== user.id && team.team_captain !== supabaseUser.id) {
+        console.error(
+          "[v0] User is not captain of this team. User ID:",
+          user.id,
+          "Supabase ID:",
+          supabaseUser.id,
+          "Team Captain:",
+          team.team_captain,
+        )
         setError("You are not the captain of this team")
         return
       }
@@ -495,12 +511,13 @@ export default function TournamentDraftPage() {
     )
   }
 
-  const isUserCaptain = teams.some((team) => team.team_captain === user?.id)
-  const userTeam = teams.find((team) => team.team_captain === user?.id)
-  const draftMode = tournament.player_pool_settings?.draft_mode || "auction_draft"
-  const isHost = user?.id === tournament.created_by
+  const isUserCaptain = teams.some((team) => team.team_captain === user?.id || team.team_captain === supabaseUser?.id)
+  const userTeam = teams.find((team) => team.team_captain === user?.id || team.team_captain === supabaseUser?.id)
+  const draftMode = tournament?.player_pool_settings?.draft_mode || "auction_draft"
+  const isHost = user?.id === tournament?.created_by || supabaseUser?.id === tournament?.created_by
 
   console.log("[v0] Captain status check - User ID:", user?.id)
+  console.log("[v0] Supabase User ID:", supabaseUser?.id) // Added Supabase user ID logging
   console.log("[v0] Is user captain:", isUserCaptain)
   console.log("[v0] User team:", userTeam?.team_name || "None")
   console.log(
@@ -509,363 +526,375 @@ export default function TournamentDraftPage() {
   )
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Button variant="ghost" size="sm" onClick={() => router.push(`/tournaments/${tournamentId}/lobby`)}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Lobby
-            </Button>
-          </div>
-          <div className="flex items-center gap-3">
-            <Trophy className="h-8 w-8 text-purple-500" />
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">{tournament.name}</h1>
-              <p className="text-lg text-muted-foreground">
-                {draftMode === "auction_draft" ? "Auction Draft" : "Snake Draft"} Room
-              </p>
+    <PermissionGuard tournamentId={tournamentId} requiredRole="user">
+      <div className="container mx-auto py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Button variant="ghost" size="sm" onClick={() => router.push(`/tournaments/${tournamentId}/lobby`)}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Lobby
+              </Button>
             </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="capitalize">
-            {tournament.status.replace("_", " ")}
-          </Badge>
-          <Badge variant="secondary">{teams.length} Teams</Badge>
-          {isHost && <Badge variant="default">Host</Badge>}
-        </div>
-      </div>
-
-      {draftStarted && currentPlayer && (
-        <Card className="border-yellow-500/20 bg-yellow-500/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Gavel className="h-5 w-5 text-yellow-500" />
-              Current Auction - {bidTimer}s remaining
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-12 w-12">
-                  <AvatarFallback>{currentPlayer.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-bold text-lg">{currentPlayer.username}</p>
-                  <p className="text-sm text-muted-foreground">ELO: {currentPlayer.elo_rating}</p>
-                  {currentPlayer.is_captain && (
-                    <Badge variant="outline" className="text-xs mt-1">
-                      <Crown className="h-3 w-3 mr-1" />
-                      Captain
-                    </Badge>
-                  )}
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold text-green-700">${currentPlayer.current_bid || 0}</p>
-                <p className="text-sm text-muted-foreground">
-                  {currentPlayer.highest_bidder
-                    ? `Leading: ${teams.find((t) => t.id === currentPlayer.highest_bidder)?.team_name}`
-                    : "No bids yet"}
+            <div className="flex items-center gap-3">
+              <Trophy className="h-8 w-8 text-purple-500" />
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">{tournament.name}</h1>
+                <p className="text-lg text-muted-foreground">
+                  {draftMode === "auction_draft" ? "Auction Draft" : "Snake Draft"} Room
                 </p>
               </div>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="capitalize">
+              {tournament.status.replace("_", " ")}
+            </Badge>
+            <Badge variant="secondary">{teams.length} Teams</Badge>
+            {isHost && <Badge variant="default">Host</Badge>}
+          </div>
+        </div>
 
-            <div className="mt-4 space-y-3">
-              {isHost && (
-                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <span className="text-sm font-medium text-blue-800">Host Controls:</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={1000}
-                    placeholder="Set price"
-                    className="w-24"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        const value = Number.parseInt((e.target as HTMLInputElement).value) || 0
-                        updatePlayerPrice(currentPlayer.user_id, value)
-                        ;(e.target as HTMLInputElement).value = ""
-                      }
-                    }}
-                  />
-                  <span className="text-xs text-blue-600">Press Enter to set price</span>
+        {draftStarted && currentPlayer && (
+          <Card className="border-yellow-500/20 bg-yellow-500/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Gavel className="h-5 w-5 text-yellow-500" />
+                Current Auction - {bidTimer}s remaining
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-12 w-12">
+                    <AvatarFallback>{currentPlayer.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-bold text-lg">{currentPlayer.username}</p>
+                    <p className="text-sm text-muted-foreground">ELO: {currentPlayer.elo_rating}</p>
+                    {currentPlayer.is_captain && (
+                      <Badge variant="outline" className="text-xs mt-1">
+                        <Crown className="h-3 w-3 mr-1" />
+                        Captain
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-              )}
-
-              {isUserCaptain && userTeam && (
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={Math.max(1, (currentPlayer.current_bid || 0) + 1)}
-                    max={userTeam.budget_remaining}
-                    value={bidAmount}
-                    onChange={(e) => setBidAmount(Number.parseInt(e.target.value) || 1)}
-                    className="w-24"
-                  />
-                  <Button
-                    onClick={() => placeBid(userTeam.id, bidAmount)}
-                    disabled={bidAmount <= (currentPlayer.current_bid || 0) || bidAmount > userTeam.budget_remaining}
-                  >
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Bid ${bidAmount}
-                  </Button>
-                  <p className="text-sm text-muted-foreground">Budget: ${userTeam.budget_remaining}</p>
-                </div>
-              )}
-
-              {!isUserCaptain && (
-                <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-                  <p className="text-red-800 font-medium">Debug: You are not recognized as a captain</p>
-                  <p className="text-xs text-red-600 mt-1">
-                    Your ID: {user?.id} | Teams: {teams.map((t) => `${t.team_name}(${t.team_captain})`).join(", ")}
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-green-700">${currentPlayer.current_bid || 0}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {currentPlayer.highest_bidder
+                      ? `Leading: ${teams.find((t) => t.id === currentPlayer.highest_bidder)?.team_name}`
+                      : "No bids yet"}
                   </p>
                 </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {isHost && (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <span className="text-sm font-medium text-blue-800">Host Controls:</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1000}
+                      placeholder="Set price"
+                      className="w-24"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const value = Number.parseInt((e.target as HTMLInputElement).value) || 0
+                          updatePlayerPrice(currentPlayer.user_id, value)
+                          ;(e.target as HTMLInputElement).value = ""
+                        }
+                      }}
+                    />
+                    <span className="text-xs text-blue-600">Press Enter to set price</span>
+                  </div>
+                )}
+
+                {isUserCaptain && userTeam && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={Math.max(1, (currentPlayer.current_bid || 0) + 1)}
+                      max={userTeam.budget_remaining}
+                      value={bidAmount}
+                      onChange={(e) => setBidAmount(Number.parseInt(e.target.value) || 1)}
+                      className="w-24"
+                    />
+                    <Button
+                      onClick={() => placeBid(userTeam.id, bidAmount)}
+                      disabled={bidAmount <= (currentPlayer.current_bid || 0) || bidAmount > userTeam.budget_remaining}
+                    >
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Bid ${bidAmount}
+                    </Button>
+                    <p className="text-sm text-muted-foreground">Budget: ${userTeam.budget_remaining}</p>
+                  </div>
+                )}
+
+                {!isUserCaptain && (
+                  <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                    <p className="text-red-800 font-medium">Debug: You are not recognized as a captain</p>
+                    <p className="text-xs text-red-600 mt-1">
+                      Your ID: {user?.id} | Teams: {teams.map((t) => `${t.team_name}(${t.team_captain})`).join(", ")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="border-green-500/20 bg-green-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-green-500" />
+              Team Captains & Budgets
+            </CardTitle>
+            <CardDescription>
+              {teams.length} teams ready for {draftMode === "auction_draft" ? "auction" : "snake"} draft
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {teams.map((team) => (
+                <div key={team.id} className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
+                  <Avatar className="h-10 w-10">
+                    {team.logo_url ? (
+                      <img
+                        src={team.logo_url || "/placeholder.svg"}
+                        alt={team.team_name}
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : (
+                      <AvatarFallback>{team.captain_username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{team.team_name}</p>
+                      {team.team_captain === user?.id && (
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => {
+                                setCustomizingTeam(team)
+                                setNewTeamName(team.team_name)
+                                setNewTeamLogo(team.logo_url || "")
+                              }}
+                            >
+                              <Settings className="h-3 w-3" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Customize Your Team</DialogTitle>
+                              <DialogDescription>Update your team name and logo</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div>
+                                <Label htmlFor="team-name">Team Name</Label>
+                                <Input
+                                  id="team-name"
+                                  value={newTeamName}
+                                  onChange={(e) => setNewTeamName(e.target.value)}
+                                  placeholder="Enter team name"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="team-logo">Team Logo URL</Label>
+                                <Input
+                                  id="team-logo"
+                                  value={newTeamLogo}
+                                  onChange={(e) => setNewTeamLogo(e.target.value)}
+                                  placeholder="Enter logo URL or leave blank for default"
+                                />
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setCustomizingTeam(null)
+                                    setNewTeamName("")
+                                    setNewTeamLogo("")
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  onClick={() => updateTeamCustomization(team.id, newTeamName, newTeamLogo)}
+                                  disabled={!newTeamName.trim()}
+                                >
+                                  Save Changes
+                                </Button>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Crown className="h-3 w-3" />
+                      <span>{team.captain_username}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {team.captain_elo} ELO
+                      </Badge>
+                    </div>
+                    {draftMode === "auction_draft" && (
+                      <p className="text-sm font-medium text-green-700">Budget: ${team.budget_remaining}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">Players: {team.players.length}</p>
+                  </div>
+                  {team.team_captain === user?.id && <Badge variant="default">You</Badge>}
+                </div>
+              ))}
+            </div>
+
+            {isUserCaptain && !draftStarted && (
+              <div className="mt-6">
+                <Button onClick={startDraft} className="w-full" size="lg">
+                  <Play className="h-4 w-4 mr-2" />
+                  Start {draftMode === "auction_draft" ? "Auction" : "Snake"} Draft
+                </Button>
+              </div>
+            )}
+
+            {!isUserCaptain && !isHost && (
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-blue-800 font-medium">You are not a team captain</p>
+                <p className="text-sm text-blue-600 mt-1">
+                  Wait for captains to complete the draft, then you'll be assigned to a team
+                </p>
+                <details className="mt-2">
+                  <summary className="text-xs text-blue-500 cursor-pointer">Debug Info</summary>
+                  <div className="text-xs text-blue-600 mt-1 space-y-1">
+                    <p>Your User ID: {user?.id}</p>
+                    <p>Your Supabase ID: {supabaseUser?.id}</p>
+                    <p>Teams: {teams.map((t) => `${t.team_name}(${t.team_captain})`).join(", ")}</p>
+                    <p>Is Authenticated: {isAuthenticated ? "Yes" : "No"}</p>
+                    <p>User Role: {user?.role || "Unknown"}</p>
+                  </div>
+                </details>
+              </div>
+            )}
+
+            {isHost && !isUserCaptain && !draftStarted && (
+              <div className="mt-6">
+                <Button onClick={startDraft} className="w-full bg-transparent" size="lg" variant="outline">
+                  <Play className="h-4 w-4 mr-2" />
+                  Start Draft (Host Override)
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-500" />
+              Available Players ({playerPool.length})
+            </CardTitle>
+            <CardDescription>
+              Players available for drafting (captains are automatically assigned to their own teams and cannot be
+              drafted by others)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2">
+              {playerPool
+                .sort((a, b) => b.elo_rating - a.elo_rating)
+                .map((player, index) => (
+                  <div
+                    key={player.user_id}
+                    className={`flex items-center gap-3 p-3 border rounded-lg ${
+                      currentPlayer?.user_id === player.user_id ? "border-yellow-500 bg-yellow-50" : ""
+                    }`}
+                  >
+                    <Badge variant="secondary" className="min-w-[2rem]">
+                      #{index + 1}
+                    </Badge>
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-xs">{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm">{player.username}</p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Target className="h-3 w-3" />
+                        <span>ELO: {player.elo_rating}</span>
+                      </div>
+                    </div>
+                    {player.user_id === user?.id && (
+                      <Badge variant="outline" className="text-xs">
+                        You
+                      </Badge>
+                    )}
+                    {currentPlayer?.user_id === player.user_id && (
+                      <Badge variant="default" className="text-xs">
+                        Current
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+            </div>
+
+            {playerPool.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No players available for drafting</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-purple-500/20 bg-purple-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-purple-500" />
+              Draft Instructions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <p>
+                <strong>Draft Format:</strong> {draftMode === "auction_draft" ? "Auction Draft" : "Snake Draft"}
+              </p>
+              <p>
+                <strong>Teams:</strong> {teams.length} teams with{" "}
+                {tournament.player_pool_settings?.players_per_team || 4} players each
+              </p>
+              <p>
+                <strong>Available Players:</strong> {playerPool.length} players ready to be drafted
+              </p>
+              <p>
+                <strong>Team Captains:</strong> Captains are automatically assigned to their own teams and cannot be
+                drafted by others
+              </p>
+              {draftMode === "auction_draft" && (
+                <>
+                  <p>
+                    <strong>Budget:</strong> Each team has $1000 to spend
+                  </p>
+                  <p>
+                    <strong>Bidding:</strong> Teams bid on players with 30-second timer per player
+                  </p>
+                  {isHost && (
+                    <p>
+                      <strong>Host Controls:</strong> As the host, you can set player prices during the auction
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </CardContent>
         </Card>
-      )}
-
-      <Card className="border-green-500/20 bg-green-500/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Crown className="h-5 w-5 text-green-500" />
-            Team Captains & Budgets
-          </CardTitle>
-          <CardDescription>
-            {teams.length} teams ready for {draftMode === "auction_draft" ? "auction" : "snake"} draft
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {teams.map((team) => (
-              <div key={team.id} className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                <Avatar className="h-10 w-10">
-                  {team.logo_url ? (
-                    <img
-                      src={team.logo_url || "/placeholder.svg"}
-                      alt={team.team_name}
-                      className="w-full h-full object-cover rounded-full"
-                    />
-                  ) : (
-                    <AvatarFallback>{team.captain_username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                  )}
-                </Avatar>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{team.team_name}</p>
-                    {team.team_captain === user?.id && (
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => {
-                              setCustomizingTeam(team)
-                              setNewTeamName(team.team_name)
-                              setNewTeamLogo(team.logo_url || "")
-                            }}
-                          >
-                            <Settings className="h-3 w-3" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Customize Your Team</DialogTitle>
-                            <DialogDescription>Update your team name and logo</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label htmlFor="team-name">Team Name</Label>
-                              <Input
-                                id="team-name"
-                                value={newTeamName}
-                                onChange={(e) => setNewTeamName(e.target.value)}
-                                placeholder="Enter team name"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="team-logo">Team Logo URL</Label>
-                              <Input
-                                id="team-logo"
-                                value={newTeamLogo}
-                                onChange={(e) => setNewTeamLogo(e.target.value)}
-                                placeholder="Enter logo URL or leave blank for default"
-                              />
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => {
-                                  setCustomizingTeam(null)
-                                  setNewTeamName("")
-                                  setNewTeamLogo("")
-                                }}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                onClick={() => updateTeamCustomization(team.id, newTeamName, newTeamLogo)}
-                                disabled={!newTeamName.trim()}
-                              >
-                                Save Changes
-                              </Button>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Crown className="h-3 w-3" />
-                    <span>{team.captain_username}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {team.captain_elo} ELO
-                    </Badge>
-                  </div>
-                  {draftMode === "auction_draft" && (
-                    <p className="text-sm font-medium text-green-700">Budget: ${team.budget_remaining}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">Players: {team.players.length}</p>
-                </div>
-                {team.team_captain === user?.id && <Badge variant="default">You</Badge>}
-              </div>
-            ))}
-          </div>
-
-          {isUserCaptain && !draftStarted && (
-            <div className="mt-6">
-              <Button onClick={startDraft} className="w-full" size="lg">
-                <Play className="h-4 w-4 mr-2" />
-                Start {draftMode === "auction_draft" ? "Auction" : "Snake"} Draft
-              </Button>
-            </div>
-          )}
-
-          {!isUserCaptain && !isHost && (
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-blue-800 font-medium">You are not a team captain</p>
-              <p className="text-sm text-blue-600 mt-1">
-                Wait for captains to complete the draft, then you'll be assigned to a team
-              </p>
-            </div>
-          )}
-
-          {isHost && !isUserCaptain && !draftStarted && (
-            <div className="mt-6">
-              <Button onClick={startDraft} className="w-full bg-transparent" size="lg" variant="outline">
-                <Play className="h-4 w-4 mr-2" />
-                Start Draft (Host Override)
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-blue-500" />
-            Available Players ({playerPool.length})
-          </CardTitle>
-          <CardDescription>
-            Players available for drafting (captains are automatically assigned to their own teams and cannot be drafted
-            by others)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-2">
-            {playerPool
-              .sort((a, b) => b.elo_rating - a.elo_rating)
-              .map((player, index) => (
-                <div
-                  key={player.user_id}
-                  className={`flex items-center gap-3 p-3 border rounded-lg ${
-                    currentPlayer?.user_id === player.user_id ? "border-yellow-500 bg-yellow-50" : ""
-                  }`}
-                >
-                  <Badge variant="secondary" className="min-w-[2rem]">
-                    #{index + 1}
-                  </Badge>
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs">{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm">{player.username}</p>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Target className="h-3 w-3" />
-                      <span>ELO: {player.elo_rating}</span>
-                    </div>
-                  </div>
-                  {player.user_id === user?.id && (
-                    <Badge variant="outline" className="text-xs">
-                      You
-                    </Badge>
-                  )}
-                  {currentPlayer?.user_id === player.user_id && (
-                    <Badge variant="default" className="text-xs">
-                      Current
-                    </Badge>
-                  )}
-                </div>
-              ))}
-          </div>
-
-          {playerPool.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No players available for drafting</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-purple-500/20 bg-purple-500/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5 text-purple-500" />
-            Draft Instructions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm">
-            <p>
-              <strong>Draft Format:</strong> {draftMode === "auction_draft" ? "Auction Draft" : "Snake Draft"}
-            </p>
-            <p>
-              <strong>Teams:</strong> {teams.length} teams with {tournament.player_pool_settings?.players_per_team || 4}{" "}
-              players each
-            </p>
-            <p>
-              <strong>Available Players:</strong> {playerPool.length} players ready to be drafted
-            </p>
-            <p>
-              <strong>Team Captains:</strong> Captains are automatically assigned to their own teams and cannot be
-              drafted by others
-            </p>
-            {draftMode === "auction_draft" && (
-              <>
-                <p>
-                  <strong>Budget:</strong> Each team has $1000 to spend
-                </p>
-                <p>
-                  <strong>Bidding:</strong> Teams bid on players with 30-second timer per player
-                </p>
-                {isHost && (
-                  <p>
-                    <strong>Host Controls:</strong> As the host, you can set player prices during the auction
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      </div>
+    </PermissionGuard>
   )
 }
