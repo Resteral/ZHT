@@ -607,7 +607,7 @@ export function CaptainSelectionInterface({
                           <span>{captain.elo_rating} ELO</span>
                         </div>
                         <Badge variant="outline" className="text-xs">
-                          {captain.captain_type.replace("_", " ")} Captain
+                          {captain.captain_type ? captain.captain_type.replace("_", " ") : "Team"} Captain
                         </Badge>
                       </div>
                     </div>
@@ -675,7 +675,8 @@ export function CaptainSelectionInterface({
                       <div className="mt-2 space-y-1">
                         {entry.captains_selected?.map((captain: any, idx: number) => (
                           <div key={idx} className="text-xs text-muted-foreground">
-                            {captain.username} ({captain.elo_rating} ELO) - {captain.captain_type.replace("_", " ")}
+                            {captain.username} ({captain.elo_rating} ELO) -{" "}
+                            {captain.captain_type ? captain.captain_type.replace("_", " ") : "Team"}
                           </div>
                         ))}
                       </div>
@@ -711,5 +712,5 @@ interface Captain {
   id: string
   username: string
   elo_rating: number
-  captain_type: "high_elo" | "low_elo"
+  captain_type: "high_elo" | "low_elo" | null
 }
