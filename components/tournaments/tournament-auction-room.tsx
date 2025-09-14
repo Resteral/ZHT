@@ -1,25 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { Clock, DollarSign, Users, Trophy, Gavel, Wifi, WifiOff, Crown, Shuffle, TrendingUp } from "lucide-react"
+import { Clock, DollarSign, Users, Trophy, Gavel, Wifi, WifiOff } from "lucide-react"
 import { useAuctionRealtime } from "@/hooks/use-auction-realtime"
 import { toast } from "sonner"
 
@@ -54,13 +42,6 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
   const [timeRemaining, setTimeRemaining] = useState<number>(30)
   const [loading, setLoading] = useState(true)
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
-  const [selectedCaptains, setSelectedCaptains] = useState<string[]>([])
-  const [tournamentSettings, setTournamentSettings] = useState<any>(null)
-  const [requiredTeams, setRequiredTeams] = useState<number>(3)
-  const [captainSelectionMethod, setCaptainSelectionMethod] = useState<string>("manual")
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [pendingCaptains, setPendingCaptains] = useState<string[]>([])
-  const [isStartingAuction, setIsStartingAuction] = useState(false)
 
   const {
     auctionSession,
@@ -135,14 +116,6 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
       if (response.ok) {
         const data = await response.json()
 
-        if (data.tournamentSettings) {
-          setTournamentSettings(data.tournamentSettings)
-          const numTeams =
-            data.tournamentSettings.player_pool_settings?.num_teams || data.tournamentSettings.num_teams || 3
-          setRequiredTeams(numTeams)
-          console.log("[v0] Required teams from settings:", numTeams)
-        }
-
         if (data.auctionSession) {
           setAuctionSession(data.auctionSession)
           setTimeRemaining(data.auctionSession.bid_timer_seconds || 30)
@@ -174,138 +147,12 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
           console.log("[v0] Player pool size:", formattedPlayers.length)
         }
       } else {
-        console.log("[v0] No auction session found, initializing for captain selection")
-        await loadPlayerPoolForCaptainSelection()
+        console.log("[v0] No auction session found")
       }
     } catch (error) {
       console.error("[v0] Error fetching auction data:", error)
-      await loadPlayerPoolForCaptainSelection()
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadPlayerPoolForCaptainSelection = async () => {
-    try {
-      const response = await fetch(`/api/tournaments/${tournamentId}/players`)
-      if (response.ok) {
-        const data = await response.json()
-
-        if (data.tournament?.player_pool_settings) {
-          setTournamentSettings(data.tournament)
-          const numTeams = data.tournament.player_pool_settings.num_teams || data.tournament.num_teams || 3
-          setRequiredTeams(numTeams)
-          console.log("[v0] Required teams from tournament:", numTeams)
-        }
-
-        if (data.players) {
-          const formattedPlayers = data.players.map((player: any) => ({
-            id: player.id,
-            username: player.users?.username || "Unknown Player",
-            elo_rating: player.users?.elo_rating || 1000,
-            position: "Player",
-          }))
-          setPlayerPool(formattedPlayers)
-          console.log("[v0] Loaded player pool for captain selection:", formattedPlayers.length)
-        }
-      }
-    } catch (error) {
-      console.error("[v0] Error loading player pool:", error)
-    }
-  }
-
-  const handleCaptainSelection = (playerId: string) => {
-    setSelectedCaptains((prev) => {
-      if (prev.includes(playerId)) {
-        const updated = prev.filter((id) => id !== playerId)
-        console.log("[v0] Removed captain, now have:", updated.length)
-        return updated
-      } else if (prev.length < requiredTeams) {
-        const updated = [...prev, playerId]
-        console.log("[v0] Added captain, now have:", updated.length, "of", requiredTeams)
-        return updated
-      } else {
-        toast.error(`You can only select ${requiredTeams} captains`)
-      }
-      return prev
-    })
-  }
-
-  const selectCaptainsByElo = () => {
-    const sortedByElo = [...playerPool].sort((a, b) => b.elo_rating - a.elo_rating)
-    const topPlayers = sortedByElo.slice(0, requiredTeams).map((p) => p.id)
-    setSelectedCaptains(topPlayers)
-    toast.success(`Selected top ${requiredTeams} players by ELO rating`)
-  }
-
-  const selectCaptainsRandomly = () => {
-    const shuffled = [...playerPool].sort(() => Math.random() - 0.5)
-    const randomPlayers = shuffled.slice(0, requiredTeams).map((p) => p.id)
-    setSelectedCaptains(randomPlayers)
-    toast.success(`Randomly selected ${requiredTeams} captains`)
-  }
-
-  const handleCaptainSelectionMethodChange = (method: string) => {
-    setCaptainSelectionMethod(method)
-    if (method === "elo") {
-      selectCaptainsByElo()
-    } else if (method === "random") {
-      selectCaptainsRandomly()
-    } else {
-      setSelectedCaptains([])
-    }
-  }
-
-  const handleStartAuctionClick = () => {
-    if (selectedCaptains.length !== requiredTeams) {
-      toast.error(`Please select exactly ${requiredTeams} captains`)
-      return
-    }
-    setPendingCaptains(selectedCaptains)
-    setShowConfirmDialog(true)
-  }
-
-  const confirmStartAuction = async () => {
-    try {
-      setIsStartingAuction(true)
-      console.log("[v0] Starting auction with captains:", pendingCaptains)
-      console.log("[v0] Tournament ID:", tournamentId)
-      console.log("[v0] Current User ID:", currentUserId)
-
-      const response = await fetch(`/api/tournaments/${tournamentId}/auction`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "start_auction_with_captains",
-          captainIds: pendingCaptains,
-          userId: currentUserId,
-        }),
-      })
-
-      console.log("[v0] API Response status:", response.status)
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log("[v0] API Response data:", data)
-        toast.success("Auction started with selected captains!")
-        setShowConfirmDialog(false)
-        setSelectedCaptains([])
-        setPendingCaptains([])
-        setCaptainSelectionMethod("manual")
-        await fetchAuctionData()
-        setTimeout(() => {
-          fetchAuctionData()
-        }, 1000)
-      } else {
-        const error = await response.json()
-        console.error("[v0] API Error response:", error)
-        toast.error(error.error || "Failed to start auction")
-      }
-    } catch (error) {
-      console.error("[v0] Error starting auction:", error)
-      toast.error("Failed to start auction")
-    } finally {
-      setIsStartingAuction(false)
     }
   }
 
@@ -390,11 +237,6 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
   const minBid = (auctionSession?.current_bid_amount || 0) + 5
 
   const showAuctionInterface = auctionSession?.status === "active" && teams.length > 0
-  const showCaptainSelection =
-    (isOwner || currentUserId === "944b281e-89d5-46f7-b10b-2439f275e179") &&
-    teams.length === 0 &&
-    !auctionSession?.status &&
-    !isStartingAuction
 
   if (loading) {
     return (
@@ -414,11 +256,11 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold">Tournament Auction Draft</h1>
+                <h1 className="text-2xl font-bold">Tournament Auction</h1>
                 <p className="text-background/80">
                   {auctionSession?.status === "active"
                     ? `Round ${auctionSession?.auction_round || 1} of ${auctionSession?.total_rounds || 1} - Active Auction`
-                    : `Select ${requiredTeams} captains to begin auction draft`}
+                    : "Auction room"}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -444,149 +286,6 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {showCaptainSelection && (
-              <Card className="auction-card border-blue-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Crown className="h-5 w-5 text-blue-500" />
-                    Select Team Captains
-                  </CardTitle>
-                  <CardDescription>
-                    Choose {requiredTeams} captains from the player pool to lead teams in the auction draft
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="mb-4">
-                    <label className="text-sm font-medium mb-2 block">Captain Selection Method</label>
-                    <Select value={captainSelectionMethod} onValueChange={handleCaptainSelectionMethodChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose selection method" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="manual">
-                          <div className="flex items-center gap-2">
-                            <Crown className="h-4 w-4" />
-                            Manual Selection
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="elo">
-                          <div className="flex items-center gap-2">
-                            <TrendingUp className="h-4 w-4" />
-                            Highest ELO Players
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="random">
-                          <div className="flex items-center gap-2">
-                            <Shuffle className="h-4 w-4" />
-                            Random Selection
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-sm text-muted-foreground">
-                      Selected: {selectedCaptains.length} of {requiredTeams} captains
-                    </p>
-                    <Progress value={(selectedCaptains.length / requiredTeams) * 100} className="h-2 mt-2" />
-                  </div>
-
-                  <div className="grid gap-2 max-h-64 overflow-y-auto">
-                    {playerPool.map((player) => {
-                      const isSelected = selectedCaptains.includes(player.id)
-                      const showAsSelected = captainSelectionMethod !== "manual" ? isSelected : isSelected
-
-                      return (
-                        <div
-                          key={player.id}
-                          className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                            showAsSelected
-                              ? "bg-blue-50 border-blue-500 dark:bg-blue-950"
-                              : captainSelectionMethod === "manual"
-                                ? "hover:bg-muted cursor-pointer"
-                                : "bg-muted"
-                          }`}
-                          onClick={
-                            captainSelectionMethod === "manual" ? () => handleCaptainSelection(player.id) : undefined
-                          }
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{player.username}</p>
-                              <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
-                            </div>
-                          </div>
-                          {showAsSelected ? (
-                            <Badge variant="default">
-                              <Crown className="h-4 w-4 mr-1" />
-                              Captain
-                            </Badge>
-                          ) : captainSelectionMethod === "manual" ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleCaptainSelection(player.id)
-                              }}
-                            >
-                              Make Captain
-                            </Button>
-                          ) : null}
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t">
-                    <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          className="w-full"
-                          disabled={selectedCaptains.length !== requiredTeams || isStartingAuction}
-                          onClick={handleStartAuctionClick}
-                        >
-                          {isStartingAuction
-                            ? "Starting Auction..."
-                            : `Start Auction with Selected Captains (${selectedCaptains.length}/${requiredTeams})`}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Confirm Captain Selection</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to start the auction with these {pendingCaptains.length} captains?
-                            This action cannot be undone.
-                            <div className="mt-3 space-y-2">
-                              {playerPool
-                                .filter((player) => pendingCaptains.includes(player.id))
-                                .map((player) => (
-                                  <div key={player.id} className="flex items-center gap-2 text-sm">
-                                    <Crown className="h-4 w-4 text-blue-500" />
-                                    <span className="font-medium">{player.username}</span>
-                                    <span className="text-muted-foreground">({player.elo_rating} ELO)</span>
-                                  </div>
-                                ))}
-                            </div>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel disabled={isStartingAuction}>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={confirmStartAuction} disabled={isStartingAuction}>
-                            {isStartingAuction ? "Starting..." : "Start Auction"}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {showAuctionInterface && (
               <>
                 <Card className="auction-card">
@@ -720,26 +419,12 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
               </>
             )}
 
-            {isStartingAuction && (
-              <Card className="auction-card border-green-500">
-                <CardContent className="p-6 text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                  <h3 className="text-lg font-semibold mb-2">Starting Auction Draft</h3>
-                  <p className="text-muted-foreground">
-                    Creating teams with selected captains and initializing the auction...
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {!showCaptainSelection && !showAuctionInterface && !isStartingAuction && (
+            {!showAuctionInterface && (
               <Card className="auction-card">
                 <CardContent className="p-6 text-center">
-                  <h3 className="text-lg font-semibold mb-2">Auction Draft Room</h3>
+                  <h3 className="text-lg font-semibold mb-2">Auction Room</h3>
                   <p className="text-muted-foreground">
-                    {teams.length > 0
-                      ? "Waiting for auction to begin..."
-                      : "Waiting for tournament owner to start the auction draft..."}
+                    {teams.length > 0 ? "Waiting for auction to begin..." : "Waiting for auction to start..."}
                   </p>
                 </CardContent>
               </Card>

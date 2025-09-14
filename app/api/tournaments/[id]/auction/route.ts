@@ -25,10 +25,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .single()
 
     if (tournamentError) {
-      console.log("[v0] No tournament settings loaded, using fallback of 4 teams")
+      console.log("[v0] No tournament settings loaded, using fallback")
     } else {
       console.log("[v0] Loaded tournament settings:", tournament)
     }
+
+    const settings = tournament?.player_pool_settings || {}
+    const playersPerTeam = settings.players_per_team || 4
 
     const { data: auctionSession, error: sessionError } = await supabase
       .from("tournament_auction_sessions")
@@ -71,14 +74,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     if (teamsError) {
       console.error("[v0] Error fetching tournament teams:", teamsError)
+      return NextResponse.json({ error: "Failed to fetch tournament teams" }, { status: 500 })
     }
 
     let teamBudgets = []
     if (tournamentTeams && tournamentTeams.length > 0) {
-      const settings = tournament?.player_pool_settings || {}
-      const playersPerTeam = settings.players_per_team || 4
-
       const teamBudgetsPromises = tournamentTeams.map(async (team) => {
+        // Count players assigned to this team
         const { count: playersAcquired } = await supabase
           .from("tournament_player_pool")
           .select("*", { count: "exact", head: true })
@@ -93,7 +95,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             users: team.users,
           },
           current_budget: team.budget_remaining,
-          max_players: playersPerTeam,
+          max_players: playersPerTeam, // From tournament settings, not database
           players_acquired: playersAcquired || 0,
         }
       })
