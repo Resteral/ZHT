@@ -27,6 +27,7 @@ interface Player {
   username: string
   elo_rating: number
   status: string
+  captain_type: string
   current_bid?: number
   highest_bidder?: string
   is_captain?: boolean
@@ -93,6 +94,7 @@ export default function TournamentDraftPage() {
       await ensureTeamsExist(tournamentId, tournamentData)
 
       const requiredTeams = tournamentData.player_pool_settings?.num_teams || 3
+
       const { data: teamsData, error: teamsError } = await supabase
         .from("tournament_teams")
         .select(`
@@ -119,30 +121,36 @@ export default function TournamentDraftPage() {
       }))
 
       setTeams(transformedTeams)
+      console.log("[v0] Teams with captains loaded:", transformedTeams.length)
 
       const { data: poolData, error: poolError } = await supabase
         .from("tournament_player_pool")
         .select(`
           user_id,
           status,
+          captain_type,
           users(username, elo_rating)
         `)
         .eq("tournament_id", tournamentId)
-        .eq("status", "available")
+        .in("status", ["available", "drafted"]) // Include both available and drafted (captains)
         .order("created_at")
 
       if (poolError) throw poolError
 
       const captainIds = transformedTeams.map((team) => team.team_captain)
-      const transformedPlayers = (poolData || []).map((player) => ({
-        user_id: player.user_id,
-        username: player.users?.username || "Unknown",
-        elo_rating: player.users?.elo_rating || 1200,
-        status: player.status,
-        current_bid: 0,
-        highest_bidder: null,
-        is_captain: captainIds.includes(player.user_id),
-      }))
+
+      const transformedPlayers = (poolData || [])
+        .filter((player) => player.status === "available" || captainIds.includes(player.user_id)) // Include available players and captains
+        .map((player) => ({
+          user_id: player.user_id,
+          username: player.users?.username || "Unknown",
+          elo_rating: player.users?.elo_rating || 1200,
+          status: player.status,
+          captain_type: player.captain_type,
+          current_bid: 0,
+          highest_bidder: null,
+          is_captain: captainIds.includes(player.user_id),
+        }))
 
       setPlayerPool(transformedPlayers)
 
@@ -162,7 +170,6 @@ export default function TournamentDraftPage() {
     try {
       const requiredTeams = tournament.player_pool_settings?.num_teams || 3
 
-      // Get current captains
       const captains = await captainSelectionService.getCurrentCaptains(tournamentId)
       console.log("[v0] Creating teams for captains:", captains.length)
 
@@ -172,7 +179,7 @@ export default function TournamentDraftPage() {
 
       const { data: existingTeams } = await supabase
         .from("tournament_teams")
-        .select("id, team_captain")
+        .select("id, team_captain, team_name")
         .eq("tournament_id", tournamentId)
 
       const captainIds = captains.map((c) => c.id)
@@ -189,12 +196,11 @@ export default function TournamentDraftPage() {
         // Delete all existing teams for this tournament
         await supabase.from("tournament_teams").delete().eq("tournament_id", tournamentId)
 
-        // Create new teams for each captain
         const teamInserts = captains.slice(0, requiredTeams).map((captain, index) => ({
           tournament_id: tournamentId,
           team_name: `Team ${captain.username}`,
-          team_captain: captain.id,
-          budget_remaining: 1000,
+          team_captain: captain.id, // This links the captain to the team
+          budget_remaining: 1000, // Set budget to 1000 as requested
           created_at: new Date().toISOString(),
         }))
 
@@ -208,6 +214,10 @@ export default function TournamentDraftPage() {
         console.log("[v0] Successfully created", teamInserts.length, "teams with proper captains")
       } else {
         console.log("[v0] Teams already exist with correct captains:", teamsWithValidCaptains.length)
+
+        for (const team of teamsWithValidCaptains) {
+          await supabase.from("tournament_teams").update({ budget_remaining: 1000 }).eq("id", team.id)
+        }
       }
     } catch (error) {
       console.error("[v0] Error ensuring teams exist:", error)
