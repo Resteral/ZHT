@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/client"
 const supabase = createClient()
 
 export interface DraftSettings {
-  max_teams: number
+  num_teams: number
+  max_teams?: number // Keep as fallback for backward compatibility
   players_per_team: number
   draft_type: "auction" | "snake" | "linear"
   auction_budget?: number
@@ -88,6 +89,7 @@ export const tournamentDraftService = {
 
       const settings: DraftSettings = {
         ...tournament.player_pool_settings,
+        num_teams: tournament.player_pool_settings.num_teams || tournament.player_pool_settings.max_teams || 4,
         pick_time_limit: tournament.player_pool_settings.pick_time_limit || 120,
       }
 
@@ -137,7 +139,7 @@ export const tournamentDraftService = {
 
   generateDraftOrder(teams: { id: string; draft_order: number }[], settings: DraftSettings): string[] {
     const teamIds = teams.map((t) => t.id)
-    const totalPicks = settings.max_teams * settings.players_per_team
+    const totalPicks = settings.num_teams * settings.players_per_team
     const order: string[] = []
 
     if (settings.draft_type === "snake") {

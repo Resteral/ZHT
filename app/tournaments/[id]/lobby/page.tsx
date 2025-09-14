@@ -18,6 +18,7 @@ interface Player {
   username: string
   elo_rating: number
   is_captain?: boolean
+  captain_type?: string
 }
 
 interface Tournament {
@@ -50,6 +51,7 @@ export default function TournamentLobbyPage() {
   const [bracket, setBracket] = useState<any[]>([])
   const [draftInfo, setDraftInfo] = useState<any>(null)
   const [tournamentStarted, setTournamentStarted] = useState(false)
+  const [captains, setCaptains] = useState<Player[]>([])
 
   const supabase = createClient()
 
@@ -70,6 +72,7 @@ export default function TournamentLobbyPage() {
       if (tournament.status === "in_progress" || tournament.status === "drafting") {
         loadBracketAndDraftInfo(tournamentId)
       }
+      loadCaptains()
     }
   }, [tournament])
 
@@ -268,10 +271,49 @@ export default function TournamentLobbyPage() {
     return () => clearInterval(timer)
   }, [tournament?.start_date, tournament?.status])
 
+  const loadCaptains = async () => {
+    try {
+      const { data: captainData, error } = await supabase
+        .from("tournament_player_pool")
+        .select(`
+          user_id,
+          captain_type,
+          users (
+            id,
+            username,
+            elo_rating
+          )
+        `)
+        .eq("tournament_id", tournamentId)
+        .eq("status", "drafted")
+        .not("captain_type", "is", null)
+
+      if (error) throw error
+
+      const captainPlayers =
+        captainData?.map((item) => ({
+          id: item.user_id,
+          username: item.users.username,
+          elo_rating: item.users.elo_rating,
+          is_captain: true,
+          captain_type: item.captain_type,
+        })) || []
+
+      setCaptains(captainPlayers)
+      console.log("[v0] Loaded captains:", captainPlayers)
+    } catch (error) {
+      console.error("[v0] Error loading captains:", error)
+    }
+  }
+
   const isUserInTournament = players.some((p) => p.id === currentUser?.id)
   const totalPlayersNeeded =
     tournament.player_pool_settings.num_teams * tournament.player_pool_settings.players_per_team
   const progressPercentage = (players.length / totalPlayersNeeded) * 100
+
+  const isPlayerCaptain = (playerId: string) => {
+    return captains.some((captain) => captain.id === playerId)
+  }
 
   return (
     <div className="container mx-auto py-6 max-w-6xl">
@@ -361,9 +403,7 @@ export default function TournamentLobbyPage() {
                       <div
                         key={player.id}
                         className={`flex items-center justify-between p-3 rounded-lg border ${
-                          index < tournament.player_pool_settings.num_teams
-                            ? "border-yellow-200 bg-yellow-50"
-                            : "border-border"
+                          isPlayerCaptain(player.id) ? "border-yellow-200 bg-yellow-50" : "border-border"
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -373,7 +413,7 @@ export default function TournamentLobbyPage() {
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{player.username}</span>
-                              {index < tournament.player_pool_settings.num_teams && (
+                              {isPlayerCaptain(player.id) && (
                                 <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
                                   <Crown className="h-3 w-3 mr-1" />
                                   Captain
@@ -386,7 +426,7 @@ export default function TournamentLobbyPage() {
                         <div className="text-right">
                           <div className="text-sm font-medium">#{index + 1}</div>
                           <div className="text-xs text-muted-foreground">
-                            {index < tournament.player_pool_settings.num_teams ? "Captain" : "Player"}
+                            {isPlayerCaptain(player.id) ? "Captain" : "Player"}
                           </div>
                         </div>
                       </div>
@@ -495,8 +535,11 @@ export default function TournamentLobbyPage() {
                       {tournament.player_pool_settings.captain_selection_method?.replace("_", " ") || "Highest ELO"}
                     </p>
                     <p className="mb-2">
-                      The <strong>{tournament.player_pool_settings.num_teams} captains</strong> will be selected
-                      automatically when the tournament starts.
+                      The{" "}
+                      <strong>
+                        {captains.length > 0 ? captains.length : tournament.player_pool_settings.num_teams} captains
+                      </strong>{" "}
+                      will be selected automatically when the tournament starts.
                     </p>
                     <p>
                       Captains will then draft their teams using{" "}

@@ -200,13 +200,24 @@ class CaptainSelectionService {
       console.log("[v0] Starting manual captain selection for tournament:", tournamentId)
       console.log("[v0] Captain IDs to select:", captainIds)
 
-      const maxCaptains = 2
+      const { data: tournament, error: tournamentError } = await this.supabase
+        .from("tournaments")
+        .select("player_pool_settings, max_teams")
+        .eq("id", tournamentId)
+        .single()
+
+      if (tournamentError) {
+        console.error("[v0] Error fetching tournament settings:", tournamentError)
+        throw tournamentError
+      }
+
+      const maxCaptains = tournament.player_pool_settings?.num_teams || tournament.max_teams || 2
 
       if (captainIds.length > maxCaptains) {
         return {
           captains: [],
           success: false,
-          message: `Can only select maximum ${maxCaptains} captains (high_elo and low_elo)`,
+          message: `Can only select maximum ${maxCaptains} captains for ${maxCaptains} teams`,
         }
       }
 
@@ -333,8 +344,8 @@ class CaptainSelectionService {
         throw tournamentError
       }
 
-      const maxCaptains = 2
-      console.log("[v0] Tournament will select", maxCaptains, "captains (high_elo and low_elo)")
+      const maxCaptains = tournament.player_pool_settings?.num_teams || tournament.max_teams || 2
+      console.log("[v0] Tournament will select", maxCaptains, "captains for", maxCaptains, "teams")
 
       const { data: poolPlayers, error: poolError } = await this.supabase
         .from("tournament_player_pool")

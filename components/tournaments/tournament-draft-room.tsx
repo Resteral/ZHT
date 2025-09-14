@@ -116,6 +116,9 @@ export function TournamentDraftRoom({
     )
   }
 
+  const minParticipants =
+    (draftSettings?.num_teams || draftSettings?.max_teams) * (draftSettings?.players_per_team || 4)
+
   return (
     <div className="space-y-6">
       {/* Connection Status */}
@@ -172,7 +175,8 @@ export function TournamentDraftRoom({
               : draftSettings?.draft_type === "snake"
                 ? "Snake Draft"
                 : "Linear Draft"}{" "}
-            • {draftSettings?.max_teams} teams • {draftSettings?.players_per_team} players per team
+            • {draftSettings?.num_teams || draftSettings?.max_teams} teams • {draftSettings?.players_per_team} players
+            per team
             {draftState && (
               <span className="ml-2">
                 • Round {draftState.current_round} • Pick {draftState.current_pick}
@@ -276,7 +280,7 @@ export function TournamentDraftRoom({
                     key={team.id}
                     className={`${
                       draftState?.current_team_index === index && draftState?.status === "active"
-                        ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20"
+                        ? "border-amber-500 bg-amber-5 dark:bg-amber-950/20"
                         : ""
                     }`}
                   >
@@ -459,15 +463,10 @@ export function TournamentDraftRoom({
                 <div className="flex justify-between text-sm">
                   <span>Players Drafted</span>
                   <span>
-                    {draftHistory.length}/{(draftSettings?.max_teams || 0) * (draftSettings?.players_per_team || 0)}
+                    {draftHistory.length}/{minParticipants}
                   </span>
                 </div>
-                <Progress
-                  value={
-                    (draftHistory.length / ((draftSettings?.max_teams || 1) * (draftSettings?.players_per_team || 1))) *
-                    100
-                  }
-                />
+                <Progress value={(draftHistory.length / minParticipants) * 100} />
                 {draftState && (
                   <div className="text-xs text-muted-foreground">
                     Round {draftState.current_round} • Pick {draftState.current_pick}
