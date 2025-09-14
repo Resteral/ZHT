@@ -153,30 +153,33 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const auctionBudget = settings.auction_budget || 500
       const playersPerTeam = settings.players_per_team || 4
 
-      // Create teams for each selected captain
-      const teamPromises = captainIds.map(async (captainId: string, index: number) => {
-        // Get captain user info
-        const { data: captainUser, error: userError } = await supabase
+      const teamPromises = captainIds.map(async (captainPlayerId: string, index: number) => {
+        // Get captain player info from tournament_player_pool
+        const { data: captainPlayer, error: playerError } = await supabase
           .from("tournament_player_pool")
-          .select("users(username)")
-          .eq("user_id", captainId)
+          .select(`
+            id,
+            user_id,
+            users(username)
+          `)
+          .eq("id", captainPlayerId)
           .eq("tournament_id", params.id)
           .single()
 
-        if (userError) {
-          console.error("[v0] Error fetching captain user:", userError)
-          throw userError
+        if (playerError) {
+          console.error("[v0] Error fetching captain player:", playerError)
+          throw playerError
         }
 
-        const teamName = `Team ${captainUser.users?.username || index + 1}`
+        const teamName = `Team ${captainPlayer.users?.username || index + 1}`
 
-        // Create team
+        // Create team with the user_id as team_captain
         const { data: team, error: teamError } = await supabase
           .from("tournament_teams")
           .insert({
             tournament_id: params.id,
             team_name: teamName,
-            team_captain: captainId,
+            team_captain: captainPlayer.user_id, // Use user_id for team_captain
             budget_remaining: auctionBudget,
             max_players: playersPerTeam,
             players_acquired: 1,
@@ -189,19 +192,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           throw teamError
         }
 
-        // Update player status to captain
-        const { error: playerError } = await supabase
+        // Update player status to captain using the player pool ID
+        const { error: statusError } = await supabase
           .from("tournament_player_pool")
           .update({
             status: "captain",
             captain_type: "selected",
           })
-          .eq("user_id", captainId)
+          .eq("id", captainPlayerId) // Use player pool ID
           .eq("tournament_id", params.id)
 
-        if (playerError) {
-          console.error("[v0] Error updating player status:", playerError)
-          throw playerError
+        if (statusError) {
+          console.error("[v0] Error updating player status:", statusError)
+          throw statusError
         }
 
         return team

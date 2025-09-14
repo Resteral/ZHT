@@ -65,6 +65,21 @@ export function TournamentLifecycleManager({
     setUpdating(true)
     try {
       console.log("[v0] Changing tournament status to:", targetStatus)
+
+      if (targetStatus === "team_building" && lifecycleState.status === "registration") {
+        // Check if tournament has minimum participants before allowing team building
+        const response = await fetch(`/api/tournaments/${tournamentId}/validate-transition`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target_status: targetStatus }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.message || "Cannot transition to team building")
+        }
+      }
+
       const newState = await tournamentLifecycleService.progressStatus(tournamentId, targetStatus, user.id)
 
       if (targetStatus === "active" && lifecycleState.status !== "active") {

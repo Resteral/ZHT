@@ -7,7 +7,19 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Clock, DollarSign, Users, Trophy, Gavel, Wifi, WifiOff, Crown } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Clock, DollarSign, Users, Trophy, Gavel, Wifi, WifiOff, Crown, Shuffle, TrendingUp } from "lucide-react"
 import { useAuctionRealtime } from "@/hooks/use-auction-realtime"
 import { toast } from "sonner"
 
@@ -45,6 +57,9 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
   const [selectedCaptains, setSelectedCaptains] = useState<string[]>([])
   const [tournamentSettings, setTournamentSettings] = useState<any>(null)
   const [requiredTeams, setRequiredTeams] = useState<number>(3)
+  const [captainSelectionMethod, setCaptainSelectionMethod] = useState<string>("manual")
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [pendingCaptains, setPendingCaptains] = useState<string[]>([])
 
   const {
     auctionSession,
@@ -121,7 +136,8 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
 
         if (data.tournamentSettings) {
           setTournamentSettings(data.tournamentSettings)
-          const numTeams = data.tournamentSettings.player_pool_settings?.num_teams || 3
+          const numTeams =
+            data.tournamentSettings.player_pool_settings?.num_teams || data.tournamentSettings.num_teams || 3
           setRequiredTeams(numTeams)
           console.log("[v0] Required teams from settings:", numTeams)
         }
@@ -176,7 +192,7 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
 
         if (data.tournament?.player_pool_settings) {
           setTournamentSettings(data.tournament)
-          const numTeams = data.tournament.player_pool_settings.num_teams || 3
+          const numTeams = data.tournament.player_pool_settings.num_teams || data.tournament.num_teams || 3
           setRequiredTeams(numTeams)
           console.log("[v0] Required teams from tournament:", numTeams)
         }
@@ -207,26 +223,57 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
         const updated = [...prev, playerId]
         console.log("[v0] Added captain, now have:", updated.length, "of", requiredTeams)
         return updated
+      } else {
+        toast.error(`You can only select ${requiredTeams} captains`)
       }
       return prev
     })
   }
 
-  const startAuctionWithCaptains = async () => {
+  const selectCaptainsByElo = () => {
+    const sortedByElo = [...playerPool].sort((a, b) => b.elo_rating - a.elo_rating)
+    const topPlayers = sortedByElo.slice(0, requiredTeams).map((p) => p.id)
+    setSelectedCaptains(topPlayers)
+    toast.success(`Selected top ${requiredTeams} players by ELO rating`)
+  }
+
+  const selectCaptainsRandomly = () => {
+    const shuffled = [...playerPool].sort(() => Math.random() - 0.5)
+    const randomPlayers = shuffled.slice(0, requiredTeams).map((p) => p.id)
+    setSelectedCaptains(randomPlayers)
+    toast.success(`Randomly selected ${requiredTeams} captains`)
+  }
+
+  const handleCaptainSelectionMethodChange = (method: string) => {
+    setCaptainSelectionMethod(method)
+    if (method === "elo") {
+      selectCaptainsByElo()
+    } else if (method === "random") {
+      selectCaptainsRandomly()
+    } else {
+      setSelectedCaptains([])
+    }
+  }
+
+  const handleStartAuctionClick = () => {
     if (selectedCaptains.length !== requiredTeams) {
       toast.error(`Please select exactly ${requiredTeams} captains`)
       return
     }
+    setPendingCaptains(selectedCaptains)
+    setShowConfirmDialog(true)
+  }
 
+  const confirmStartAuction = async () => {
     try {
-      console.log("[v0] Starting auction with captains:", selectedCaptains)
+      console.log("[v0] Starting auction with captains:", pendingCaptains)
 
       const response = await fetch(`/api/tournaments/${tournamentId}/auction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "start_auction_with_captains",
-          captainIds: selectedCaptains,
+          captainIds: pendingCaptains,
           userId: currentUserId,
         }),
       })
@@ -234,7 +281,7 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
       if (response.ok) {
         const data = await response.json()
         toast.success("Auction started with selected captains!")
-
+        setShowConfirmDialog(false)
         await fetchAuctionData()
       } else {
         const error = await response.json()
@@ -346,8 +393,8 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
               <div>
                 <h1 className="text-2xl font-bold">Tournament Auction Draft</h1>
                 <p className="text-background/80">
-                  Round {auctionSession?.auction_round} of {auctionSession?.total_rounds} - Select {requiredTeams}{" "}
-                  captains and build teams
+                  Round {auctionSession?.auction_round || 1} of {auctionSession?.total_rounds || 1} - Select{" "}
+                  {requiredTeams} captains and build teams
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -386,60 +433,148 @@ export default function TournamentAuctionRoom({ tournamentId, currentUserId, isO
                 </CardHeader>
                 <CardContent>
                   <div className="mb-4">
+                    <label className="text-sm font-medium mb-2 block">Captain Selection Method</label>
+                    <Select value={captainSelectionMethod} onValueChange={handleCaptainSelectionMethodChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose selection method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">
+                          <div className="flex items-center gap-2">
+                            <Crown className="h-4 w-4" />
+                            Manual Selection
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="elo">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4" />
+                            Highest ELO Players
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="random">
+                          <div className="flex items-center gap-2">
+                            <Shuffle className="h-4 w-4" />
+                            Random Selection
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="mb-4">
                     <p className="text-sm text-muted-foreground">
                       Selected: {selectedCaptains.length} of {requiredTeams} captains
                     </p>
                     <Progress value={(selectedCaptains.length / requiredTeams) * 100} className="h-2 mt-2" />
                   </div>
-                  <div className="grid gap-2 max-h-64 overflow-y-auto">
-                    {playerPool.map((player) => {
-                      const isSelected = selectedCaptains.includes(player.id)
-                      return (
-                        <div
-                          key={player.id}
-                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                            isSelected ? "bg-blue-50 border-blue-500 dark:bg-blue-950" : "hover:bg-muted"
-                          }`}
-                          onClick={() => handleCaptainSelection(player.id)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{player.username}</p>
-                              <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
-                            </div>
-                          </div>
-                          <Button
-                            variant={isSelected ? "default" : "outline"}
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleCaptainSelection(player.id)
-                            }}
+
+                  {captainSelectionMethod === "manual" && (
+                    <div className="grid gap-2 max-h-64 overflow-y-auto">
+                      {playerPool.map((player) => {
+                        const isSelected = selectedCaptains.includes(player.id)
+                        return (
+                          <div
+                            key={player.id}
+                            className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                              isSelected ? "bg-blue-50 border-blue-500 dark:bg-blue-950" : "hover:bg-muted"
+                            }`}
+                            onClick={() => handleCaptainSelection(player.id)}
                           >
-                            {isSelected ? (
-                              <>
-                                <Crown className="h-4 w-4 mr-1" />
-                                Captain
-                              </>
-                            ) : (
-                              "Make Captain"
-                            )}
-                          </Button>
-                        </div>
-                      )
-                    })}
-                  </div>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">{player.username}</p>
+                                <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
+                              </div>
+                            </div>
+                            <Button
+                              variant={isSelected ? "default" : "outline"}
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCaptainSelection(player.id)
+                              }}
+                            >
+                              {isSelected ? (
+                                <>
+                                  <Crown className="h-4 w-4 mr-1" />
+                                  Captain
+                                </>
+                              ) : (
+                                "Make Captain"
+                              )}
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {captainSelectionMethod !== "manual" && (
+                    <div className="grid gap-2 max-h-64 overflow-y-auto">
+                      {playerPool
+                        .filter((player) => selectedCaptains.includes(player.id))
+                        .map((player) => (
+                          <div
+                            key={player.id}
+                            className="flex items-center justify-between p-3 rounded-lg border bg-blue-50 border-blue-500 dark:bg-blue-950"
+                          >
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarFallback>{player.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">{player.username}</p>
+                                <p className="text-sm text-muted-foreground">{player.elo_rating} ELO</p>
+                              </div>
+                            </div>
+                            <Badge variant="default">
+                              <Crown className="h-4 w-4 mr-1" />
+                              Captain
+                            </Badge>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
                   <div className="mt-4 pt-4 border-t">
-                    <Button
-                      className="w-full"
-                      disabled={selectedCaptains.length !== requiredTeams}
-                      onClick={startAuctionWithCaptains}
-                    >
-                      Start Auction with Selected Captains ({selectedCaptains.length}/{requiredTeams})
-                    </Button>
+                    <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          className="w-full"
+                          disabled={selectedCaptains.length !== requiredTeams}
+                          onClick={handleStartAuctionClick}
+                        >
+                          Start Auction with Selected Captains ({selectedCaptains.length}/{requiredTeams})
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Confirm Captain Selection</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to start the auction with these {pendingCaptains.length} captains?
+                            This action cannot be undone.
+                            <div className="mt-3 space-y-2">
+                              {playerPool
+                                .filter((player) => pendingCaptains.includes(player.id))
+                                .map((player) => (
+                                  <div key={player.id} className="flex items-center gap-2 text-sm">
+                                    <Crown className="h-4 w-4 text-blue-500" />
+                                    <span className="font-medium">{player.username}</span>
+                                    <span className="text-muted-foreground">({player.elo_rating} ELO)</span>
+                                  </div>
+                                ))}
+                            </div>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={confirmStartAuction}>Start Auction</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </CardContent>
               </Card>

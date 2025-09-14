@@ -268,7 +268,7 @@ export default function TournamentManagePage({ params }: TournamentManagePagePro
                 <Settings className="h-4 w-4 mr-2" />
                 Auction Room
               </Button>
-              {tournament?.status === "drafting" && (
+              {tournament?.status !== "drafting" && tournament?.status !== "active" && (
                 <Button
                   onClick={() => router.push(`/tournaments/${params.id}/draft`)}
                   variant="outline"
