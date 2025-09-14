@@ -29,7 +29,7 @@ interface Team {
   captain_username: string
   captain_elo: number
   players: any[]
-  team_logo?: string
+  logo_url?: string
 }
 
 interface Player {
@@ -114,7 +114,7 @@ export default function TournamentDraftPage() {
           team_captain,
           budget_remaining,
           users:team_captain(username, elo_rating),
-          team_logo
+          logo_url
         `)
         .eq("tournament_id", tournamentId)
         .order("created_at")
@@ -130,7 +130,7 @@ export default function TournamentDraftPage() {
         captain_username: team.users?.username || "Unknown",
         captain_elo: team.users?.elo_rating || 1200,
         players: [],
-        team_logo: team.team_logo,
+        logo_url: team.logo_url,
       }))
 
       setTeams(transformedTeams)
@@ -213,7 +213,7 @@ export default function TournamentDraftPage() {
           team_name: `Team ${captain.username}`,
           team_captain: captain.id,
           budget_remaining: 1000,
-          team_logo: `https://api.dicebear.com/7.x/shapes/svg?seed=${captain.username}`,
+          logo_url: `https://api.dicebear.com/7.x/shapes/svg?seed=${captain.username}`,
           created_at: new Date().toISOString(),
         }))
 
@@ -380,7 +380,7 @@ export default function TournamentDraftPage() {
         .from("tournament_teams")
         .update({
           team_name: teamName,
-          team_logo: teamLogo,
+          logo_url: teamLogo,
         })
         .eq("id", teamId)
 
@@ -392,7 +392,7 @@ export default function TournamentDraftPage() {
             ? {
                 ...team,
                 team_name: teamName,
-                team_logo: teamLogo,
+                logo_url: teamLogo,
               }
             : team,
         ),
@@ -567,9 +567,9 @@ export default function TournamentDraftPage() {
             {teams.map((team) => (
               <div key={team.id} className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
                 <Avatar className="h-10 w-10">
-                  {team.team_logo ? (
+                  {team.logo_url ? (
                     <img
-                      src={team.team_logo || "/placeholder.svg"}
+                      src={team.logo_url || "/placeholder.svg"}
                       alt={team.team_name}
                       className="w-full h-full object-cover rounded-full"
                     />
@@ -590,7 +590,7 @@ export default function TournamentDraftPage() {
                             onClick={() => {
                               setCustomizingTeam(team)
                               setNewTeamName(team.team_name)
-                              setNewTeamLogo(team.team_logo || "")
+                              setNewTeamLogo(team.logo_url || "")
                             }}
                           >
                             <Settings className="h-3 w-3" />
