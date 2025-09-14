@@ -150,11 +150,18 @@ export function CaptainSelectionInterface({
     setProcessing(true)
     try {
       console.log("[v0] Starting manual captain selection:", selectedPlayers)
+      console.log("[v0] Selected player IDs:", selectedPlayers)
+      console.log(
+        "[v0] Available players pool:",
+        availablePlayers.map((p) => ({ id: p.user_id, username: p.username })),
+      )
 
       const result: CaptainSelectionResult = await captainSelectionService.selectCaptainsManually(
         tournamentId,
         selectedPlayers,
       )
+
+      console.log("[v0] Manual selection result:", result)
 
       if (result.success) {
         toast.success(result.message)

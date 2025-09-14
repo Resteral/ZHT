@@ -155,6 +155,7 @@ class CaptainSelectionService {
   async selectCaptainsManually(tournamentId: string, captainIds: string[]): Promise<CaptainSelectionResult> {
     try {
       console.log("[v0] Starting manual captain selection for tournament:", tournamentId)
+      console.log("[v0] Captain IDs to select:", captainIds)
 
       const requiredCaptains = 4
 
@@ -166,11 +167,12 @@ class CaptainSelectionService {
         }
       }
 
-      // Get player details for selected captains
       const { data: selectedPlayers, error: playersError } = await this.supabase
         .from("tournament_player_pool")
         .select(`
           user_id,
+          status,
+          captain_type,
           users(username, elo_rating)
         `)
         .eq("tournament_id", tournamentId)
@@ -181,11 +183,33 @@ class CaptainSelectionService {
         throw playersError
       }
 
+      console.log("[v0] Found players in pool:", selectedPlayers)
+
       if (!selectedPlayers || selectedPlayers.length !== requiredCaptains) {
         return {
           captains: [],
           success: false,
-          message: "Could not find all selected players in tournament pool",
+          message: `Could not find all selected players in tournament pool. Found ${selectedPlayers?.length || 0} of ${requiredCaptains} players.`,
+        }
+      }
+
+      // Check if any selected players are already captains
+      const alreadyCaptains = selectedPlayers.filter((p) => p.captain_type !== null)
+      if (alreadyCaptains.length > 0) {
+        return {
+          captains: [],
+          success: false,
+          message: `Some selected players are already captains: ${alreadyCaptains.map((p) => p.users?.username).join(", ")}`,
+        }
+      }
+
+      // Check if all selected players are available
+      const unavailablePlayers = selectedPlayers.filter((p) => p.status !== "available")
+      if (unavailablePlayers.length > 0) {
+        return {
+          captains: [],
+          success: false,
+          message: `Some selected players are not available: ${unavailablePlayers.map((p) => p.users?.username).join(", ")}`,
         }
       }
 
@@ -198,12 +222,16 @@ class CaptainSelectionService {
         }))
         .sort((a, b) => b.elo_rating - a.elo_rating)
 
+      console.log("[v0] Sorted players for captain assignment:", sortedPlayers)
+
       const captainUpdates = sortedPlayers.map((player, index) => ({
         user_id: player.user_id,
         captain_type: index === 0 ? "high_elo" : index === requiredCaptains - 1 ? "low_elo" : "mid_elo",
         username: player.username,
         elo_rating: player.elo_rating,
       }))
+
+      console.log("[v0] Captain updates to apply:", captainUpdates)
 
       for (const update of captainUpdates) {
         const { error: updateError } = await this.supabase
