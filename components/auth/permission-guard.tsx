@@ -31,6 +31,7 @@ export default function PermissionGuard({
   useEffect(() => {
     const checkPermissions = async () => {
       if (!isAuthenticated || !user) {
+        console.log("[v0] User not authenticated:", { isAuthenticated, user: !!user })
         setHasPermission(false)
         setPermissionLoading(false)
         return
@@ -47,13 +48,20 @@ export default function PermissionGuard({
       })
 
       try {
-        // Check role-based permissions
         const roleHierarchy = ["user", "captain", "organizer", "admin"]
         const userRoleLevel = roleHierarchy.indexOf(user.role || "user")
         const requiredRoleLevel = roleHierarchy.indexOf(requiredRole)
 
+        // Allow admin users to bypass all checks
+        if (user.role === "admin") {
+          console.log("[v0] Admin user - permission granted")
+          setHasPermission(true)
+          setPermissionLoading(false)
+          return
+        }
+
         if (userRoleLevel < requiredRoleLevel) {
-          console.log("[v0] Insufficient role level")
+          console.log("[v0] Insufficient role level:", { userRole: user.role, requiredRole })
           setHasPermission(false)
           setPermissionLoading(false)
           return
@@ -61,13 +69,30 @@ export default function PermissionGuard({
 
         // Check tournament creator permission
         if (requireTournamentCreator && tournamentId) {
+          let isCreator = false
+
           const { data: tournament } = await supabase
             .from("tournaments")
             .select("created_by")
             .eq("id", tournamentId)
             .single()
 
-          if (tournament?.created_by !== user.id) {
+          if (tournament?.created_by === user.id) {
+            isCreator = true
+          } else {
+            // Fallback to leagues table
+            const { data: league } = await supabase
+              .from("leagues")
+              .select("commissioner_id")
+              .eq("id", tournamentId)
+              .single()
+
+            if (league?.commissioner_id === user.id) {
+              isCreator = true
+            }
+          }
+
+          if (!isCreator) {
             console.log("[v0] User is not tournament creator")
             setHasPermission(false)
             setPermissionLoading(false)
@@ -96,7 +121,12 @@ export default function PermissionGuard({
         setHasPermission(true)
       } catch (error) {
         console.error("[v0] Error checking permissions:", error)
-        setHasPermission(false)
+        if (error instanceof Error && error.message.includes("No rows")) {
+          console.log("[v0] No tournament found, but allowing access for creation")
+          setHasPermission(true)
+        } else {
+          setHasPermission(false)
+        }
       } finally {
         setPermissionLoading(false)
       }
@@ -117,7 +147,7 @@ export default function PermissionGuard({
   if (!isAuthenticated) {
     return (
       <Alert>
-        <AlertDescription>You must be logged in to access this content.</AlertDescription>
+        <AlertDescription>You must be logged in to access this content. Please sign in to continue.</AlertDescription>
       </Alert>
     )
   }
@@ -129,6 +159,11 @@ export default function PermissionGuard({
           You don't have permission to access this content. Required: {requiredRole}
           {requireTournamentCreator && " (Tournament Creator)"}
           {requireTeamCaptain && " (Team Captain)"}
+          {user && (
+            <div className="mt-2 text-sm">
+              Current user: {user.username} (Role: {user.role || "user"})
+            </div>
+          )}
         </AlertDescription>
       </Alert>
     )
