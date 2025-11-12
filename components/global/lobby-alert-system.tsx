@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { isSupabaseConfigured } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -25,21 +26,23 @@ export function LobbyAlertSystem() {
   const [consecutiveErrors, setConsecutiveErrors] = useState(0)
   const [isDisabled, setIsDisabled] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const supabase = createClient()
   const router = useRouter()
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      console.log("[v0] Supabase not configured, skipping lobby checking")
+      return
+    }
+
+    const supabase = createClient()
+
     const checkAndCleanupLobbies = async () => {
       if (isDisabled) {
-        console.log("[v0] Lobby checking disabled due to consecutive errors")
         return
       }
 
       try {
         console.log("[v0] Checking for active lobbies...")
-
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
 
         const { data: matches, error } = await supabase
           .from("matches")
@@ -53,52 +56,46 @@ export function LobbyAlertSystem() {
             created_at
           `)
           .eq("status", "waiting")
-          .limit(10) // Limit results to prevent large queries
-          .abortSignal(controller.signal)
-
-        clearTimeout(timeoutId)
+          .limit(10)
 
         if (error) {
-          console.error("[v0] Database error:", error)
+          if (error.message.includes("Failed to fetch") || error.message.includes("fetch")) {
+            console.log("[v0] Network error - will retry later")
+            setConsecutiveErrors((prev) => prev + 1)
+            return
+          }
           throw error
         }
 
         setConsecutiveErrors(0)
 
         if (!matches || matches.length === 0) {
-          console.log("[v0] No waiting lobbies found")
           setAlerts([])
           return
         }
-
-        console.log(`[v0] Found ${matches.length} waiting lobbies`)
 
         const now = new Date()
         const fullLobbies = []
         const staleLobbyIds = []
 
         for (const match of matches) {
+          const createdAt = new Date(match.created_at)
+          const ageInMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60)
+
+          if (ageInMinutes > 5) {
+            staleLobbyIds.push(match.id)
+            continue
+          }
+
           try {
-            const createdAt = new Date(match.created_at)
-            const ageInMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60)
-
-            if (ageInMinutes > 5) {
-              staleLobbyIds.push(match.id)
-              console.log(`[v0] Marking stale lobby for cleanup: ${match.id} (${ageInMinutes.toFixed(1)} minutes old)`)
-              continue
-            }
-
             const { data: participants, error: participantError } = await supabase
               .from("match_participants")
               .select("user_id")
               .eq("match_id", match.id)
 
-            if (participantError) {
-              console.error("[v0] Error fetching participants for match", match.id, participantError)
-              continue
-            }
+            if (participantError || !participants) continue
 
-            const participantCount = participants?.length || 0
+            const participantCount = participants.length
 
             if (participantCount >= match.max_participants && !dismissed.has(match.id)) {
               fullLobbies.push({
@@ -111,66 +108,36 @@ export function LobbyAlertSystem() {
                 timeUntilStart: 10,
               })
             }
-          } catch (participantError) {
-            console.error("[v0] Error processing match participants:", participantError)
+          } catch (error) {
             continue
           }
         }
 
         if (staleLobbyIds.length > 0) {
-          console.log(`[v0] Cleaning up ${staleLobbyIds.length} stale lobbies`)
-
-          try {
-            const { error: participantCleanupError } = await supabase
-              .from("match_participants")
-              .delete()
-              .in("match_id", staleLobbyIds)
-
-            if (participantCleanupError) {
-              console.error("[v0] Error cleaning up participants:", participantCleanupError)
-            }
-
-            const { error: matchCleanupError } = await supabase.from("matches").delete().in("id", staleLobbyIds)
-
-            if (matchCleanupError) {
-              console.error("[v0] Error cleaning up matches:", matchCleanupError)
-            } else {
-              console.log(`[v0] Successfully cleaned up ${staleLobbyIds.length} stale lobbies`)
-            }
-          } catch (cleanupError) {
-            console.error("[v0] Error during cleanup:", cleanupError)
-          }
+          cleanupStaleLobbies(supabase, staleLobbyIds).catch(() => {
+            // Ignore cleanup errors
+          })
         }
 
         setAlerts(fullLobbies)
 
         for (const lobby of fullLobbies) {
-          if (lobby.current_participants >= lobby.max_participants) {
-            setTimeout(() => {
-              autoStartLobby(lobby.id, lobby.name)
-            }, 10000)
-          }
+          setTimeout(() => {
+            autoStartLobby(supabase, lobby.id, lobby.name)
+          }, 10000)
         }
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          console.log("[v0] Lobby check timed out after 15 seconds - this is normal for slow connections")
-          // Don't increment consecutive errors for timeouts
-          return
-        }
-
         console.error("[v0] Error checking lobbies:", error)
 
         setConsecutiveErrors((prev) => {
           const newCount = prev + 1
-          if (newCount >= 3) {
-            console.log("[v0] Too many consecutive errors, disabling lobby checking for 5 minutes")
+          if (newCount >= 5) {
+            console.log("[v0] Too many consecutive errors, disabling lobby checking temporarily")
             setIsDisabled(true)
-            // Re-enable after 5 minutes
             setTimeout(
               () => {
                 setIsDisabled(false)
                 setConsecutiveErrors(0)
-                console.log("[v0] Re-enabling lobby checking")
               },
               5 * 60 * 1000,
             )
@@ -180,48 +147,50 @@ export function LobbyAlertSystem() {
       }
     }
 
+    const cleanupStaleLobbies = async (supabase: any, lobbyIds: string[]) => {
+      await supabase.from("match_participants").delete().in("match_id", lobbyIds)
+      await supabase.from("matches").delete().in("id", lobbyIds)
+    }
+
+    const autoStartLobby = async (supabase: any, lobbyId: string, lobbyName: string) => {
+      try {
+        const { error } = await supabase
+          .from("matches")
+          .update({
+            status: "active",
+            start_date: new Date().toISOString(),
+          })
+          .eq("id", lobbyId)
+
+        if (error) throw error
+
+        toast.success(`🎮 ${lobbyName} has started!`, {
+          duration: 5000,
+          action: {
+            label: "View Match",
+            onClick: () => router.push(`/leagues/match/${lobbyId}`),
+          },
+        })
+
+        setAlerts((prev) => prev.filter((alert) => alert.id !== lobbyId))
+      } catch (error) {
+        // Silently handle auto-start errors
+      }
+    }
+
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
     }
 
     checkAndCleanupLobbies()
-    intervalRef.current = setInterval(checkAndCleanupLobbies, 120000) // 2 minutes instead of 1 minute
+    intervalRef.current = setInterval(checkAndCleanupLobbies, 120000)
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
       }
     }
-  }, [dismissed, isDisabled])
-
-  const autoStartLobby = async (lobbyId: string, lobbyName: string) => {
-    try {
-      console.log("[v0] Auto-starting lobby:", lobbyId)
-
-      const { error } = await supabase
-        .from("matches")
-        .update({
-          status: "active",
-          start_date: new Date().toISOString(),
-        })
-        .eq("id", lobbyId)
-
-      if (error) throw error
-
-      toast.success(`🎮 ${lobbyName} has started! All players have been notified.`, {
-        duration: 5000,
-        action: {
-          label: "View Match",
-          onClick: () => router.push(`/leagues/match/${lobbyId}`),
-        },
-      })
-
-      setAlerts((prev) => prev.filter((alert) => alert.id !== lobbyId))
-    } catch (error) {
-      console.error("[v0] Error auto-starting lobby:", error)
-      toast.error("Failed to start lobby automatically")
-    }
-  }
+  }, [dismissed, isDisabled, router])
 
   const dismissAlert = (alertId: string) => {
     setDismissed((prev) => new Set([...prev, alertId]))
