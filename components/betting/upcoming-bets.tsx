@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Calendar } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import Link from "next/link"
 
 interface Game {
   id: string
+  game_title: string
   scheduled_time: string
   home_team: { name: string; avatar?: string; record: string }
   away_team: { name: string; avatar?: string; record: string }
@@ -34,7 +36,7 @@ interface Future {
   probability: string
 }
 
-export function UpcomingBets() {
+export function UpcomingContests() {
   const [upcomingGames, setUpcomingGames] = useState<Game[]>([])
   const [futures, setFutures] = useState<Future[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,76 +46,51 @@ export function UpcomingBets() {
     loadBettingData()
   }, [])
 
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   const loadBettingData = async () => {
     try {
-      const { data: gamesData, error: gamesError } = await supabase
-        .from("games")
-        .select(`
-          id,
-          game_date,
-          home_score,
-          away_score,
-          status,
-          home_user:users!games_home_user_id_fkey(username, display_name, wins, losses),
-          away_user:users!games_away_user_id_fkey(username, display_name, wins, losses),
-          betting_markets(market_type, odds_home, odds_away, spread_line, total_line)
-        `)
-        .gte("game_date", new Date().toISOString())
-        .order("game_date", { ascending: true })
-        .limit(10)
+      setLoading(true)
+      // Simulating API call delay
+      await new Promise(resolve => setTimeout(resolve, 800))
 
-      if (gamesError) throw gamesError
+      const { MOCK_ESPORTS_MATCHES } = await import("@/lib/mock-esports-data")
 
-      const transformedGames =
-        gamesData?.map((game) => ({
+      const upcoming = MOCK_ESPORTS_MATCHES
+        .filter(m => m.status === "upcoming")
+        .map(game => ({
           id: game.id,
-          scheduled_time: game.game_date,
+          game_title: game.gameTitle,
+          scheduled_time: game.scheduledTime,
           home_team: {
-            name: game.home_user?.username || "Unknown Player",
+            name: game.homeTeam.name,
             avatar: undefined,
-            record: `${game.home_user?.wins || 0}-${game.home_user?.losses || 0}`,
+            record: game.homeTeam.record
           },
           away_team: {
-            name: game.away_user?.username || "Unknown Player",
+            name: game.awayTeam.name,
             avatar: undefined,
-            record: `${game.away_user?.wins || 0}-${game.away_user?.losses || 0}`,
+            record: game.awayTeam.record
           },
-          markets:
-            game.betting_markets?.map((market: any) => ({
-              type: market.market_type,
-              home_odds: market.odds_home ? `${market.odds_home > 0 ? "+" : ""}${market.odds_home}` : "EVEN",
-              away_odds: market.odds_away ? `${market.odds_away > 0 ? "+" : ""}${market.odds_away}` : "EVEN",
-              home_spread: market.spread_line ? `${market.spread_line > 0 ? "+" : ""}${market.spread_line}` : "0",
-              away_spread: market.spread_line ? `${-market.spread_line > 0 ? "+" : ""}${-market.spread_line}` : "0",
-              over: market.total_line?.toString() || "TBD",
-              under: market.total_line?.toString() || "TBD",
-              over_odds: "EVEN",
-              under_odds: "EVEN",
-            })) || [],
-        })) || []
+          // Add game title to the object for UI rendering if needed, 
+          // though the interface might need updating. For now mapping to existing structure.
+          markets: game.markets.map(m => ({
+            type: m.type,
+            home_odds: m.homeOdds,
+            away_odds: m.awayOdds,
+            home_spread: m.homeSpread || "0",
+            away_spread: m.awaySpread || "0",
+            over: m.over || "TBD",
+            under: m.under || "TBD",
+            over_odds: m.overOdds || "EVEN",
+            under_odds: m.underOdds || "EVEN"
+          }))
+        }))
 
-      setUpcomingGames(transformedGames)
-
-      const { data: futuresData } = await supabase
-        .from("betting_markets")
-        .select("*")
-        .eq("market_type", "futures")
-        .eq("status", "active")
-
-      const transformedFutures =
-        futuresData?.map((future) => ({
-          market: future.description || "Season Winner",
-          team: future.description?.includes("Team") ? "TBD" : undefined,
-          player: future.description?.includes("Player") ? "TBD" : undefined,
-          odds: future.odds_home ? `+${future.odds_home}` : "TBD",
-          probability: "TBD",
-        })) || []
-
-      setFutures(transformedFutures)
+      setUpcomingGames(upcoming)
+      setFutures([]) // Mock futures as empty for now
     } catch (error) {
       console.error("Error loading betting data:", error)
       setUpcomingGames([])
-      setFutures([])
     } finally {
       setLoading(false)
     }
@@ -123,7 +100,7 @@ export function UpcomingBets() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-        <p className="text-muted-foreground">Loading betting markets...</p>
+        <p className="text-muted-foreground">Loading contests...</p>
       </div>
     )
   }
@@ -132,12 +109,12 @@ export function UpcomingBets() {
     <div className="space-y-6">
       {/* Upcoming Games */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Upcoming Games</h3>
+        <h3 className="text-lg font-semibold">Upcoming Contests</h3>
         {upcomingGames.length === 0 ? (
           <div className="text-center py-8">
             <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-medium mb-2">No Upcoming Games</h3>
-            <p className="text-muted-foreground">No games are currently scheduled for betting.</p>
+            <h3 className="text-lg font-medium mb-2">No Upcoming Contests</h3>
+            <p className="text-muted-foreground">No contests are currently scheduled.</p>
           </div>
         ) : (
           upcomingGames.map((game) => (
@@ -148,34 +125,41 @@ export function UpcomingBets() {
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium">{new Date(game.scheduled_time).toLocaleString()}</span>
                   </div>
-                  <Badge variant="outline">Pre-game</Badge>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>{game.away_team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium text-sm">{game.away_team.name}</p>
-                      <p className="text-xs text-muted-foreground">{game.away_team.record}</p>
-                    </div>
-                  </div>
-
-                  <div className="text-center">
-                    <p className="text-sm font-medium">vs</p>
-                  </div>
-
-                  <div className="flex items-center space-x-3">
-                    <div className="text-right">
-                      <p className="font-medium text-sm">{game.home_team.name}</p>
-                      <p className="text-xs text-muted-foreground">{game.home_team.record}</p>
-                    </div>
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>{game.home_team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
+                  <div className="flex gap-2">
+                    <Badge variant="secondary">{game.game_title}</Badge>
+                    <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                      Prize Pool: $500+ {/* Mock value or from prop */}
+                    </Badge>
                   </div>
                 </div>
+
+                <Link href={`/bet/${game.id}`} className="block hover:bg-slate-800/50 rounded-lg p-2 transition-colors -mx-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback>{game.away_team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium text-sm">{game.away_team.name}</p>
+                        <p className="text-xs text-muted-foreground">{game.away_team.record}</p>
+                      </div>
+                    </div>
+
+                    <div className="text-center">
+                      <p className="text-sm font-medium">vs</p>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      <div className="text-right">
+                        <p className="font-medium text-sm">{game.home_team.name}</p>
+                        <p className="text-xs text-muted-foreground">{game.home_team.record}</p>
+                      </div>
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback>{game.home_team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                    </div>
+                  </div>
+                </Link>
               </CardHeader>
 
               <CardContent>
@@ -221,7 +205,7 @@ export function UpcomingBets() {
                   </div>
                 ) : (
                   <div className="text-center py-4 text-muted-foreground">
-                    <p>Betting markets not yet available</p>
+                    <p>Contest selection not yet available</p>
                   </div>
                 )}
               </CardContent>
@@ -245,7 +229,7 @@ export function UpcomingBets() {
               <Card key={index}>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">{future.market}</CardTitle>
-                  <CardDescription>Season-long betting market</CardDescription>
+                  <CardDescription>Season-long contest market</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between">

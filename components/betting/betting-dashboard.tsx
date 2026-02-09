@@ -6,42 +6,43 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingUp, DollarSign, Target, Clock, Zap, Trophy } from "lucide-react"
-import { LiveBettingMarkets } from "./live-betting-markets"
-import { UpcomingBets } from "./upcoming-bets"
+import { LiveContests } from "./live-betting-markets"
+import { UpcomingContests } from "./upcoming-bets"
 import { BettingHistory } from "./betting-history"
-import { BetSlip } from "./bet-slip"
+import { ContestEntrySlip } from "./bet-slip"
 import { ELODraftBetting } from "./elo-draft-betting"
 import { BettingResults } from "./betting-results"
+import { SponsorsList } from "@/components/sponsors/sponsors-list"
 import { createClient } from "@/lib/supabase/client"
 
-interface BettingStats {
+interface ContestStats {
   availableBalance: number
-  activeBets: number
-  totalStake: number
+  activeEntries: number
+  totalEntryFees: number
   winRate: number
-  liveMarkets: number
+  liveContests: number
   weeklyChange: number
 }
 
 export function BettingDashboard() {
-  const [stats, setStats] = useState<BettingStats>({
+  const [stats, setStats] = useState<ContestStats>({
     availableBalance: 0,
-    activeBets: 0,
-    totalStake: 0,
+    activeEntries: 0,
+    totalEntryFees: 0,
     winRate: 0,
-    liveMarkets: 0,
+    liveContests: 0,
     weeklyChange: 0,
   })
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   useEffect(() => {
-    loadBettingStats()
+    loadContestStats()
   }, [])
 
-  const loadBettingStats = async () => {
+  const loadContestStats = async () => {
     try {
-      console.log("[v0] Loading betting dashboard stats...")
+      console.log("[v0] Loading contest dashboard stats...")
 
       const { data: user } = await supabase.auth.getUser()
       if (!user.user) {
@@ -61,7 +62,7 @@ export function BettingDashboard() {
         console.error("[v0] Error fetching user data:", userError)
       }
 
-      // Get active bets
+      // Get active bets (entries)
       const { data: activeBets, error: activeBetsError } = await supabase
         .from("bets")
         .select("stake_amount")
@@ -69,7 +70,7 @@ export function BettingDashboard() {
         .eq("status", "pending")
 
       if (activeBetsError) {
-        console.error("[v0] Error fetching active bets:", activeBetsError)
+        console.error("[v0] Error fetching active entries:", activeBetsError)
       }
 
       // Get betting history for win rate calculation
@@ -82,23 +83,23 @@ export function BettingDashboard() {
         .limit(50)
 
       if (historyError) {
-        console.error("[v0] Error fetching betting history:", historyError)
+        console.error("[v0] Error fetching contest history:", historyError)
       }
 
-      // Get live markets count
+      // Get live markets (contests) count
       const { data: liveMarkets, error: marketsError } = await supabase
         .from("betting_markets")
         .select("id")
         .eq("status", "active")
 
       if (marketsError) {
-        console.error("[v0] Error fetching live markets:", marketsError)
+        console.error("[v0] Error fetching live contests:", marketsError)
       }
 
       // Calculate stats
       const availableBalance = userData?.balance || 0
       const activeCount = activeBets?.length || 0
-      const totalStake = activeBets?.reduce((sum, bet) => sum + (bet.stake_amount || 0), 0) || 0
+      const totalEntryFees = activeBets?.reduce((sum, bet) => sum + (bet.stake_amount || 0), 0) || 0
 
       let winRate = 0
       let weeklyChange = 0
@@ -125,27 +126,27 @@ export function BettingDashboard() {
         weeklyChange = weeklyWon - weeklyLost
       }
 
-      const liveMarketsCount = liveMarkets?.length || 0
+      const liveContestsCount = liveMarkets?.length || 0
 
       setStats({
         availableBalance,
-        activeBets: activeCount,
-        totalStake,
+        activeEntries: activeCount,
+        totalEntryFees,
         winRate,
-        liveMarkets: liveMarketsCount,
+        liveContests: liveContestsCount,
         weeklyChange,
       })
 
-      console.log("[v0] Betting stats loaded:", {
+      console.log("[v0] Contest stats loaded:", {
         availableBalance,
-        activeBets: activeCount,
-        totalStake,
+        activeEntries: activeCount,
+        totalEntryFees,
         winRate,
-        liveMarkets: liveMarketsCount,
+        liveContests: liveContestsCount,
         weeklyChange,
       })
     } catch (error) {
-      console.error("[v0] Error loading betting stats:", error)
+      console.error("[v0] Error loading contest stats:", error)
     } finally {
       setLoading(false)
     }
@@ -153,7 +154,7 @@ export function BettingDashboard() {
 
   const refreshStats = () => {
     setLoading(true)
-    loadBettingStats()
+    loadContestStats()
   }
 
   if (loading) {
@@ -196,12 +197,12 @@ export function BettingDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Bets</CardTitle>
+            <CardTitle className="text-sm font-medium">Active Entries</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activeBets}</div>
-            <p className="text-xs text-muted-foreground">${stats.totalStake.toFixed(2)} total stake</p>
+            <div className="text-2xl font-bold">{stats.activeEntries}</div>
+            <p className="text-xs text-muted-foreground">${stats.totalEntryFees.toFixed(2)} in entry fees</p>
           </CardContent>
         </Card>
 
@@ -212,19 +213,19 @@ export function BettingDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.winRate}%</div>
-            <p className="text-xs text-muted-foreground">Last 50 bets</p>
+            <p className="text-xs text-muted-foreground">Last 50 contests</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Live Markets</CardTitle>
+            <CardTitle className="text-sm font-medium">Live Contests</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.liveMarkets}</div>
+            <div className="text-2xl font-bold">{stats.liveContests}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.liveMarkets > 0 ? "Markets available" : "No active markets"}
+              {stats.liveContests > 0 ? "Contests available" : "No active contests"}
             </p>
           </CardContent>
         </Card>
@@ -238,7 +239,7 @@ export function BettingDashboard() {
               <TabsList>
                 <TabsTrigger value="live" className="flex items-center space-x-2">
                   <Zap className="h-4 w-4" />
-                  <span>Live Markets</span>
+                  <span>Live Contests</span>
                 </TabsTrigger>
                 <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
                 <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
@@ -250,32 +251,33 @@ export function BettingDashboard() {
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
               <div className="flex items-center space-x-2">
-                <Badge variant="secondary">Real-time odds</Badge>
+                <Badge variant="secondary">Live Updates</Badge>
                 <Button size="sm" variant="outline" onClick={refreshStats}>
-                  Refresh Markets
+                  Refresh
                 </Button>
                 <Button size="sm" variant="default">
-                  Create Market
+                  Create Contest
                 </Button>
               </div>
             </div>
 
             <TabsContent value="live" className="space-y-6">
-              <LiveBettingMarkets />
+              <LiveContests />
             </TabsContent>
 
             <TabsContent value="upcoming" className="space-y-6">
-              <UpcomingBets />
+              <UpcomingContests />
             </TabsContent>
 
             <TabsContent value="tournaments" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Tournament Betting Markets</CardTitle>
-                  <CardDescription>Bet on tournament outcomes and player performances</CardDescription>
+                  <CardTitle>Tournament Contests</CardTitle>
+                  <CardDescription>Enter tournament prediction contests and player props</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ELODraftBetting />
+                  {/* Should be refactored to ELODraftContests ideally */}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -283,8 +285,8 @@ export function BettingDashboard() {
             <TabsContent value="elo-lobbies" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>ELO Lobby Betting Markets</CardTitle>
-                  <CardDescription>Bet on ELO lobby matches and player statistics</CardDescription>
+                  <CardTitle>ELO Lobby Contests</CardTitle>
+                  <CardDescription>Skill-based contests on ELO lobby matches</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ELODraftBetting />
@@ -303,50 +305,52 @@ export function BettingDashboard() {
         </div>
 
         <div className="space-y-6">
-          <BetSlip />
+          <ContestEntrySlip />
 
           <Card>
             <CardHeader>
-              <CardTitle>Create Betting Market</CardTitle>
-              <CardDescription>Anyone can create betting markets</CardDescription>
+              <CardTitle>Create Contest Group</CardTitle>
+              <CardDescription>Anyone can create a contest group</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button className="w-full bg-transparent" variant="outline">
-                Create Tournament Market
+                Create Tournament Contest
               </Button>
               <Button className="w-full bg-transparent" variant="outline">
-                Create ELO Lobby Market
+                Create ELO Lobby Contest
               </Button>
               <Button className="w-full bg-transparent" variant="outline">
-                Create Custom Market
+                Create Custom Contest
               </Button>
             </CardContent>
           </Card>
+
+          <SponsorsList />
 
           <Card>
             <CardHeader>
               <CardTitle>Hot Tips</CardTitle>
-              <CardDescription>Popular bets right now</CardDescription>
+              <CardDescription>Popular picks right now</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="text-center py-4">
-                <p className="text-muted-foreground text-sm">No trending bets available</p>
+                <p className="text-muted-foreground text-sm">No trending picks available</p>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Betting Limits</CardTitle>
+              <CardTitle>Contest Limits</CardTitle>
               <CardDescription>Your current limits</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span>Daily Limit</span>
+                <span>Daily Entry Limit</span>
                 <span>$500 / $1,000</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Single Bet</span>
+                <span>Single Entry</span>
                 <span>$250 max</span>
               </div>
               <div className="flex justify-between text-sm">

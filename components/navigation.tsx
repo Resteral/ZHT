@@ -31,6 +31,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import Image from "next/image"
+import { DepositModal } from "@/components/payments/deposit-modal"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
@@ -39,7 +40,7 @@ const navigation = [
   { name: "Leagues", href: "/leagues", icon: Trophy },
   { name: "Tournaments", href: "/tournaments", icon: Trophy },
   { name: "Schedule", href: "/schedule", icon: Calendar },
-  { name: "Betting", href: "/betting", icon: Target },
+  { name: "Contests", href: "/matches", icon: Target },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Leaderboard", href: "/leaderboard", icon: TrendingUp },
   { name: "Announcements", href: "/announcements", icon: Bell },
@@ -167,6 +168,7 @@ export function Navigation() {
             <div className="hidden sm:flex items-center space-x-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-1">
               <DollarSign className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-primary">${user.balance.toFixed(2)}</span>
+              <DepositModal />
             </div>
 
             {/* Notifications */}
@@ -265,9 +267,8 @@ export function Navigation() {
                         key={item.name}
                         href={item.href}
                         onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                          isActive(item.href) ? "bg-secondary text-secondary-foreground" : "hover:bg-secondary/50"
-                        }`}
+                        className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${isActive(item.href) ? "bg-secondary text-secondary-foreground" : "hover:bg-secondary/50"
+                          }`}
                       >
                         <Icon className="h-5 w-5" />
                         <span>{item.name}</span>

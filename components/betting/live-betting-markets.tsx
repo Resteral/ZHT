@@ -8,10 +8,12 @@ import { Clock, TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { useRealtimeBetting } from "@/lib/hooks/use-realtime"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import Link from "next/link"
 
 interface LiveMarket {
   id: string
   gameId: string
+  gameTitle?: string
   homeTeam: { name: string; avatar?: string; score: number }
   awayTeam: { name: string; avatar?: string; score: number }
   timeRemaining: string
@@ -37,7 +39,7 @@ interface LiveMarket {
   averageElo?: number
 }
 
-export function LiveBettingMarkets() {
+export function LiveContests() {
   const { markets, odds } = useRealtimeBetting()
   const [liveMarkets, setLiveMarkets] = useState<LiveMarket[]>([])
   const [eloLobbies, setEloLobbies] = useState<LiveMarket[]>([])
@@ -51,7 +53,7 @@ export function LiveBettingMarkets() {
 
   const loadELOLobbies = async () => {
     try {
-      console.log("[v0] Loading ELO lobbies for live betting...")
+      console.log("[v0] Loading ELO lobbies for live contests...")
 
       const { data: lobbies, error } = await supabase
         .from("matches")
@@ -133,56 +135,41 @@ export function LiveBettingMarkets() {
     }
   }
 
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   const loadLiveMarkets = async () => {
     try {
-      const { data: marketsData, error } = await supabase
-        .from("betting_markets")
-        .select(`
-          id,
-          game_id,
-          market_type,
-          description,
-          odds_home,
-          odds_away,
-          spread_line,
-          total_line,
-          status,
-          created_at,
-          updated_at
-        `)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
+      const { MOCK_ESPORTS_MATCHES } = await import("@/lib/mock-esports-data")
 
-      if (error) throw error
-
-      const formattedMarkets: LiveMarket[] =
-        marketsData?.map((market) => ({
-          id: market.id,
-          gameId: market.game_id || market.id,
+      const live = MOCK_ESPORTS_MATCHES
+        .filter(m => m.status === "live")
+        .map(game => ({
+          id: game.id,
+          gameId: game.id,
+          gameTitle: game.gameTitle,
           homeTeam: {
-            name: `Team A`,
-            score: 0,
+            name: game.homeTeam.name,
+            score: game.liveState?.homeScore || 0
           },
           awayTeam: {
-            name: `Team B`,
-            score: 0,
+            name: game.awayTeam.name,
+            score: game.liveState?.awayScore || 0
           },
-          timeRemaining: "00:00",
-          quarter: "Final",
-          markets: [
-            {
-              type: "moneyline",
-              homeOdds: market.odds_home?.toString() || "EVEN",
-              awayOdds: market.odds_away?.toString() || "EVEN",
-              trend: "stable",
-            },
-          ],
-          volume: 0,
-        })) || []
+          timeRemaining: game.liveState?.time || "Live",
+          quarter: game.liveState?.quarter || "Map 1",
+          markets: game.markets.map(m => ({
+            type: m.type,
+            homeOdds: m.homeOdds,
+            awayOdds: m.awayOdds,
+            trend: "stable"
+          })),
+          volume: Math.floor(Math.random() * 100) + 50,
+          entryFee: game.entryFee,
+          prizePool: game.prizePool
+        }))
 
-      setLiveMarkets(formattedMarkets)
+      setLiveMarkets(live)
     } catch (error) {
-      console.error("Error loading live markets:", error)
+      console.error("Error loading live contests:", error)
       setLiveMarkets([])
     } finally {
       setLoading(false)
@@ -216,7 +203,7 @@ export function LiveBettingMarkets() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-        <p className="text-muted-foreground">Loading live markets...</p>
+        <p className="text-muted-foreground">Loading live contests...</p>
       </div>
     )
   }
@@ -225,8 +212,8 @@ export function LiveBettingMarkets() {
     return (
       <div className="text-center py-8">
         <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-        <h3 className="text-lg font-medium mb-2">No Live Games</h3>
-        <p className="text-muted-foreground">Check back later for live betting opportunities</p>
+        <h3 className="text-lg font-medium mb-2">No Live Contests</h3>
+        <p className="text-muted-foreground">Check back later for live contest opportunities</p>
       </div>
     )
   }
@@ -234,7 +221,7 @@ export function LiveBettingMarkets() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Live Games & ELO Lobbies</h3>
+        <h3 className="text-lg font-semibold">Live Contests & ELO Lobbies</h3>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
           <span className="text-sm text-muted-foreground">Live Updates</span>
@@ -254,58 +241,61 @@ export function LiveBettingMarkets() {
                   >
                     {market.isELOLobby ? "ELO LOBBY" : "LIVE"}
                   </Badge>
+                  {market.gameTitle && (
+                    <Badge variant="outline" className="text-xs">
+                      {market.gameTitle}
+                    </Badge>
+                  )}
                   <div className="flex items-center space-x-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium">
                       {market.quarter} - {market.timeRemaining}
                     </span>
                   </div>
-                  {market.isELOLobby && (
+                  {(market.isELOLobby || market.entryFee) && (
                     <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                      <span>Avg ELO: {market.averageElo}</span>
-                      <span>•</span>
-                      <span>
-                        {market.participantCount}/{market.maxParticipants}
-                      </span>
-                      {market.entryFee > 0 && (
-                        <>
-                          <span>•</span>
-                          <span>${market.entryFee} entry</span>
-                        </>
+                      {market.averageElo && <span>Avg ELO: {market.averageElo} • </span>}
+                      {market.participantCount && <span>{market.participantCount}/{market.maxParticipants} • </span>}
+                      {market.entryFee && market.entryFee > 0 && (
+
+                        <span className="text-green-500 font-medium">${market.entryFee} entry</span>
+
                       )}
                     </div>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground">{market.volume} bets placed</div>
+                <div className="text-xs text-muted-foreground">{market.volume} entries</div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={market.awayTeam.avatar || "/placeholder.svg"} alt={market.awayTeam.name} />
-                    <AvatarFallback>{market.awayTeam.name.slice(0, 2)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium text-sm">{market.awayTeam.name}</p>
-                    <p className="text-lg font-bold">{market.awayTeam.score}</p>
+              <Link href={`/bet/${market.gameId}`} className="block hover:bg-slate-800/50 rounded-lg p-2 transition-colors -mx-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={market.awayTeam.avatar || "/placeholder.svg"} alt={market.awayTeam.name} />
+                      <AvatarFallback>{market.awayTeam.name.slice(0, 2)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium text-sm">{market.awayTeam.name}</p>
+                      <p className="text-lg font-bold">{market.awayTeam.score}</p>
+                    </div>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-sm font-medium">@</p>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <div className="text-right">
+                      <p className="font-medium text-sm">{market.homeTeam.name}</p>
+                      <p className="text-lg font-bold">{market.homeTeam.score}</p>
+                    </div>
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={market.homeTeam.avatar || "/placeholder.svg"} alt={market.homeTeam.name} />
+                      <AvatarFallback>{market.homeTeam.name.slice(0, 2)}</AvatarFallback>
+                    </Avatar>
                   </div>
                 </div>
-
-                <div className="text-center">
-                  <p className="text-sm font-medium">@</p>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <div className="text-right">
-                    <p className="font-medium text-sm">{market.homeTeam.name}</p>
-                    <p className="text-lg font-bold">{market.homeTeam.score}</p>
-                  </div>
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={market.homeTeam.avatar || "/placeholder.svg"} alt={market.homeTeam.name} />
-                    <AvatarFallback>{market.homeTeam.name.slice(0, 2)}</AvatarFallback>
-                  </Avatar>
-                </div>
-              </div>
+              </Link>
             </CardHeader>
 
             <CardContent className="space-y-4">

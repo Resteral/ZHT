@@ -18,7 +18,7 @@ interface BetSlipItem {
   stake: number
 }
 
-export function BetSlip() {
+export function ContestEntrySlip() {
   const [betSlipItems, setBetSlipItems] = useState<BetSlipItem[]>([])
 
   const [betType, setBetType] = useState<"single" | "parlay">("single")
@@ -47,17 +47,17 @@ export function BetSlip() {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Bet Slip</CardTitle>
+          <CardTitle>Contest Entries</CardTitle>
           <Badge variant="secondary">{betSlipItems.length} selections</Badge>
         </div>
-        <CardDescription>Review and place your bets</CardDescription>
+        <CardDescription>Review and submit your contest entries</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
         {betSlipItems.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-muted-foreground">No bets selected</p>
-            <p className="text-xs text-muted-foreground mt-1">Click on odds to add bets</p>
+            <p className="text-muted-foreground">No selections</p>
+            <p className="text-xs text-muted-foreground mt-1">Select outcomes to enter contests</p>
           </div>
         ) : (
           <>
@@ -77,7 +77,7 @@ export function BetSlip() {
 
                   <div className="flex items-center space-x-2">
                     <Label htmlFor={`stake-${item.id}`} className="text-xs">
-                      Stake:
+                      Entry Fee:
                     </Label>
                     <div className="flex items-center space-x-1">
                       <Button
@@ -109,7 +109,7 @@ export function BetSlip() {
                   </div>
 
                   <div className="text-xs text-muted-foreground">
-                    To win: ${(item.stake * item.decimalOdds - item.stake).toFixed(2)}
+                    Est. Prize: ${(item.stake * item.decimalOdds).toFixed(2)}
                   </div>
                 </div>
               ))}
@@ -120,22 +120,22 @@ export function BetSlip() {
             {/* Totals */}
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Total Stake:</span>
+                <span>Total Entry Fees:</span>
                 <span className="font-medium">${getTotalStake().toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Potential Payout:</span>
+                <span>Est. Prize Pool Share:</span>
                 <span className="font-medium">${getTotalPayout().toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Potential Profit:</span>
+                <span>Net Potential:</span>
                 <span className="font-medium text-green-500">+${getPotentialProfit().toFixed(2)}</span>
               </div>
             </div>
 
             {/* Place Bet Button */}
             <Button className="w-full" disabled={getTotalStake() === 0}>
-              Place Bets - ${getTotalStake().toFixed(2)}
+              Submit Entries - ${getTotalStake().toFixed(2)}
             </Button>
 
             {/* Quick Stake Buttons */}
