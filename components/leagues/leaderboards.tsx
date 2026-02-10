@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Star, DollarSign, Medal, Crown, Target } from "lucide-react"
+import { Trophy, Star, DollarSign, Medal, Crown, Target, Shield } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 interface LeaderboardEntry {
@@ -19,10 +19,29 @@ interface LeaderboardEntry {
   rank: number
 }
 
+interface Clan {
+  id: string
+  name: string
+  tag: string
+  level: number
+  rating: number
+  members_count: number
+  rank: number
+}
+
+const MOCK_CLANS: Clan[] = [
+  { id: "1", name: "Team Solomid", tag: "TSM", level: 15, rating: 2450, members_count: 42, rank: 1 },
+  { id: "2", name: "Cloud9", tag: "C9", level: 14, rating: 2380, members_count: 38, rank: 2 },
+  { id: "3", name: "FaZe Clan", tag: "FAZE", level: 16, rating: 2350, members_count: 48, rank: 3 },
+  { id: "4", name: "100 Thieves", tag: "100T", level: 13, rating: 2290, members_count: 35, rank: 4 },
+  { id: "5", name: "Team Liquid", tag: "TL", level: 14, rating: 2250, members_count: 40, rank: 5 },
+]
+
 export function Leaderboards() {
   const [eloLeaders, setEloLeaders] = useState<LeaderboardEntry[]>([])
   const [fantasyLeaders, setFantasyLeaders] = useState<LeaderboardEntry[]>([])
   const [earningsLeaders, setEarningsLeaders] = useState<LeaderboardEntry[]>([])
+  const [clans, setClans] = useState<Clan[]>([])
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
@@ -34,6 +53,7 @@ export function Leaderboards() {
   const loadLeaderboards = async () => {
     try {
       // Load highest ELO players
+      setClans(MOCK_CLANS)
       const { data: eloData } = await supabase
         .from("users")
         .select("id, username, elo_rating")
@@ -70,16 +90,19 @@ export function Leaderboards() {
         .limit(20)
 
       if (fantasyData) {
-        const fantasyLeaders = fantasyData.map((team, index) => ({
-          id: team.owner_id,
-          username: team.users?.username || "Unknown",
-          elo_rating: team.users?.elo_rating || 1200,
-          total_earnings: 0,
-          fantasy_team_value: team.total_elo,
-          fantasy_team_name: team.name,
-          division: getDivisionFromElo(team.average_elo),
-          rank: index + 1,
-        }))
+        const fantasyLeaders = fantasyData.map((team, index) => {
+          const user = Array.isArray(team.users) ? team.users[0] : team.users
+          return {
+            id: team.owner_id,
+            username: user?.username || "Unknown",
+            elo_rating: user?.elo_rating || 1200,
+            total_earnings: 0,
+            fantasy_team_value: team.total_elo,
+            fantasy_team_name: team.name,
+            division: getDivisionFromElo(team.average_elo),
+            rank: index + 1,
+          }
+        })
         setFantasyLeaders(fantasyLeaders)
       }
 
@@ -177,6 +200,7 @@ export function Leaderboards() {
       <Tabs defaultValue="elo" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="elo">Highest ELO</TabsTrigger>
+          <TabsTrigger value="clans">Top Clans</TabsTrigger>
           <TabsTrigger value="fantasy">Highest Fantasy Team</TabsTrigger>
           <TabsTrigger value="earnings">Highest Earners</TabsTrigger>
         </TabsList>
@@ -206,6 +230,40 @@ export function Leaderboards() {
                     <div className="text-right">
                       <p className="text-2xl font-bold text-yellow-600">{player.elo_rating}</p>
                       <p className="text-sm text-muted-foreground">ELO Rating</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="clans" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-indigo-500" />
+                Top Clans
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {clans.map((clan, index) => (
+                  <div key={clan.id} className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                    <div className="flex items-center justify-center w-12">{getRankIcon(index + 1)}</div>
+                    <Avatar>
+                      <AvatarFallback>{clan.tag}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="font-medium flex items-center gap-2">
+                        [{clan.tag}] {clan.name}
+                        <Badge variant="outline" className="text-xs">Lvl {clan.level}</Badge>
+                      </p>
+                      <p className="text-sm text-muted-foreground">{clan.members_count} members</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-indigo-500">{clan.rating}</p>
+                      <p className="text-sm text-muted-foreground">Clan Rating</p>
                     </div>
                   </div>
                 ))}

@@ -5,9 +5,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Crown, Trophy, Medal, Star, TrendingUp, TrendingDown, Zap, Target } from "lucide-react"
+import { Crown, Trophy, Medal, Star, TrendingUp, TrendingDown, Zap, Target, Shield } from "lucide-react"
 import { ProfileNameLink } from "@/components/profile/profile-name-link"
 import { createClient } from "@/lib/supabase/client"
+
+interface Clan {
+  id: string
+  name: string
+  tag: string
+  level: number
+  rating: number
+  wins: number
+  losses: number
+  members_count: number
+  rank: number
+}
 
 interface Player {
   id: string
@@ -29,6 +41,17 @@ interface Earner {
   monthly_earnings: number
   rank: number
 }
+
+const MOCK_CLAN_LEADERBOARD: Clan[] = [
+  { id: "1", name: "Team Solomid", tag: "TSM", level: 15, rating: 2450, wins: 142, losses: 89, members_count: 42, rank: 1 },
+  { id: "2", name: "Cloud9", tag: "C9", level: 14, rating: 2380, wins: 135, losses: 92, members_count: 38, rank: 2 },
+  { id: "3", name: "FaZe Clan", tag: "FAZE", level: 16, rating: 2350, wins: 156, losses: 112, members_count: 48, rank: 3 },
+  { id: "4", name: "100 Thieves", tag: "100T", level: 13, rating: 2290, wins: 110, losses: 75, members_count: 35, rank: 4 },
+  { id: "5", name: "Team Liquid", tag: "TL", level: 14, rating: 2250, wins: 125, losses: 98, members_count: 40, rank: 5 },
+  { id: "6", name: "G2 Esports", tag: "G2", level: 15, rating: 2210, wins: 130, losses: 105, members_count: 41, rank: 6 },
+  { id: "7", name: "Fnatic", tag: "FNC", level: 13, rating: 2180, wins: 115, losses: 90, members_count: 36, rank: 7 },
+  { id: "8", name: "T1", tag: "T1", level: 16, rating: 2500, wins: 180, losses: 50, members_count: 45, rank: 8 }, // Should be rank 1 by rating, but mocking list order
+]
 
 export default function LeaderboardPage() {
   const [eloPlayers, setEloPlayers] = useState<Player[]>([])
@@ -91,7 +114,12 @@ export default function LeaderboardPage() {
             continue
           }
 
-          const completedMatchIds = userMatches.filter((m) => m.matches?.status === "completed").map((m) => m.match_id)
+          const completedMatchIds = userMatches
+            .filter((m) => {
+              const match = Array.isArray(m.matches) ? m.matches[0] : m.matches
+              return match?.status === "completed"
+            })
+            .map((m) => m.match_id)
 
           console.log("[v0] Found", completedMatchIds.length, "completed matches for", player.username)
 
@@ -171,13 +199,16 @@ export default function LeaderboardPage() {
         .limit(10)
 
       if (earners) {
-        const formattedEarners = earners.map((earner, index) => ({
-          id: earner.user_id,
-          username: earner.users.username,
-          total_earnings: earner.total_winnings || 0,
-          monthly_earnings: earner.total_winnings * 0.1, // Approximate monthly earnings
-          rank: index + 1,
-        }))
+        const formattedEarners = earners.map((earner, index) => {
+          const user = Array.isArray(earner.users) ? earner.users[0] : earner.users
+          return {
+            id: earner.user_id,
+            username: user?.username || "Unknown",
+            total_earnings: earner.total_winnings || 0,
+            monthly_earnings: earner.total_winnings * 0.1, // Approximate monthly earnings
+            rank: index + 1,
+          }
+        })
         setTopEarners(formattedEarners)
         console.log("[v0] Set top earners:", formattedEarners.length)
       }
@@ -280,11 +311,12 @@ export default function LeaderboardPage() {
       </div>
 
       <Tabs defaultValue="elo" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="elo" className="flex items-center gap-2">
             <Crown className="h-4 w-4" />
             <span className="text-foreground">ELO Rankings</span>
           </TabsTrigger>
+          <TabsTrigger value="clans">Top Clans</TabsTrigger>
           <TabsTrigger value="earnings">Top Earners</TabsTrigger>
           <TabsTrigger value="tournaments">Tournament Winners</TabsTrigger>
           <TabsTrigger value="betting">Betting Leaders</TabsTrigger>
@@ -400,7 +432,7 @@ export default function LeaderboardPage() {
                           <AvatarFallback>
                             {player.username
                               .split(" ")
-                              .map((n) => n[0])
+                              .map((n: string) => n[0])
                               .join("")}
                           </AvatarFallback>
                         </Avatar>
@@ -424,13 +456,12 @@ export default function LeaderboardPage() {
                         <div className="text-right">
                           <div className="font-bold text-lg">{player.elo_rating}</div>
                           <div
-                            className={`text-sm flex items-center gap-1 ${
-                              player.recent_change > 0
-                                ? "text-green-600"
-                                : player.recent_change < 0
-                                  ? "text-red-600"
-                                  : "text-muted-foreground"
-                            }`}
+                            className={`text-sm flex items-center gap-1 ${player.recent_change > 0
+                              ? "text-green-600"
+                              : player.recent_change < 0
+                                ? "text-red-600"
+                                : "text-muted-foreground"
+                              }`}
                           >
                             {player.recent_change > 0 ? (
                               <TrendingUp className="h-3 w-3" />
@@ -446,6 +477,47 @@ export default function LeaderboardPage() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="clans" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-indigo-500" />
+                Top Clans
+              </CardTitle>
+              <CardDescription>Highest rated clans by average member ELO</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {MOCK_CLAN_LEADERBOARD.sort((a, b) => b.rating - a.rating).map((clan, index) => (
+                  <div key={clan.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted font-bold">
+                        {index + 1}
+                      </div>
+                      <Avatar>
+                        <AvatarFallback>{clan.tag}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-semibold flex items-center gap-2">
+                          [{clan.tag}] {clan.name}
+                          <Badge variant="outline" className="text-xs">Lvl {clan.level}</Badge>
+                        </div>
+                        <div className="text-sm text-slate-100">
+                          {clan.members_count} members • {clan.wins}W-{clan.losses}L
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-lg text-indigo-400">{clan.rating}</div>
+                      <div className="text-sm text-slate-100">Clan Rating</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -492,7 +564,7 @@ export default function LeaderboardPage() {
                           <AvatarFallback>
                             {player.username
                               .split(" ")
-                              .map((n) => n[0])
+                              .map((n: string) => n[0])
                               .join("")}
                           </AvatarFallback>
                         </Avatar>
@@ -638,7 +710,7 @@ export default function LeaderboardPage() {
                         <AvatarFallback>
                           {bettor.name
                             .split(" ")
-                            .map((n) => n[0])
+                            .map((n: string) => n[0])
                             .join("")}
                         </AvatarFallback>
                       </Avatar>
