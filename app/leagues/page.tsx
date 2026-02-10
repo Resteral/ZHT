@@ -18,14 +18,7 @@ import { useRouter } from "next/navigation"
 import { SeasonalTournamentDashboard } from "@/components/tournaments/seasonal-tournament-dashboard"
 import { LeagueTournamentsSection } from "@/components/leagues/league-tournaments-section"
 
-interface WagerMatch {
-  id: string
-  player1: string
-  player2?: string
-  pot: number
-  status: string
-  game: string
-}
+
 
 interface CaptainDraft {
   id: string
@@ -75,6 +68,8 @@ interface LeaguePlayer {
   team_id?: string
   status: "available" | "drafted" | "captain"
   division: "premier" | "championship" | "league_one" | "league_two"
+  monthly_points?: number
+  trend?: "up" | "down" | "stable"
 }
 
 interface MonthlyRanking {
@@ -116,7 +111,7 @@ export default function LeaguesPage() {
   const [selectedLeague, setSelectedLeague] = useState<EloLeague | null>(null)
   const [leaguePlayers, setLeaguePlayers] = useState<LeaguePlayer[]>([])
   const [monthlyRankings, setMonthlyRankings] = useState<MonthlyRanking[]>([])
-  const [activeWagerMatches, setActiveWagerMatches] = useState<WagerMatch[]>([])
+
   const supabase = createClient()
   const { user } = useAuth()
   const router = useRouter()
@@ -148,7 +143,7 @@ export default function LeaguesPage() {
 
         if (userTournaments && userTournaments.length > 0) {
           for (const entry of userTournaments) {
-            const tournament = entry.tournaments
+            const tournament = entry.tournaments as any
             if (tournament && tournament.status === "draft_active") {
               // Show notification and redirect to draft
               const shouldRedirect = window.confirm(
@@ -365,25 +360,7 @@ export default function LeaguesPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const { data: wagerMatches } = await supabase
-        .from("wager_matches")
-        .select("*")
-        .in("status", ["open", "waiting", "in_progress"])
-        .order("created_at", { ascending: false })
-        .limit(10)
 
-      if (wagerMatches) {
-        setActiveWagerMatches(
-          wagerMatches.map((match) => ({
-            id: match.id,
-            player1: match.player1_name || "Player 1",
-            player2: match.player2_name,
-            pot: match.stake_amount || 50,
-            status: match.status,
-            game: match.game || "Omega Strikers",
-          })),
-        )
-      }
 
       const { data: eloMatches } = await supabase
         .from("matches")

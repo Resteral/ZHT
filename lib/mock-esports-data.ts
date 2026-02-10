@@ -1,7 +1,7 @@
 
 export interface EsportsMatch {
     id: string;
-    gameTitle: "League of Legends" | "CS2" | "Valorant" | "Dota 2" | "Rainbow Six Siege" | "Starcraft II" | "GTA VI" | "Fortnite" | "Apex Legends" | "Omega Strikers" | "Zealot Hockey";
+    gameTitle: "League of Legends" | "CS2" | "Valorant" | "Dota 2" | "Rainbow Six Siege" | "Starcraft II" | "GTA VI" | "Fortnite" | "Apex Legends" | "Omega Strikers" | "Zealot Hockey" | "World of Warcraft";
     league: string;
     homeTeam: {
         name: string;
@@ -190,6 +190,20 @@ export const MOCK_ESPORTS_MATCHES: EsportsMatch[] = [
         markets: [
             { type: "moneyline", homeOdds: "-160", awayOdds: "+130" },
             { type: "total", over: "5.5", under: "5.5", overOdds: "-110", underOdds: "-110" }
+        ]
+    },
+    {
+        id: "match-11",
+        gameTitle: "World of Warcraft",
+        league: "Arena World Championship",
+        homeTeam: { name: "Echo", record: "15-2" },
+        awayTeam: { name: "Liquid", record: "14-3" },
+        scheduledTime: new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString(),
+        status: "upcoming",
+        entryFee: 10,
+        prizePool: 3000,
+        markets: [
+            { type: "moneyline", homeOdds: "-140", awayOdds: "+110" }
         ]
     }
 ];
