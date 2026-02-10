@@ -3,13 +3,13 @@ import { ContestDashboard } from "@/components/contests/contest-dashboard"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
-export default function BettingPage() {
+export default function ContestsPage() {
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Betting Markets</h1>
-          <p className="text-muted-foreground">Place bets on games and player performances</p>
+          <h1 className="text-3xl font-bold text-foreground">Contest Markets</h1>
+          <p className="text-muted-foreground">Place entries on games and player performances</p>
         </div>
       </div>
 

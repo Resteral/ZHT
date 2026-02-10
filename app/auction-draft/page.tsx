@@ -201,7 +201,7 @@ export default function AuctionDraftPage() {
                       </Button>
                       {league.betting_enabled && (
                         <Button asChild variant="outline" size="sm">
-                          <Link href={`/betting?league=${league.id}`}>
+                          <Link href={`/contests?league=${league.id}`}>
                             <DollarSign className="h-3 w-3" />
                           </Link>
                         </Button>

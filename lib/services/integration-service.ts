@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { bettingService } from "./betting-service"
+import { contestService } from "./contest-service"
 
 export interface GameResult {
   game_id: string
@@ -11,7 +11,7 @@ export interface GameResult {
 }
 
 export class IntegrationService {
-  private supabase = createClient()
+  private supabase = createClient() // Assuming createClient() is synchronous as it's a class property. If it were async, this would require a different initialization pattern.
 
   // Sequence: Game completion -> ELO updates -> Bet settlements -> Analytics updates
   async processGameCompletion(gameResult: GameResult) {

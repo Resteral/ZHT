@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react"
 import Link from "next/link"
 
-export default function CreateBettingMarket() {
+export default function CreateContestMarket() {
   const [marketData, setMarketData] = useState({
     title: "",
     description: "",
@@ -73,21 +73,21 @@ export default function CreateBettingMarket() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Creating betting market:", marketData)
+    console.log("Creating contest market:", marketData)
   }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/admin/betting">
+        <Link href="/admin/contests">
           <Button variant="outline" size="sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Markets
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Create Betting Market</h1>
-          <p className="text-muted-foreground">Set up a new betting market with odds</p>
+          <h1 className="text-3xl font-bold text-foreground">Create Contest Market</h1>
+          <p className="text-muted-foreground">Set up a new contest market with odds</p>
         </div>
       </div>
 
@@ -97,7 +97,7 @@ export default function CreateBettingMarket() {
           <Card>
             <CardHeader>
               <CardTitle>Market Details</CardTitle>
-              <CardDescription>Basic information about the betting market</CardDescription>
+              <CardDescription>Basic information about the contest market</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -320,7 +320,7 @@ export default function CreateBettingMarket() {
 
         {/* Submit Button */}
         <div className="flex justify-end gap-4">
-          <Link href="/admin/betting">
+          <Link href="/admin/contests">
             <Button variant="outline">Cancel</Button>
           </Link>
           <Button type="submit" className="flex items-center gap-2">

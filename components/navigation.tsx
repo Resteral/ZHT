@@ -49,7 +49,7 @@ const navigation: NavigationItem[] = [
   { name: "Leagues", href: "/leagues", icon: Trophy },
   { name: "Tournaments", href: "/tournaments", icon: Trophy },
   { name: "Schedule", href: "/schedule", icon: Calendar },
-  { name: "Contests", href: "/matches", icon: Target },
+  { name: "Contests", href: "/contests", icon: Target },
   { name: "Clan", href: "/clan", icon: Shield },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Leaderboard", href: "/leaderboard", icon: TrendingUp },

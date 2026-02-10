@@ -696,7 +696,7 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
           <CardHeader className="border-b border-slate-700">
             <CardTitle className="flex items-center gap-2 text-slate-100">
               <DollarSign className="h-5 w-5 text-amber-400" />
-              Betting Lobby - Place Your Bets!
+              Contest Lobby - Place Your Entries!
               <Badge variant="outline" className="bg-red-800 text-red-100 border-red-600 animate-pulse">
                 {formatTime(bettingTimeLeft)} remaining
               </Badge>
@@ -704,30 +704,28 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
             <div className="text-center mb-4">
-              <p className="text-slate-100 font-medium">Draft completed! Place your bets before the match begins.</p>
-              <p className="text-sm text-slate-300">Betting closes automatically when timer expires.</p>
+              <p className="text-slate-100 font-medium">Draft completed! Place your entries before the match begins.</p>
+              <p className="text-sm text-slate-300">Contest closes automatically when timer expires.</p>
             </div>
 
             <div className="flex space-x-1 bg-slate-800 p-1 rounded-lg mb-4 border border-slate-700">
               <button
                 onClick={() => setActiveBettingTab("match")}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all duration-200 ${
-                  activeBettingTab === "match"
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all duration-200 ${activeBettingTab === "match"
                     ? "bg-indigo-600 text-white shadow-lg"
                     : "text-slate-300 hover:text-white hover:bg-slate-700"
-                }`}
+                  }`}
               >
-                Match Betting
+                Match Contests
               </button>
               <button
                 onClick={() => setActiveBettingTab("players")}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all duration-200 ${
-                  activeBettingTab === "players"
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all duration-200 ${activeBettingTab === "players"
                     ? "bg-indigo-600 text-white shadow-lg"
                     : "text-slate-300 hover:text-white hover:bg-slate-700"
-                }`}
+                  }`}
               >
-                Player Betting
+                Player Contests
               </button>
             </div>
 

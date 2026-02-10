@@ -110,10 +110,10 @@ export default function BettingMarketManagement() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Betting Market Management</h1>
-          <p className="text-muted-foreground">Create and manage all betting markets and odds</p>
+          <h1 className="text-3xl font-bold text-foreground">Contest Market Management</h1>
+          <p className="text-muted-foreground">Create and manage all contest markets and odds</p>
         </div>
-        <Link href="/admin/betting/create">
+        <Link href="/admin/contests/create">
           <Button className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Create Market
@@ -189,16 +189,16 @@ export default function BettingMarketManagement() {
       {/* Markets Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Betting Markets</CardTitle>
+          <CardTitle>All Contest Markets</CardTitle>
           <CardDescription>{markets.length} markets total</CardDescription>
         </CardHeader>
         <CardContent>
           {markets.length === 0 ? (
             <div className="text-center py-8">
               <Target className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-lg font-medium mb-2">No Betting Markets</h3>
-              <p className="text-muted-foreground">Create your first betting market to get started</p>
-              <Link href="/admin/betting/create">
+              <h3 className="text-lg font-medium mb-2">No Contest Markets</h3>
+              <p className="text-muted-foreground">Create your first contest market to get started</p>
+              <Link href="/admin/contests/create">
                 <Button className="mt-4">
                   <Plus className="h-4 w-4 mr-2" />
                   Create Market
@@ -250,7 +250,7 @@ export default function BettingMarketManagement() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Link href={`/admin/betting/${market.id}/edit`}>
+                        <Link href={`/admin/contests/${market.id}/edit`}>
                           <Button size="sm" variant="outline">
                             <Edit className="h-4 w-4" />
                           </Button>

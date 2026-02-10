@@ -217,12 +217,12 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Link href="/admin/betting">
+                  <Link href="/admin/contests">
                     <Button className="w-full bg-transparent" variant="outline">
                       Manage Markets
                     </Button>
                   </Link>
-                  <Link href="/admin/betting/create">
+                  <Link href="/admin/contests/create">
                     <Button className="w-full" size="sm">
                       Create Market
                     </Button>
@@ -541,15 +541,14 @@ export default function AdminDashboard() {
                   <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <div
-                        className={`w-2 h-2 rounded-full ${
-                          activity.type === "success"
+                        className={`w-2 h-2 rounded-full ${activity.type === "success"
                             ? "bg-green-500"
                             : activity.type === "warning"
                               ? "bg-orange-500"
                               : activity.type === "error"
                                 ? "bg-red-500"
                                 : "bg-blue-500"
-                        }`}
+                          }`}
                       />
                       <div>
                         <p className="text-sm font-medium">{activity.action}</p>
