@@ -135,7 +135,7 @@ export function useRealtimeGame(gameId: string) {
   return { gameState, events }
 }
 
-export function useRealtimeBetting() {
+export function useRealtimeContests() {
   const [markets, setMarkets] = useState<any[]>([])
   const [odds, setOdds] = useState<Record<string, any>>({})
 
@@ -151,14 +151,14 @@ export function useRealtimeBetting() {
         },
         (payload) => {
           if (payload.eventType === "UPDATE") {
-            setMarkets((current) => current.map((market) => (market.id === payload.new.id ? payload.new : market)))
+            setMarkets((current) => current.map((market) => (market.id === (payload.new as any).id ? (payload.new as any) : market)))
             setOdds((current) => ({
               ...current,
-              [payload.new.id]: {
-                home_odds: payload.new.odds_home,
-                away_odds: payload.new.odds_away,
-                spread_line: payload.new.spread_line,
-                total_line: payload.new.total_line,
+              [(payload.new as any).id]: {
+                home_odds: (payload.new as any).odds_home,
+                away_odds: (payload.new as any).odds_away,
+                spread_line: (payload.new as any).spread_line,
+                total_line: (payload.new as any).total_line,
               },
             }))
           }

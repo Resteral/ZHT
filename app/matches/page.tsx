@@ -1,7 +1,7 @@
 "use client"
 
-import { UpcomingContests } from "@/components/betting/upcoming-bets"
-import { LiveContests } from "@/components/betting/live-betting-markets"
+import { UpcomingContests } from "@/components/contests/upcoming-contests"
+import { LiveContests } from "@/components/contests/live-contests"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Zap, Calendar } from "lucide-react"
 

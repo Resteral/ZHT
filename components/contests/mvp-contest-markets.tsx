@@ -23,7 +23,7 @@ interface MVPMarket {
   closes_at: string
 }
 
-export function MVPBettingMarkets() {
+export function MVPContestMarkets() {
   const [mvpMarkets, setMvpMarkets] = useState<MVPMarket[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBets, setSelectedBets] = useState<{
@@ -126,7 +126,7 @@ export function MVPBettingMarkets() {
 
       const { data: wallet, error: walletCheckError } = await supabase
         .from("user_wallets")
-        .select("balance")
+        .select("balance, total_wagered")
         .eq("user_id", user.user.id)
         .single()
 
@@ -145,7 +145,7 @@ export function MVPBettingMarkets() {
           .from("user_wallets")
           .update({
             balance: wallet.balance - stake,
-            total_wagered: supabase.raw("total_wagered + ?", [stake]),
+            total_wagered: (wallet.total_wagered || 0) + stake,
           })
           .eq("user_id", user.user.id)
 
@@ -170,7 +170,7 @@ export function MVPBettingMarkets() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-        <p className="text-muted-foreground">Loading MVP betting markets...</p>
+        <p className="text-muted-foreground">Loading MVP contest markets...</p>
       </div>
     )
   }
@@ -190,7 +190,7 @@ export function MVPBettingMarkets() {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Trophy className="h-5 w-5" />
-          MVP Betting Markets
+          MVP Contest Markets
         </h3>
         <Badge variant="secondary">{mvpMarkets.length} markets available</Badge>
       </div>
@@ -211,7 +211,7 @@ export function MVPBettingMarkets() {
               </div>
               <CardDescription className="flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                Betting closes: {new Date(market.closes_at).toLocaleString()}
+                Contest closes: {new Date(market.closes_at).toLocaleString()}
               </CardDescription>
             </CardHeader>
 
@@ -284,7 +284,7 @@ export function MVPBettingMarkets() {
                             To win: $
                             {(
                               selectedBet.stake *
-                                (player.odds > 0 ? player.odds / 100 + 1 : 100 / Math.abs(player.odds) + 1) -
+                              (player.odds > 0 ? player.odds / 100 + 1 : 100 / Math.abs(player.odds) + 1) -
                               selectedBet.stake
                             ).toFixed(2)}
                           </p>

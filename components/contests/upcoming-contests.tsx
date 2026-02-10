@@ -43,11 +43,11 @@ export function UpcomingContests() {
   const supabase = createClient()
 
   useEffect(() => {
-    loadBettingData()
+    loadContestData()
   }, [])
 
   /* eslint-disable @typescript-eslint/no-unused-vars */
-  const loadBettingData = async () => {
+  const loadContestData = async () => {
     try {
       setLoading(true)
       // Simulating API call delay
@@ -133,7 +133,7 @@ export function UpcomingContests() {
                   </div>
                 </div>
 
-                <Link href={`/bet/${game.id}`} className="block hover:bg-slate-800/50 rounded-lg p-2 transition-colors -mx-2">
+                <Link href={`/contest/${game.id}`} className="block hover:bg-slate-800/50 rounded-lg p-2 transition-colors -mx-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       <Avatar className="h-8 w-8">

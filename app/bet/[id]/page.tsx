@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, Calendar, User, Trophy } from "lucide-react"
 import Link from "next/link"
-import { ContestEntrySlip } from "@/components/betting/bet-slip"
+import { ContestEntrySlip } from "@/components/contests/contest-slip"
 
 export default function ContestDetailPage() {
     const params = useParams()

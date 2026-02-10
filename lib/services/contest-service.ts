@@ -25,12 +25,12 @@ export interface Bet {
   settled_at?: string
 }
 
-export class BettingService {
+export class ContestService {
   private async getSupabase() {
     return await createClient()
   }
 
-  async getActiveMarkets(gameId?: string) {
+  async getActiveContests(gameId?: string) {
     const supabase = await this.getSupabase()
     let query = supabase
       .from("betting_markets")
@@ -66,7 +66,7 @@ export class BettingService {
     return data || []
   }
 
-  async placeBet(userId: string, marketId: string, selection: string, odds: number, stake: number) {
+  async enterContest(userId: string, marketId: string, selection: string, odds: number, stake: number) {
     const supabase = await this.getSupabase()
     const potentialPayout = stake * (odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1)
 
@@ -117,7 +117,7 @@ export class BettingService {
     return bet
   }
 
-  async getUserBets(userId: string, status?: string) {
+  async getUserContests(userId: string, status?: string) {
     const supabase = await this.getSupabase()
     let query = supabase
       .from("bets")
@@ -153,7 +153,7 @@ export class BettingService {
     return data || []
   }
 
-  async settleBet(betId: string, result: "won" | "lost") {
+  async settleContest(betId: string, result: "won" | "lost") {
     const supabase = await this.getSupabase()
     const { data: bet, error: betError } = await supabase.from("bets").select("*").eq("id", betId).single()
 
@@ -194,7 +194,7 @@ export class BettingService {
     return bet
   }
 
-  async getBettingStats(userId: string) {
+  async getContestStats(userId: string) {
     const supabase = await this.getSupabase()
     const { data: bets, error } = await supabase
       .from("bets")
@@ -250,4 +250,4 @@ export class BettingService {
   }
 }
 
-export const bettingService = new BettingService()
+export const contestService = new ContestService()

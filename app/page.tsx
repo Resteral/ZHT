@@ -1,6 +1,6 @@
 "use client"
 
-import { BettingDashboard } from "@/components/betting/betting-dashboard"
+import { ContestDashboard } from "@/components/contests/contest-dashboard"
 import { UserInitializer } from "@/components/auth/user-initializer"
 // import { useAuth } from "@/lib/auth-context"
 
@@ -15,7 +15,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold tracking-tight text-white">Esports Contests</h1>
           </div>
-          <BettingDashboard />
+          <ContestDashboard />
         </div>
       </main>
     </div>

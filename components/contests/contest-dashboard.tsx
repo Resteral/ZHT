@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingUp, DollarSign, Target, Clock, Zap, Trophy } from "lucide-react"
-import { LiveContests } from "./live-betting-markets"
-import { UpcomingContests } from "./upcoming-bets"
-import { BettingHistory } from "./betting-history"
-import { ContestEntrySlip } from "./bet-slip"
-import { ELODraftBetting } from "./elo-draft-betting"
-import { BettingResults } from "./betting-results"
+import { LiveContests } from "./live-contests"
+import { UpcomingContests } from "./upcoming-contests"
+import { ContestHistory } from "./contest-history"
+import { ContestEntrySlip } from "./contest-slip"
+import { ELODraftContest } from "./elo-draft-contest"
+import { ContestResults } from "./contest-results"
 import { SponsorsList } from "@/components/sponsors/sponsors-list"
 import { FriendsList } from "@/components/social/friends-list"
 import { createClient } from "@/lib/supabase/client"
@@ -25,7 +25,7 @@ interface ContestStats {
   weeklyChange: number
 }
 
-export function BettingDashboard() {
+export function ContestDashboard() {
   const [stats, setStats] = useState<ContestStats>({
     availableBalance: 0,
     activeEntries: 0,
@@ -249,7 +249,7 @@ export function BettingDashboard() {
                   <Trophy className="h-4 w-4" />
                   <span>Results</span>
                 </TabsTrigger>
-                <TabsTrigger value="history">History</TabsTrigger>
+                <TabsTrigger value="history">My Entries</TabsTrigger>
               </TabsList>
               <div className="flex items-center space-x-2">
                 <Badge variant="secondary">Live Updates</Badge>
@@ -277,7 +277,7 @@ export function BettingDashboard() {
                   <CardDescription>Enter tournament prediction contests and player props</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ELODraftBetting />
+                  <ELODraftContest />
                   {/* Should be refactored to ELODraftContests ideally */}
                 </CardContent>
               </Card>
@@ -290,17 +290,17 @@ export function BettingDashboard() {
                   <CardDescription>Skill-based contests on ELO lobby matches</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ELODraftBetting />
+                  <ELODraftContest />
                 </CardContent>
               </Card>
             </TabsContent>
 
             <TabsContent value="results" className="space-y-6">
-              <BettingResults />
+              <ContestResults />
             </TabsContent>
 
             <TabsContent value="history" className="space-y-6">
-              <BettingHistory />
+              <ContestHistory />
             </TabsContent>
           </Tabs>
         </div>

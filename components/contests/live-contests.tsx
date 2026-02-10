@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Clock, TrendingUp, TrendingDown, Minus } from "lucide-react"
-import { useRealtimeBetting } from "@/lib/hooks/use-realtime"
+import { useRealtimeContests } from "@/lib/hooks/use-realtime"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
@@ -40,7 +40,7 @@ interface LiveMarket {
 }
 
 export function LiveContests() {
-  const { markets, odds } = useRealtimeBetting()
+  const { markets, odds } = useRealtimeContests()
   const [liveMarkets, setLiveMarkets] = useState<LiveMarket[]>([])
   const [eloLobbies, setEloLobbies] = useState<LiveMarket[]>([])
   const [loading, setLoading] = useState(true)
@@ -267,7 +267,7 @@ export function LiveContests() {
                 <div className="text-xs text-muted-foreground">{market.volume} entries</div>
               </div>
 
-              <Link href={`/bet/${market.gameId}`} className="block hover:bg-slate-800/50 rounded-lg p-2 transition-colors -mx-2">
+              <Link href={`/contest/${market.gameId}`} className="block hover:bg-slate-800/50 rounded-lg p-2 transition-colors -mx-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <Avatar className="h-8 w-8">

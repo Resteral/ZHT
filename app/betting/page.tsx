@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import { BettingDashboard } from "@/components/betting/betting-dashboard"
+import { ContestDashboard } from "@/components/contests/contest-dashboard"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -42,7 +42,7 @@ export default function BettingPage() {
           </div>
         }
       >
-        <BettingDashboard />
+        <ContestDashboard />
       </Suspense>
     </div>
   )

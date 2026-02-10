@@ -37,7 +37,7 @@ interface ELODraftMarket {
   start_date: string
 }
 
-export function ELODraftBetting() {
+export function ELODraftContest() {
   const [draftMarkets, setDraftMarkets] = useState<ELODraftMarket[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBets, setSelectedBets] = useState<{

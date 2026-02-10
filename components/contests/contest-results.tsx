@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckCircle, XCircle, Clock, TrendingUp, TrendingDown, Search, Trophy, Target, DollarSign } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
-interface BettingResult {
+interface ContestResult {
   id: string
   market_id: string
   game_id: string
@@ -30,7 +30,7 @@ interface BettingResult {
   winning_team?: string
 }
 
-interface BettingResultsStats {
+interface ContestResultsStats {
   totalBets: number
   wonBets: number
   lostBets: number
@@ -44,9 +44,9 @@ interface BettingResultsStats {
   biggestLoss: number
 }
 
-export function BettingResults() {
-  const [results, setResults] = useState<BettingResult[]>([])
-  const [stats, setStats] = useState<BettingResultsStats>({
+export function ContestResults() {
+  const [results, setResults] = useState<ContestResult[]>([])
+  const [stats, setStats] = useState<ContestResultsStats>({
     totalBets: 0,
     wonBets: 0,
     lostBets: 0,
@@ -67,10 +67,10 @@ export function BettingResults() {
   const supabase = createClient()
 
   useEffect(() => {
-    loadBettingResults()
+    loadContestResults()
   }, [])
 
-  const loadBettingResults = async () => {
+  const loadContestResults = async () => {
     try {
       const { data: user } = await supabase.auth.getUser()
       if (!user.user) return
@@ -113,7 +113,7 @@ export function BettingResults() {
         }
       }
 
-      const transformedResults: BettingResult[] = (betsData || []).map((bet) => {
+      const transformedResults: ContestResult[] = (betsData || []).map((bet) => {
         const matchData = matchesData.find((m) => m.id === bet.betting_markets?.game_id)
 
         return {
@@ -207,7 +207,7 @@ export function BettingResults() {
     }
   }
 
-  const getProfitLoss = (result: BettingResult) => {
+  const getProfitLoss = (result: ContestResult) => {
     if (result.status === "won") {
       return result.actual_payout - result.stake_amount
     } else if (result.status === "lost") {
@@ -457,7 +457,7 @@ export function BettingResults() {
 
       {filteredResults.length > 0 && filteredResults.length < results.length && (
         <div className="text-center">
-          <Button variant="outline" onClick={loadBettingResults}>
+          <Button variant="outline" onClick={loadContestResults}>
             Load More Results
           </Button>
         </div>

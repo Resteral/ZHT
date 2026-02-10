@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { CheckCircle, XCircle, Clock, TrendingUp, Trophy } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
-interface BettingHistoryItem {
+interface ContestHistoryItem {
   id: string
   market_id: string
   bet_type: string
@@ -21,10 +21,12 @@ interface BettingHistoryItem {
   isELODraft?: boolean
   matchName?: string
   matchType?: string
+  market_description?: string
+  player_stats?: any
 }
 
-export function BettingHistory() {
-  const [bettingHistory, setBettingHistory] = useState<BettingHistoryItem[]>([])
+export function ContestHistory() {
+  const [contestHistory, setContestHistory] = useState<ContestHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showELODraftOnly, setShowELODraftOnly] = useState(false)
   const [eloDraftStats, setEloDraftStats] = useState({
@@ -42,10 +44,10 @@ export function BettingHistory() {
   const supabase = createClient()
 
   useEffect(() => {
-    loadBettingHistory()
+    loadContestHistory()
   }, [showELODraftOnly])
 
-  const loadBettingHistory = async () => {
+  const loadContestHistory = async () => {
     try {
       const { data: user } = await supabase.auth.getUser()
       if (!user.user) return
@@ -73,7 +75,7 @@ export function BettingHistory() {
 
       if (error) throw error
 
-      const transformedData: BettingHistoryItem[] = (data || []).map((bet) => ({
+      const transformedData: ContestHistoryItem[] = (data || []).map((bet) => ({
         id: bet.id,
         market_id: bet.market_id || "",
         bet_type: bet.bet_type || bet.selection || "Unknown",
@@ -95,7 +97,7 @@ export function BettingHistory() {
 
       const filteredData = showELODraftOnly ? transformedData.filter((bet) => bet.isELODraft) : transformedData
 
-      setBettingHistory(filteredData)
+      setContestHistory(filteredData)
 
       const eloDraftBets = transformedData.filter((bet) => bet.isELODraft)
       const eloDraftWon = eloDraftBets.filter((bet) => bet.status === "won")
@@ -132,7 +134,7 @@ export function BettingHistory() {
       })
     } catch (error) {
       console.error("Error loading betting history:", error)
-      setBettingHistory([])
+      setContestHistory([])
     } finally {
       setLoading(false)
     }
@@ -164,7 +166,7 @@ export function BettingHistory() {
     }
   }
 
-  const getProfitLoss = (bet: BettingHistoryItem) => {
+  const getProfitLoss = (bet: ContestHistoryItem) => {
     if (bet.status === "won") {
       return bet.potential_payout - bet.stake_amount
     } else if (bet.status === "lost") {
@@ -277,7 +279,7 @@ export function BettingHistory() {
       </div>
 
       <div className="space-y-4">
-        {bettingHistory.length === 0 ? (
+        {contestHistory.length === 0 ? (
           <div className="text-center py-8">
             <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-lg font-medium mb-2">No Contest History</h3>
@@ -288,60 +290,52 @@ export function BettingHistory() {
             </p>
           </div>
         ) : (
-          bettingHistory.map((bet) => (
-            <Card key={bet.id}>
+          contestHistory.map((item) => (
+            <Card key={item.id}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    {getStatusIcon(bet.status)}
-                    <Badge variant={getStatusVariant(bet.status)}>
-                      {bet.status.charAt(0).toUpperCase() + bet.status.slice(1)}
+                    {getStatusIcon(item.status)}
+                    <Badge variant={getStatusVariant(item.status)}>
+                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                     </Badge>
-                    {bet.isELODraft && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
-                      >
+                    {item.isELODraft && (
+                      <Badge variant="secondary" className="bg-purple-500/10 text-purple-500">
                         ELO Draft
                       </Badge>
                     )}
-                    <span className="text-sm text-muted-foreground">
-                      {new Date(bet.created_at).toLocaleDateString()}
-                    </span>
                   </div>
-                  <div className="text-right">
-                    {bet.status !== "pending" && (
-                      <div
-                        className={`text-sm font-medium ${getProfitLoss(bet) > 0 ? "text-green-500" : "text-red-500"}`}
-                      >
-                        {getProfitLoss(bet) > 0 ? "+" : ""}${getProfitLoss(bet).toFixed(2)}
+                  <span className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString()}</span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold">{item.market_description}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {item.bet_type === "mvp" ? "MVP Selection" : item.selection}
+                    </p>
+                    {item.isELODraft && item.player_stats && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Details: {JSON.stringify(item.player_stats).slice(0, 50)}...
                       </div>
                     )}
                   </div>
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{bet.selection}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {bet.bet_type.replace("_", " ").toUpperCase()} • {bet.odds > 0 ? "+" : ""}
-                      {bet.odds}
-                    </p>
-                    {bet.isELODraft && (
-                      <p className="text-xs text-purple-600 dark:text-purple-400">
-                        {bet.matchName} ({bet.matchType?.toUpperCase()})
-                      </p>
-                    )}
-                  </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium">${bet.stake_amount}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {bet.status === "pending"
-                        ? `To win $${(bet.potential_payout - bet.stake_amount).toFixed(2)}`
-                        : ""}
-                    </p>
+                    <div className="font-medium">
+                      {item.status === "won" ? (
+                        <span className="text-green-500">
+                          +${(item.potential_payout - item.stake_amount).toFixed(2)}
+                        </span>
+                      ) : item.status === "lost" ? (
+                        <span className="text-red-500">-${item.stake_amount.toFixed(2)}</span>
+                      ) : (
+                        <span>${item.stake_amount.toFixed(2)}</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.odds > 0 ? `+${item.odds}` : item.odds}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -350,13 +344,15 @@ export function BettingHistory() {
         )}
       </div>
 
-      {bettingHistory.length > 0 && (
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={loadBettingHistory}>
-            Load More History
-          </Button>
-        </div>
-      )}
-    </div>
+      {
+        contestHistory.length > 0 && (
+          <div className="flex justify-center">
+            <Button variant="outline" onClick={loadContestHistory}>
+              Load More History
+            </Button>
+          </div>
+        )
+      }
+    </div >
   )
 }
