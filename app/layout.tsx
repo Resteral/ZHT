@@ -16,7 +16,7 @@ import { ChatWindow } from "@/components/social/chat-window"
 
 export const metadata: Metadata = {
   title: "TUG E-Sports Lobbies",
-  description: "Premier ELO-based e-sports lobbies with competitive gaming, betting, and analytics",
+  description: "Premier ELO-based e-sports lobbies with competitive gaming, contests, and analytics",
   generator: "v0.app",
 }
 

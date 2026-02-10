@@ -177,7 +177,7 @@ export function BettingHistory() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-        <p className="text-muted-foreground">Loading betting history...</p>
+        <p className="text-muted-foreground">Loading contest history...</p>
       </div>
     )
   }
@@ -189,7 +189,7 @@ export function BettingHistory() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Trophy className="h-4 w-4" />
-              ELO Draft Betting Performance
+              ELO Draft Contest Performance
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -280,11 +280,11 @@ export function BettingHistory() {
         {bettingHistory.length === 0 ? (
           <div className="text-center py-8">
             <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-medium mb-2">No Betting History</h3>
+            <h3 className="text-lg font-medium mb-2">No Contest History</h3>
             <p className="text-muted-foreground">
               {showELODraftOnly
-                ? "No ELO draft betting history found"
-                : "Your betting history will appear here once you place bets"}
+                ? "No ELO draft contest history found"
+                : "Your contest history will appear here once you enter contests"}
             </p>
           </div>
         ) : (

@@ -13,7 +13,7 @@ export default function Dashboard() {
         <UserInitializer />
         <div className="flex flex-col space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold tracking-tight text-white">Esports Betting</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-white">Esports Contests</h1>
           </div>
           <BettingDashboard />
         </div>

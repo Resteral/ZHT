@@ -133,7 +133,7 @@ export function ContestEntrySlip() {
               </div>
             </div>
 
-            {/* Place Bet Button */}
+            {/* Submit Entries Button */}
             <Button className="w-full" disabled={getTotalStake() === 0}>
               Submit Entries - ${getTotalStake().toFixed(2)}
             </Button>

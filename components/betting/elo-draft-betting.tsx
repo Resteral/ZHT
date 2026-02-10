@@ -316,7 +316,7 @@ export function ELODraftBetting() {
 
       const { data: wallet, error: walletError } = await supabase
         .from("user_wallets")
-        .select("balance")
+        .select("balance, total_wagered")
         .eq("user_id", user.user.id)
         .single()
 
@@ -356,7 +356,7 @@ export function ELODraftBetting() {
         .from("user_wallets")
         .update({
           balance: wallet.balance - stake,
-          total_wagered: supabase.raw("total_wagered + ?", [stake]),
+          total_wagered: (wallet.total_wagered || 0) + stake,
         })
         .eq("user_id", user.user.id)
 
@@ -369,7 +369,7 @@ export function ELODraftBetting() {
         return newBets
       })
 
-      alert(`${marketType.toUpperCase()} bet placed successfully! $${stake} on ${selection}`)
+      alert(`${marketType.toUpperCase()} entry placed successfully! $${stake} on ${selection}`)
       loadELODraftMarkets()
     } catch (error) {
       console.error("Error placing ELO draft bet:", error)
@@ -399,7 +399,7 @@ export function ELODraftBetting() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-        <p className="text-muted-foreground">Loading ELO draft betting markets...</p>
+        <p className="text-muted-foreground">Loading ELO draft contest markets...</p>
       </div>
     )
   }
@@ -422,7 +422,7 @@ export function ELODraftBetting() {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Gamepad2 className="h-5 w-5" />
-          ELO Draft Betting
+          ELO Draft Contests
         </h3>
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{draftMarkets.length} games available</Badge>
@@ -463,7 +463,7 @@ export function ELODraftBetting() {
                 <div className="text-2xl font-bold text-purple-600">
                   {draftMarkets.reduce((sum, m) => sum + m.markets.length, 0)}
                 </div>
-                <div className="text-xs text-muted-foreground">Betting Markets</div>
+                <div className="text-xs text-muted-foreground">Contest Markets</div>
               </div>
             </div>
           </CardContent>
@@ -554,7 +554,7 @@ export function ELODraftBetting() {
                                   className="flex-1 h-7 text-xs"
                                   disabled={selectedBet.stake <= 0}
                                 >
-                                  Bet ${selectedBet.stake}
+                                  Enter ${selectedBet.stake}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -575,7 +575,7 @@ export function ELODraftBetting() {
                                 To win: $
                                 {(
                                   selectedBet.stake *
-                                    (option.odds > 0 ? option.odds / 100 + 1 : 100 / Math.abs(option.odds) + 1) -
+                                  (option.odds > 0 ? option.odds / 100 + 1 : 100 / Math.abs(option.odds) + 1) -
                                   selectedBet.stake
                                 ).toFixed(2)}
                               </p>
@@ -592,7 +592,7 @@ export function ELODraftBetting() {
                               }
                               className="w-full h-7 text-xs"
                             >
-                              Bet
+                              Enter
                             </Button>
                           )}
                         </div>

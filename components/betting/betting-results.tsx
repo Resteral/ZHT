@@ -218,7 +218,7 @@ export function BettingResults() {
 
   const filteredResults = results.filter((result) => {
     const matchesSearch =
-      result.game_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (result.game_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       result.selection.toLowerCase().includes(searchTerm.toLowerCase()) ||
       result.bet_type.toLowerCase().includes(searchTerm.toLowerCase())
 
@@ -251,7 +251,7 @@ export function BettingResults() {
     return (
       <div className="text-center py-8">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-        <p className="text-muted-foreground">Loading betting results...</p>
+        <p className="text-muted-foreground">Loading contest results...</p>
       </div>
     )
   }
@@ -359,7 +359,7 @@ export function BettingResults() {
 
       {/* Results List */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Betting Results ({filteredResults.length})</h3>
+        <h3 className="text-lg font-semibold">Contest Results ({filteredResults.length})</h3>
 
         {filteredResults.length === 0 ? (
           <Card>
