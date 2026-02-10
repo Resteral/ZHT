@@ -23,6 +23,7 @@ import {
   Calendar,
   Target,
   Bell,
+  Shield,
   Settings,
   Menu,
   DollarSign,
@@ -32,15 +33,24 @@ import {
 import { useAuth } from "@/lib/auth-context"
 import Image from "next/image"
 import { DepositModal } from "@/components/payments/deposit-modal"
+import { WithdrawalModal } from "@/components/payments/withdrawal-modal"
 
-const navigation = [
+interface NavigationItem {
+  name: string
+  href: string
+  icon: any
+  submenu?: { name: string; href: string }[]
+}
+
+const navigation: NavigationItem[] = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Players", href: "/players", icon: Users },
-  { name: "Lobbies", href: "/lobbies", icon: Gamepad2 }, // Added Lobbies tab for ELO draft and active games
+  { name: "Lobbies", href: "/lobbies", icon: Gamepad2 },
   { name: "Leagues", href: "/leagues", icon: Trophy },
   { name: "Tournaments", href: "/tournaments", icon: Trophy },
   { name: "Schedule", href: "/schedule", icon: Calendar },
   { name: "Contests", href: "/matches", icon: Target },
+  { name: "Clan", href: "/clan", icon: Shield },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Leaderboard", href: "/leaderboard", icon: TrendingUp },
   { name: "Announcements", href: "/announcements", icon: Bell },
@@ -169,6 +179,7 @@ export function Navigation() {
               <DollarSign className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-primary">${user.balance.toFixed(2)}</span>
               <DepositModal />
+              <WithdrawalModal />
             </div>
 
             {/* Notifications */}

@@ -13,6 +13,7 @@ import { ContestEntrySlip } from "./bet-slip"
 import { ELODraftBetting } from "./elo-draft-betting"
 import { BettingResults } from "./betting-results"
 import { SponsorsList } from "@/components/sponsors/sponsors-list"
+import { FriendsList } from "@/components/social/friends-list"
 import { createClient } from "@/lib/supabase/client"
 
 interface ContestStats {
@@ -326,6 +327,8 @@ export function BettingDashboard() {
           </Card>
 
           <SponsorsList />
+
+          <FriendsList />
 
           <Card>
             <CardHeader>

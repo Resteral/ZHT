@@ -12,6 +12,7 @@ import { LobbyAlertSystem } from "@/components/global/lobby-alert-system"
 import { ActiveDraftTracker } from "@/components/navigation/active-draft-tracker"
 import ActiveMatchNotification from "@/components/navigation/active-match-notification"
 import MonacoEnvironment from "@/components/monaco-environment"
+import { ChatWindow } from "@/components/social/chat-window"
 
 export const metadata: Metadata = {
   title: "TUG E-Sports Lobbies",
@@ -47,6 +48,7 @@ html {
                 <LobbyAlertSystem />
                 <ActiveDraftTracker />
                 <ActiveMatchNotification />
+                <ChatWindow />
               </div>
             </DraftAlertProvider>
           </AuthProvider>
