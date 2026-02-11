@@ -9,6 +9,7 @@ import { ArrowLeft, Eye, Crown, Users, DollarSign, TrendingUp } from "lucide-rea
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import { loadBettingMarkets } from "@/lib/supabase/betting-markets" // Declare the variable here
+import { walletService } from "@/lib/services/wallet-service"
 
 interface ELODraftRoomPageProps {
   params: {
@@ -542,11 +543,55 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
     )
   }
 
+  const handleJoinLobby = async () => {
+    if (!user || !draftData) return
+
+    try {
+      const entryFee = draftData.entry_fee || 0
+      if (entryFee > 0) {
+        const { data: wallet } = await supabase
+          .from("user_wallets")
+          .select("balance")
+          .eq("user_id", user.id)
+          .single()
+
+        if (!wallet || wallet.balance < entryFee) {
+          alert("Insufficient funds to join this lobby")
+          return
+        }
+
+        const success = await walletService.deductEntryFee(user.id, entryFee, `Entry fee for ${draftData.name}`)
+        if (!success) {
+          alert("Transaction failed")
+          return
+        }
+      }
+
+      const { error } = await supabase.from("tournament_participants").insert({
+        tournament_id: params.id,
+        user_id: user.id,
+        status: "registered",
+        joined_at: new Date().toISOString()
+      })
+
+      if (error) throw error
+
+      // Refresh page or state
+      initializeDraft()
+      alert("Successfully joined lobby!")
+    } catch (error) {
+      console.error("Error joining lobby:", error)
+      alert("Failed to join lobby")
+    }
+  }
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Live Snake Draft</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            {draftData?.name || "Live Snake Draft"}
+          </h1>
           <p className="text-slate-600">
             {isParticipant ? "You are participating in this draft" : "Watching live snake draft"}
             {!isParticipant && spectatorCount > 0 && (
@@ -555,6 +600,12 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {!isParticipant && (draftStatus === "active" || draftStatus === "waiting" || draftStatus === "drafting") && participants.length < (draftData?.max_participants || 100) && (
+            <Button onClick={handleJoinLobby} className="bg-green-600 hover:bg-green-700">
+              Join Queue {draftData?.entry_fee > 0 ? `($${draftData.entry_fee})` : "(Free)"}
+            </Button>
+          )}
+
           <Badge variant={draftStatus === "active" ? "default" : "secondary"} className="bg-emerald-600 text-white">
             {draftStatus === "active" ? "Live Draft" : draftStatus}
           </Badge>
@@ -565,11 +616,11 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
           )}
           <Button
             variant="outline"
-            onClick={() => router.push("/leagues")}
+            onClick={() => router.push("/lobbies")}
             className="border-slate-300 hover:bg-slate-50"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Matches
+            Back to Lobbies
           </Button>
         </div>
       </div>
@@ -712,8 +763,8 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
               <button
                 onClick={() => setActiveBettingTab("match")}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all duration-200 ${activeBettingTab === "match"
-                    ? "bg-indigo-600 text-white shadow-lg"
-                    : "text-slate-300 hover:text-white hover:bg-slate-700"
+                  ? "bg-indigo-600 text-white shadow-lg"
+                  : "text-slate-300 hover:text-white hover:bg-slate-700"
                   }`}
               >
                 Match Contests
@@ -721,8 +772,8 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
               <button
                 onClick={() => setActiveBettingTab("players")}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all duration-200 ${activeBettingTab === "players"
-                    ? "bg-indigo-600 text-white shadow-lg"
-                    : "text-slate-300 hover:text-white hover:bg-slate-700"
+                  ? "bg-indigo-600 text-white shadow-lg"
+                  : "text-slate-300 hover:text-white hover:bg-slate-700"
                   }`}
               >
                 Player Contests

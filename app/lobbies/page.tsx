@@ -1,14 +1,16 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Users, Clock, Crown, Gamepad2, Target, Zap, Download, TrendingUp } from "lucide-react"
+import { Trophy, Users, Clock, Crown, Gamepad2, Target, Zap, Download, TrendingUp, DollarSign, Wallet } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
 import Link from "next/link"
 import { UnifiedDraftSelector } from "@/components/draft/unified-draft-selector"
+import { lobbyQueueService, type LobbyQueue } from "@/lib/services/lobby-queue-service"
+import { toast } from "sonner"
 
 interface Lobby {
   id: string
@@ -44,34 +46,68 @@ interface ELOLeaguePlayer {
 
 export default function LobbiesPage() {
   const [activeLobbies, setActiveLobbies] = useState<Lobby[]>([])
+  const [queues, setQueues] = useState<LobbyQueue[]>([])
   const [eloLeaguePlayers, setEloLeaguePlayers] = useState<ELOLeaguePlayer[]>([])
   const [loading, setLoading] = useState(true)
+  const [joiningQueue, setJoiningQueue] = useState<string | null>(null)
+  const [selectedGame, setSelectedGame] = useState<string>("Omega Strikers")
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
+  const fetchQueues = useCallback(async () => {
+    try {
+      const allQueues = await lobbyQueueService.getAllQueues()
+      setQueues(allQueues)
+    } catch (error) {
+      console.error("Error fetching queues:", error)
+    }
+  }, [])
+
   const fetchActiveLobbies = useCallback(async () => {
     try {
       const { data: matchesData } = await supabase
-        .from("matches")
+        .from("tournaments")
         .select("*")
-        .eq("status", "waiting") // Only waiting lobbies
+        .eq("status", "drafting")
         .order("created_at", { ascending: false })
 
-      const formattedActiveLobbies = (matchesData || []).map((match) => ({
-        id: match.id,
-        name: match.name || `${match.match_type} Lobby`,
-        game_mode: match.match_type || "ELO Draft",
-        max_participants: match.max_participants || 8,
-        current_participants: match.current_participants || 0,
-        entry_fee: 0,
-        prize_pool: match.prize_pool || 0,
-        status: match.status,
-        created_at: match.created_at,
-        type: "lobby" as const,
-      }))
+      const { data: legacyMatches } = await supabase
+        .from("matches")
+        .select("*")
+        .eq("status", "waiting")
+        .order("created_at", { ascending: false })
+
+      const formattedActiveLobbies = [
+        ...(matchesData || []).map((t) => ({
+          id: t.id,
+          name: t.name,
+          game_mode: t.player_pool_settings?.draft_mode || "Draft",
+          max_participants: t.max_participants,
+          current_participants: 0,
+          entry_fee: t.entry_fee || 0,
+          prize_pool: t.prize_pool || 0,
+          status: t.status,
+          created_at: t.created_at,
+          type: "tournament" as const,
+          game: t.game || "Omega Strikers"
+        })),
+        ...(legacyMatches || []).map((match) => ({
+          id: match.id,
+          name: match.name || `${match.match_type} Lobby`,
+          game_mode: match.match_type || "ELO Draft",
+          max_participants: match.max_participants || 8,
+          current_participants: match.current_participants || 0,
+          entry_fee: 0,
+          prize_pool: match.prize_pool || 0,
+          status: match.status,
+          created_at: match.created_at,
+          type: "lobby" as const,
+          game: "Omega Strikers"
+        }))
+      ]
 
       setActiveLobbies(formattedActiveLobbies)
     } catch (error) {
@@ -128,102 +164,88 @@ export default function LobbiesPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      await Promise.all([fetchActiveLobbies(), fetchELOLeagueData()])
+      await Promise.all([fetchQueues(), fetchActiveLobbies(), fetchELOLeagueData()])
+
+      // Ensure persistent lobbies exist
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await lobbyQueueService.ensurePersistentLobbies(user.id)
+        // Refetch to show the newly created lobbies
+        fetchActiveLobbies()
+      }
+
       setLoading(false)
     }
 
     loadData()
 
+    const queueSub = supabase.channel('lobby_queue_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lobby_queue' }, fetchQueues)
+      .subscribe()
+
     const matchesSubscription = supabase
       .channel("matches-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => {
-        fetchActiveLobbies()
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, fetchActiveLobbies)
       .subscribe()
 
     const usersSubscription = supabase
       .channel("users-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => {
-        fetchELOLeagueData()
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "users" }, fetchELOLeagueData)
       .subscribe()
 
     return () => {
+      queueSub.unsubscribe()
       matchesSubscription.unsubscribe()
       usersSubscription.unsubscribe()
     }
-  }, [fetchActiveLobbies, fetchELOLeagueData])
+  }, [fetchQueues, fetchActiveLobbies, fetchELOLeagueData])
 
-  const exportToCSV = () => {
-    const headers = [
-      "Rank",
-      "Username",
-      "ELO Rating",
-      "Wins",
-      "Losses",
-      "Win %",
-      "Total Games",
-      "Goals",
-      "Assists",
-      "Steals",
-      "Turnovers",
-      "Goals Saved",
-      "Goals Allowed",
-      "Pick Ups",
-    ]
+  const handleJoinQueue = async (queue: LobbyQueue) => {
+    try {
+      setJoiningQueue(`${queue.queue_type}-${queue.entry_fee}`)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error("Please login to join a queue")
+        return
+      }
 
-    const csvContent = [
-      headers.join(","),
-      ...eloLeaguePlayers.map((player) =>
-        [
-          player.rank,
-          player.username,
-          player.elo_rating,
-          player.wins,
-          player.losses,
-          player.win_percentage,
-          player.total_games,
-          player.goals,
-          player.assists,
-          player.steals,
-          player.turnovers,
-          player.goals_saved,
-          player.goals_allowed,
-          player.pick_ups,
-        ].join(","),
-      ),
-    ].join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `elo-league-stats-${new Date().toISOString().split("T")[0]}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "waiting":
-        return "bg-yellow-500"
-      case "active":
-      case "drafting":
-        return "bg-green-500"
-      default:
-        return "bg-gray-500"
+      await lobbyQueueService.joinQueue(
+        user.id,
+        selectedGame,
+        queue.queue_type,
+        queue.game_format as any,
+        queue.player_count,
+        queue.entry_fee
+      )
+      toast.success(`Joined ${selectedGame} ${queue.entry_fee > 0 ? `$${queue.entry_fee}` : "Free"} Queue!`)
+      fetchQueues()
+    } catch (error: any) {
+      toast.error(error.message || "Failed to join queue")
+    } finally {
+      setJoiningQueue(null)
     }
   }
 
-  const getGameModeIcon = (gameMode: string) => {
-    if (gameMode.includes("1v1")) return <Target className="h-4 w-4" />
-    if (gameMode.includes("2v2")) return <Users className="h-4 w-4" />
-    if (gameMode.includes("3v3")) return <Crown className="h-4 w-4" />
-    if (gameMode.includes("4v4")) return <Trophy className="h-4 w-4" />
-    return <Gamepad2 className="h-4 w-4" />
+  const handleLeaveQueue = async () => {
+    try {
+      setJoiningQueue("leave")
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      await lobbyQueueService.leaveQueue(user.id)
+      toast.success("Left queue")
+      fetchQueues()
+    } catch (error: any) {
+      toast.error("Failed to leave queue")
+    } finally {
+      setJoiningQueue(null)
+    }
   }
+
+  // ... (exportToCSV, getStatusColor, getGameModeIcon unchanged)
+
+  const displayedQueues = queues.filter(q => q.game === selectedGame)
+  const displayedLobbies = activeLobbies.filter(l => (l as any).game === selectedGame || (!l.tournament_type && selectedGame === "Omega Strikers"))
 
   const LobbyCard = ({ lobby }: { lobby: Lobby }) => (
     <Card className="hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/50">
@@ -242,13 +264,20 @@ export default function LobbiesPage() {
         <div className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-1">
             <Users className="h-4 w-4" />
-            {lobby.current_participants}/{lobby.max_participants} Players
+            {lobby.max_participants} Slots
           </span>
+          {lobby.entry_fee > 0 ? (
+            <Badge variant="outline" className="border-green-500 text-green-500">
+              ${lobby.entry_fee} Entry
+            </Badge>
+          ) : (
+            <Badge variant="outline">Free</Badge>
+          )}
         </div>
 
         {lobby.prize_pool > 0 && (
           <div className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-1 text-green-600 font-semibold">
+            <span className="flex items-center gap-1 text-green-500 font-semibold">
               <Trophy className="h-4 w-4" />
               Prize: ${lobby.prize_pool}
             </span>
@@ -262,7 +291,7 @@ export default function LobbiesPage() {
 
         <div className="flex gap-2 pt-2">
           <Button asChild size="sm" className="flex-1 bg-primary hover:bg-primary/90">
-            <Link href={`/leagues/lobby/${lobby.id}`}>
+            <Link href={lobby.type === 'tournament' ? `/draft/room/${lobby.id}` : `/leagues/lobby/${lobby.id}`}>
               <Zap className="h-3 w-3 mr-1" />
               Join Lobby
             </Link>
@@ -271,6 +300,74 @@ export default function LobbiesPage() {
       </CardContent>
     </Card>
   )
+
+  const QueueCard = ({ queue }: { queue: LobbyQueue }) => {
+    const isFree = queue.entry_fee === 0
+    const isMaxed = queue.queue_type === "maxed"
+
+    return (
+      <Card className={`relative overflow-hidden border-2 transition-all hover:scale-105 ${!isFree ? "border-amber-500/50 hover:border-amber-500" : "hover:border-primary/50"
+        }`}>
+        {/* Background Gradient */}
+        <div className={`absolute inset-0 opacity-10 ${!isFree ? "bg-gradient-to-br from-amber-500 to-yellow-600" : "bg-gradient-to-br from-blue-500 to-cyan-500"
+          }`} />
+
+        <CardHeader>
+          <CardTitle className="flex justify-between items-start">
+            <div>
+              <div className="text-sm uppercase tracking-wider text-muted-foreground mb-1">
+                {queue.game_format.replace("_", " ")}
+              </div>
+              <div className="text-2xl font-bold flex items-center gap-2">
+                {isFree ? "Free Play" : `$${queue.entry_fee} Entry`}
+                {!isFree && <DollarSign className="h-5 w-5 text-amber-500" />}
+              </div>
+            </div>
+            {isMaxed && <Badge variant="secondary">Ranked</Badge>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-between items-center bg-muted/50 p-3 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Queue</span>
+            </div>
+            <div className="text-lg font-bold">
+              {queue.current_players} <span className="text-muted-foreground text-sm">/ {queue.required_players}</span>
+            </div>
+          </div>
+
+          {!isFree && (
+            <div className="flex justify-between items-center bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+              <div className="flex items-center gap-2 text-amber-500">
+                <Trophy className="h-4 w-4" />
+                <span className="text-sm font-medium">Prize Pool</span>
+              </div>
+              <div className="text-lg font-bold text-amber-500">
+                ${queue.entry_fee * queue.required_players}
+              </div>
+            </div>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button
+            className={`w-full ${!isFree ? "bg-amber-600 hover:bg-amber-700" : ""}`}
+            onClick={() => handleJoinQueue(queue)}
+            disabled={joiningQueue !== null}
+          >
+            {joiningQueue === `${queue.queue_type}-${queue.entry_fee}` ? (
+              <span className="animate-pulse">Joining...</span>
+            ) : (
+              <>
+                <Zap className="h-4 w-4 mr-2" />
+                Join {isFree ? "Free" : `$${queue.entry_fee}`} Queue
+              </>
+            )}
+          </Button>
+        </CardFooter>
+      </Card>
+    )
+  }
 
   if (loading) {
     return (
@@ -283,52 +380,136 @@ export default function LobbiesPage() {
     )
   }
 
+  const getGameModeIcon = (mode: string) => {
+    switch (mode) {
+      case "snake_draft":
+        return <Users className="h-4 w-4" />
+      case "captain_pick":
+        return <Crown className="h-4 w-4" />
+      default:
+        return <Gamepad2 className="h-4 w-4" />
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active":
+        return "bg-green-500"
+      case "waiting":
+        return "bg-yellow-500"
+      case "completed":
+        return "bg-slate-500"
+      default:
+        return "bg-slate-500"
+    }
+  }
+
+  const exportToCSV = () => {
+    const headers = [
+      "Rank,Username,ELO,Wins,Losses,Win %,Goals,Assists,Steals,Turnovers,Saves,Goals Allowed,Pickups",
+    ]
+    const rows = eloLeaguePlayers.map((p) =>
+      [
+        p.rank,
+        p.username,
+        p.elo_rating,
+        p.wins,
+        p.losses,
+        `${p.win_percentage}%`,
+        p.goals,
+        p.assists,
+        p.steals,
+        p.turnovers,
+        p.goals_saved,
+        p.goals_allowed,
+        p.pick_ups,
+      ].join(","),
+    )
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n")
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", "elo_league_standings.csv")
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Lobbies & ELO League</h1>
-        <p className="text-slate-200">Join active lobbies and compete in the ELO League</p>
+      <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-4xl font-bold mb-2">Lobbies & ELO League</h1>
+          <p className="text-slate-200">Join active lobbies and compete in the ELO League</p>
+        </div>
+
+        {/* Game Selector */}
+        <div className="bg-muted p-1 rounded-lg flex gap-1">
+          {["Omega Strikers", "Deadlock"].map(game => (
+            <button
+              key={game}
+              onClick={() => setSelectedGame(game)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${selectedGame === game
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+                }`}
+            >
+              {game}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="mb-8 grid md:grid-cols-1 gap-6">
-        <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5" />
-              Create ELO Draft Lobby
-            </CardTitle>
-            <CardDescription>Start a new ELO draft in any format (1v1 to 6v6)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <UnifiedDraftSelector buttonText="Create Draft Lobby" buttonSize="lg" className="w-full" mode="create" />
-          </CardContent>
-        </Card>
+      <div className="mb-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-semibold flex items-center gap-2">
+            <Gamepad2 className="h-6 w-6 text-primary" />
+            Play {selectedGame} Now
+          </h2>
+          {queues.some(q => q.queued_users.some(u => true)) && (
+            <Button variant="outline" onClick={handleLeaveQueue} className="text-red-500 hover:text-red-600 hover:bg-red-500/10">
+              Leave All Queues
+            </Button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {displayedQueues.length > 0 ? displayedQueues.map((queue, i) => (
+            <QueueCard key={i} queue={queue} />
+          )) : (
+            <div className="col-span-full text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+              No active queues found for {selectedGame}.
+            </div>
+          )}
+        </div>
       </div>
 
       <Tabs defaultValue="lobbies" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="lobbies">Active Lobbies ({activeLobbies.length})</TabsTrigger>
+          <TabsTrigger value="lobbies">Active Lobbies ({displayedLobbies.length})</TabsTrigger>
           <TabsTrigger value="elo-league">ELO League</TabsTrigger>
         </TabsList>
 
         <TabsContent value="lobbies" className="mt-6">
-          {activeLobbies.length === 0 ? (
+          {displayedLobbies.length === 0 ? (
             <Card className="text-center py-12">
               <CardContent>
                 <Gamepad2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-xl font-semibold mb-2">No Active Lobbies</h3>
-                <p className="text-slate-200 mb-4">Create a new ELO draft lobby to get started!</p>
-                <UnifiedDraftSelector buttonText="Create ELO Draft" mode="create" />
+                <h3 className="text-xl font-semibold mb-2">No Active Lobbies for {selectedGame}</h3>
+                <p className="text-slate-200 mb-4">Join a queue above to start a match!</p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {activeLobbies.map((lobby) => (
+                // @ts-ignore
                 <LobbyCard key={lobby.id} lobby={lobby} />
               ))}
             </div>
           )}
         </TabsContent>
+
 
         <TabsContent value="elo-league" className="mt-6">
           <div className="space-y-6">
@@ -360,8 +541,8 @@ export default function LobbiesPage() {
                     <div className="text-2xl font-bold text-green-600">
                       {eloLeaguePlayers.length > 0
                         ? Math.round(
-                            eloLeaguePlayers.reduce((sum, p) => sum + p.elo_rating, 0) / eloLeaguePlayers.length,
-                          )
+                          eloLeaguePlayers.reduce((sum, p) => sum + p.elo_rating, 0) / eloLeaguePlayers.length,
+                        )
                         : 0}
                     </div>
                     <div className="text-sm text-muted-foreground">Average ELO</div>
@@ -399,13 +580,12 @@ export default function LobbiesPage() {
                             <div className="flex items-center gap-2">
                               {player.rank <= 3 && (
                                 <Trophy
-                                  className={`h-4 w-4 ${
-                                    player.rank === 1
-                                      ? "text-yellow-500"
-                                      : player.rank === 2
-                                        ? "text-gray-400"
-                                        : "text-amber-600"
-                                  }`}
+                                  className={`h-4 w-4 ${player.rank === 1
+                                    ? "text-yellow-500"
+                                    : player.rank === 2
+                                      ? "text-gray-400"
+                                      : "text-amber-600"
+                                    }`}
                                 />
                               )}
                               #{player.rank}
@@ -423,13 +603,12 @@ export default function LobbiesPage() {
                           </td>
                           <td className="p-2">
                             <span
-                              className={`font-medium ${
-                                player.win_percentage >= 70
-                                  ? "text-green-600"
-                                  : player.win_percentage >= 50
-                                    ? "text-yellow-600"
-                                    : "text-red-600"
-                              }`}
+                              className={`font-medium ${player.win_percentage >= 70
+                                ? "text-green-600"
+                                : player.win_percentage >= 50
+                                  ? "text-yellow-600"
+                                  : "text-red-600"
+                                }`}
                             >
                               {player.win_percentage}%
                             </span>

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client"
+import { walletService } from "@/lib/services/wallet-service"
 
 const supabase = createClient()
 
@@ -9,6 +10,7 @@ export interface QueueEntry {
   game_format: "snake_draft" | "auction_draft" | "linear_draft"
   player_count: number // 4, 6, 8, 12
   elo_rating: number
+  entry_fee: number
   joined_at: string
   status: "waiting" | "matched" | "cancelled"
 }
@@ -17,6 +19,7 @@ export interface LobbyQueue {
   queue_type: "maxed" | "unmaxed"
   game_format: string
   player_count: number
+  entry_fee: number
   current_players: number
   required_players: number
   estimated_wait_time: number
@@ -31,11 +34,13 @@ export interface LobbyQueue {
 export const lobbyQueueService = {
   async joinQueue(
     userId: string,
+    game: string,
     queueType: "maxed" | "unmaxed",
     gameFormat: "snake_draft" | "auction_draft" | "linear_draft",
     playerCount: number,
+    entryFee: number = 0
   ): Promise<QueueEntry> {
-    console.log("[v0] User joining queue:", { userId, queueType, gameFormat, playerCount })
+    console.log("[v0] User joining queue:", { userId, game, queueType, gameFormat, playerCount, entryFee })
 
     // Check if user is already in a queue
     const { data: existing } = await supabase
@@ -49,33 +54,80 @@ export const lobbyQueueService = {
       throw new Error("You are already in a queue. Please leave your current queue first.")
     }
 
-    // Get user's ELO rating
-    const { data: userData } = await supabase.from("users").select("elo_rating").eq("id", userId).single()
+    // Deduct entry fee if applicable
+    if (entryFee > 0) {
+      const success = await walletService.deductEntryFee(userId, entryFee, `Entry fee for ${gameFormat} lobby`)
+      if (!success) {
+        throw new Error("Insufficient funds to join this lobby.")
+      }
+    }
+
+    // Get user's Game-Specific ELO rating
+    let eloRating = 1000
+    const { data: gameRating } = await supabase
+      .from("user_game_ratings")
+      .select("elo_rating")
+      .eq("user_id", userId)
+      .eq("game", game)
+      .single()
+
+    if (gameRating) {
+      eloRating = gameRating.elo_rating
+    } else {
+      // Fallback or initialize: Check global ELO or default to 1000
+      const { data: userData } = await supabase.from("users").select("elo_rating").eq("id", userId).single()
+      eloRating = userData?.elo_rating || 1000
+
+      // Initialize user_game_ratings for this game
+      await supabase.from("user_game_ratings").insert({
+        user_id: userId,
+        game: game,
+        elo_rating: eloRating
+      }).catch(err => {
+        console.warn("Could not insert initial game rating", err)
+      })
+    }
 
     const { data: queueEntry, error } = await supabase
       .from("lobby_queue")
       .insert({
         user_id: userId,
+        game: game,
         queue_type: queueType,
         game_format: gameFormat,
         player_count: playerCount,
-        elo_rating: userData?.elo_rating || 1000,
+        entry_fee: entryFee,
+        elo_rating: eloRating,
         joined_at: new Date().toISOString(),
         status: "waiting",
       })
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      // Refund if insert fails
+      if (entryFee > 0) {
+        await walletService.awardPrize(userId, entryFee, "Refund: Lobby join failed")
+      }
+      throw error
+    }
 
     // Check if we can create a match immediately
-    await this.checkAndCreateMatch(queueType, gameFormat, playerCount)
+    await this.checkAndCreateMatch(queueType, gameFormat, playerCount, entryFee)
 
     return queueEntry
   },
 
   async leaveQueue(userId: string): Promise<void> {
     console.log("[v0] User leaving queue:", userId)
+
+    // Get current queue entry to know amount to refund
+    const { data: entry } = await supabase
+      .from("lobby_queue")
+      .select("entry_fee")
+      .eq("user_id", userId)
+      .eq("status", "waiting")
+      .single()
 
     const { error } = await supabase
       .from("lobby_queue")
@@ -84,9 +136,14 @@ export const lobbyQueueService = {
       .eq("status", "waiting")
 
     if (error) throw error
+
+    // Refund entry fee
+    if (entry && entry.entry_fee > 0) {
+      await walletService.awardPrize(userId, entry.entry_fee, "Refund: Left lobby queue")
+    }
   },
 
-  async getQueueStatus(queueType: "maxed" | "unmaxed", gameFormat: string, playerCount: number): Promise<LobbyQueue> {
+  async getQueueStatus(game: string, queueType: "maxed" | "unmaxed", gameFormat: string, playerCount: number, entryFee: number = 0): Promise<LobbyQueue> {
     const { data: queuedUsers, error } = await supabase
       .from("lobby_queue")
       .select(
@@ -95,9 +152,11 @@ export const lobbyQueueService = {
         users(username, elo_rating)
       `,
       )
+      .eq("game", game)
       .eq("queue_type", queueType)
       .eq("game_format", gameFormat)
       .eq("player_count", playerCount)
+      .eq("entry_fee", entryFee)
       .eq("status", "waiting")
       .order("joined_at", { ascending: true })
 
@@ -109,18 +168,28 @@ export const lobbyQueueService = {
     const estimatedWaitTime = playersNeeded * 30 // Estimate 30 seconds per missing player
 
     return {
+      id: `${game}-${queueType}-${gameFormat}-${playerCount}-${entryFee}`,
+      name: `${game} ${queueType} Queue`,
+      game: game,
+      game_mode: gameFormat,
+      status: "active",
       queue_type: queueType,
-      game_format: gameFormat,
+      game_format: gameFormat as "snake_draft" | "auction_draft" | "linear_draft",
       player_count: playerCount,
+      entry_fee: entryFee,
       current_players: currentPlayers,
-      required_players: requiredPlayers,
+      max_players: requiredPlayers,
+      required_players: requiredPlayers, // Added to match interface
+      prize_pool: entryFee * requiredPlayers, // Estimate
       estimated_wait_time: estimatedWaitTime,
       queued_users:
         queuedUsers?.map((entry: any) => {
           const waitTime = Math.floor((Date.now() - new Date(entry.joined_at).getTime()) / 1000)
           return {
+            id: entry.user_id,
             user_id: entry.user_id,
             username: entry.users?.username || "Unknown",
+            avatar_url: "", // Placeholder
             elo_rating: entry.users?.elo_rating || 1000,
             wait_time: waitTime,
           }
@@ -129,26 +198,39 @@ export const lobbyQueueService = {
   },
 
   async getAllQueues(): Promise<LobbyQueue[]> {
+    const games = ["Omega Strikers", "Deadlock"]
+    // Define standard queues with entry fees
     const queueConfigs = [
-      { type: "maxed" as const, format: "snake_draft", count: 4 },
-      { type: "maxed" as const, format: "auction_draft", count: 4 },
-      { type: "unmaxed" as const, format: "snake_draft", count: 4 },
-      { type: "unmaxed" as const, format: "auction_draft", count: 4 },
+      // Free queues
+      { type: "maxed" as const, format: "snake_draft", count: 4, fee: 0 },
+      { type: "maxed" as const, format: "auction_draft", count: 4, fee: 0 },
+      // $10 Entry
+      { type: "maxed" as const, format: "snake_draft", count: 4, fee: 10 },
+      { type: "maxed" as const, format: "auction_draft", count: 4, fee: 10 },
+      // $25 Entry
+      { type: "maxed" as const, format: "snake_draft", count: 4, fee: 25 },
     ]
 
-    const queues = await Promise.all(
-      queueConfigs.map((config) => this.getQueueStatus(config.type, config.format, config.count)),
-    )
+    const allQueues: LobbyQueue[] = []
 
-    return queues
+    for (const game of games) {
+      const gameQueues = await Promise.all(
+        queueConfigs.map((config) => this.getQueueStatus(game, config.type, config.format, config.count, config.fee)),
+      )
+      allQueues.push(...gameQueues)
+    }
+
+    return allQueues
   },
 
   async checkAndCreateMatch(
+    game: string,
     queueType: "maxed" | "unmaxed",
     gameFormat: string,
     playerCount: number,
+    entryFee: number = 0
   ): Promise<string | null> {
-    console.log("[v0] Checking if we can create match:", { queueType, gameFormat, playerCount })
+    console.log("[v0] Checking if we can create match:", { game, queueType, gameFormat, playerCount, entryFee })
 
     const { data: queuedUsers } = await supabase
       .from("lobby_queue")
@@ -158,9 +240,11 @@ export const lobbyQueueService = {
         users(username, elo_rating)
       `,
       )
+      .eq("game", game)
       .eq("queue_type", queueType)
       .eq("game_format", gameFormat)
       .eq("player_count", playerCount)
+      .eq("entry_fee", entryFee)
       .eq("status", "waiting")
       .order("joined_at", { ascending: true })
 
@@ -193,17 +277,23 @@ export const lobbyQueueService = {
     // Take the required number of players
     const playersForMatch = queuedUsers.slice(0, requiredPlayers)
 
+    // Calculate prize pool
+    // e.g. $10 entry * 8 players = $80 total. Platform fee might apply, but for now 100% to prize pool.
+    const prizePool = entryFee * playersForMatch.length
+
     // Create tournament
-    const tournamentName = `${queueType === "maxed" ? "Ranked" : "Quick Play"} ${gameFormat.replace("_", " ")} - ${new Date().toLocaleTimeString()}`
+    const tournamentName = `${entryFee > 0 ? `$${entryFee} ` : ""}${queueType === "maxed" ? "Ranked" : "Quick Play"} ${gameFormat.replace("_", " ")}`
 
     const { data: tournament, error: tournamentError } = await supabase
       .from("tournaments")
       .insert({
         name: tournamentName,
         description: `Auto-created from ${queueType} queue`,
-        game: "Omega Strikers",
+        game: game,
         tournament_type: "draft",
         max_participants: requiredPlayers,
+        entry_fee: entryFee,
+        prize_pool: prizePool,
         status: "drafting",
         start_date: new Date().toISOString(),
         player_pool_settings: {
@@ -242,9 +332,46 @@ export const lobbyQueueService = {
     // Update queue entries to matched status
     const playerIds = playersForMatch.map((p: any) => p.user_id)
     await supabase.from("lobby_queue").update({ status: "matched" }).in("user_id", playerIds).eq("status", "waiting")
-
     console.log("[v0] Created tournament from queue:", tournament.id)
     return tournament.id
+  },
+
+  async ensurePersistentLobbies(userId: string): Promise<void> {
+    const persistentConfigs = [
+      { game: "Omega Strikers", name: "Public Draft Lobby", fee: 0, participants: 8, format: "snake_draft" },
+      { game: "Deadlock", name: "Deadlock Public Lobby", fee: 0, participants: 12, format: "snake_draft" }
+    ]
+
+    for (const config of persistentConfigs) {
+      // Check if a lobby exists
+      const { data: existing } = await supabase
+        .from("tournaments")
+        .select("id")
+        .eq("game", config.game)
+        .eq("status", "drafting")
+        .eq("name", config.name)
+        .limit(1)
+
+      if (!existing || existing.length === 0) {
+        console.log(`[v0] Creating persistent lobby for ${config.game}`)
+        const { error } = await supabase.from("tournaments").insert({
+          name: config.name,
+          description: "Always open public lobby",
+          game: config.game,
+          tournament_type: "draft",
+          max_participants: config.participants,
+          entry_fee: config.fee,
+          status: "drafting",
+          start_date: new Date().toISOString(),
+          player_pool_settings: {
+            draft_mode: config.format,
+            auto_start: true
+          },
+          created_by: userId // The user who triggered this becomes the creator/owner effectively
+        })
+        if (error) console.error("Error creating persistent lobby:", error)
+      }
+    }
   },
 
   async startQueueMonitoring(): Promise<void> {
@@ -253,15 +380,12 @@ export const lobbyQueueService = {
     // Check every 5 seconds for matches to create
     setInterval(async () => {
       try {
-        const queueConfigs = [
-          { type: "maxed" as const, format: "snake_draft", count: 4 },
-          { type: "maxed" as const, format: "auction_draft", count: 4 },
-          { type: "unmaxed" as const, format: "snake_draft", count: 4 },
-          { type: "unmaxed" as const, format: "auction_draft", count: 4 },
-        ]
+        const queues = await this.getAllQueues()
 
-        for (const config of queueConfigs) {
-          await this.checkAndCreateMatch(config.type, config.format, config.count)
+        for (const queue of queues) {
+          if (queue.current_players >= queue.required_players) {
+            await this.checkAndCreateMatch(queue.game, queue.queue_type as any, queue.game_format, queue.player_count, queue.entry_fee)
+          }
         }
       } catch (error) {
         console.error("[v0] Error in queue monitoring:", error)

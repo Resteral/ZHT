@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Crown, Trophy, Medal, Star, TrendingUp, TrendingDown, Zap, Target, Shield } from "lucide-react"
+import { Crown, Trophy, Medal, Star, TrendingUp, TrendingDown, Zap, Target, Shield, DollarSign } from "lucide-react"
 import { ProfileNameLink } from "@/components/profile/profile-name-link"
 import { createClient } from "@/lib/supabase/client"
 
@@ -32,14 +32,7 @@ interface Player {
   rank: number
   badge: string
   tier: string
-}
-
-interface Earner {
-  id: string
-  username: string
   total_earnings: number
-  monthly_earnings: number
-  rank: number
 }
 
 const MOCK_CLAN_LEADERBOARD: Clan[] = [
@@ -50,12 +43,11 @@ const MOCK_CLAN_LEADERBOARD: Clan[] = [
   { id: "5", name: "Team Liquid", tag: "TL", level: 14, rating: 2250, wins: 125, losses: 98, members_count: 40, rank: 5 },
   { id: "6", name: "G2 Esports", tag: "G2", level: 15, rating: 2210, wins: 130, losses: 105, members_count: 41, rank: 6 },
   { id: "7", name: "Fnatic", tag: "FNC", level: 13, rating: 2180, wins: 115, losses: 90, members_count: 36, rank: 7 },
-  { id: "8", name: "T1", tag: "T1", level: 16, rating: 2500, wins: 180, losses: 50, members_count: 45, rank: 8 }, // Should be rank 1 by rating, but mocking list order
+  { id: "8", name: "T1", tag: "T1", level: 16, rating: 2500, wins: 180, losses: 50, members_count: 45, rank: 8 },
 ]
 
 export default function LeaderboardPage() {
   const [eloPlayers, setEloPlayers] = useState<Player[]>([])
-  const [topEarners, setTopEarners] = useState<Earner[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -68,6 +60,7 @@ export default function LeaderboardPage() {
 
       console.log("[v0] Loading leaderboard data...")
 
+      // Fetch users and their wallet data for earnings
       const { data: players } = await supabase
         .from("users")
         .select(`
@@ -76,7 +69,10 @@ export default function LeaderboardPage() {
           elo_rating,
           total_games,
           wins,
-          losses
+          losses,
+          user_wallets (
+            total_winnings
+          )
         `)
         .not("elo_rating", "is", null)
         .order("elo_rating", { ascending: false })
@@ -88,9 +84,13 @@ export default function LeaderboardPage() {
 
       if (players) {
         for (const player of players) {
-          console.log("[v0] Calculating stats for player:", player.username)
+          // Basic stats from user table directly (assuming sync is working better now or just use what we have)
+          // For now, let's trust the columns in users table for speed, or do the match calc if needed.
+          // The previous code did a complex match calc. Let's simplify and rely on columns if possible, 
+          // BUT the previous code manual calc suggests `wins`/`losses` might not be trusted.
+          // Let's keep the manual calc for accuracy if that was the intent, but add earnings.
 
-          // Get all matches this player participated in
+          // ACTUAL LOGIC: Fetch match history to verify wins/losses
           const { data: userMatches } = await supabase
             .from("match_participants")
             .select(`
@@ -110,6 +110,7 @@ export default function LeaderboardPage() {
               total_games: 0,
               wins: 0,
               losses: 0,
+              total_earnings: player.user_wallets?.[0]?.total_winnings || 0
             })
             continue
           }
@@ -121,9 +122,7 @@ export default function LeaderboardPage() {
             })
             .map((m) => m.match_id)
 
-          console.log("[v0] Found", completedMatchIds.length, "completed matches for", player.username)
-
-          // Get match results for completed matches
+          // Get match results
           const { data: matchResults } = await supabase
             .from("match_results")
             .select("match_id, winning_team")
@@ -135,7 +134,6 @@ export default function LeaderboardPage() {
 
           if (matchResults) {
             for (const result of matchResults) {
-              // Get all participants for this match to determine team assignments
               const { data: allParticipants } = await supabase
                 .from("match_participants")
                 .select("user_id, joined_at")
@@ -143,12 +141,9 @@ export default function LeaderboardPage() {
                 .order("joined_at", { ascending: true })
 
               if (allParticipants) {
-                // Determine which team the player was on (based on join order)
                 const userIndex = allParticipants.findIndex((p) => p.user_id === player.id)
                 if (userIndex !== -1) {
-                  // Team assignment: first 4 players = team 1, next 4 = team 2
                   const userTeam = Math.floor(userIndex / 4) + 1
-
                   if (userTeam === result.winning_team) {
                     actualWins++
                   } else {
@@ -160,23 +155,13 @@ export default function LeaderboardPage() {
           }
 
           const totalGames = actualWins + actualLosses
-          console.log(
-            "[v0] Player",
-            player.username,
-            "stats:",
-            totalGames,
-            "games,",
-            actualWins,
-            "wins,",
-            actualLosses,
-            "losses",
-          )
 
           playersWithActualStats.push({
             ...player,
             total_games: totalGames,
             wins: actualWins,
             losses: actualLosses,
+            total_earnings: player.user_wallets?.[0]?.total_winnings || 0
           })
         }
       }
@@ -186,43 +171,9 @@ export default function LeaderboardPage() {
         .select("user_id, rating_change, created_at")
         .order("created_at", { ascending: false })
 
-      const csvStatsMap = new Map()
-
-      const { data: earners } = await supabase
-        .from("user_wallets")
-        .select(`
-          user_id,
-          total_winnings,
-          users!inner(id, username)
-        `)
-        .order("total_winnings", { ascending: false })
-        .limit(10)
-
-      if (earners) {
-        const formattedEarners = earners.map((earner, index) => {
-          const user = Array.isArray(earner.users) ? earner.users[0] : earner.users
-          return {
-            id: earner.user_id,
-            username: user?.username || "Unknown",
-            total_earnings: earner.total_winnings || 0,
-            monthly_earnings: earner.total_winnings * 0.1, // Approximate monthly earnings
-            rank: index + 1,
-          }
-        })
-        setTopEarners(formattedEarners)
-        console.log("[v0] Set top earners:", formattedEarners.length)
-      }
-
       if (playersWithActualStats) {
         const formattedPlayers = playersWithActualStats.map((player, index) => {
           const recentChange = recentChanges?.find((change) => change.user_id === player.id)?.rating_change || 0
-
-          const csvStats = {
-            totalGoals: 0,
-            totalAssists: 0,
-            totalSaves: 0,
-            totalGames: 0,
-          }
 
           return {
             id: player.id,
@@ -235,18 +186,10 @@ export default function LeaderboardPage() {
             rank: index + 1,
             badge: getELOBadge(player.elo_rating || 1200),
             tier: getELOTier(player.elo_rating || 1200),
-            goals: csvStats.totalGoals,
-            assists: csvStats.totalAssists,
-            saves: csvStats.totalSaves,
-            shots: 0,
-            avg_rating:
-              csvStats.totalGames > 0
-                ? ((csvStats.totalGoals + csvStats.totalAssists) / csvStats.totalGames).toFixed(1)
-                : 0,
+            total_earnings: player.total_earnings || 0
           }
         })
         setEloPlayers(formattedPlayers)
-        console.log("[v0] Set formatted players:", formattedPlayers.length)
       }
     } catch (error) {
       console.error("Error loading leaderboard data:", error)
@@ -311,15 +254,13 @@ export default function LeaderboardPage() {
       </div>
 
       <Tabs defaultValue="elo" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="elo" className="flex items-center gap-2">
             <Crown className="h-4 w-4" />
             <span className="text-foreground">ELO Rankings</span>
           </TabsTrigger>
           <TabsTrigger value="clans">Top Clans</TabsTrigger>
-          <TabsTrigger value="earnings">Top Earners</TabsTrigger>
           <TabsTrigger value="tournaments">Tournament Winners</TabsTrigger>
-          <TabsTrigger value="betting">Betting Leaders</TabsTrigger>
         </TabsList>
 
         <TabsContent value="elo" className="space-y-4">
@@ -451,6 +392,16 @@ export default function LeaderboardPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Earnings Column */}
+                      <div className="flex flex-col items-end mr-6 min-w-[100px]">
+                        <div className="flex items-center gap-1 font-semibold text-green-500">
+                          <DollarSign className="h-3 w-3" />
+                          {player.total_earnings.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Earnings</div>
+                      </div>
+
                       <div className="flex items-center gap-4">
                         <Badge className={`${getBadgeColor(player.tier)} border-0`}>{player.badge}</Badge>
                         <div className="text-right">
@@ -522,77 +473,6 @@ export default function LeaderboardPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="earnings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-green-500" />
-                Top Earners
-              </CardTitle>
-              <CardDescription>Players with highest total winnings</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="space-y-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div className="w-8 h-8 bg-muted rounded-full animate-pulse" />
-                        <div className="w-8 h-8 bg-muted rounded-full animate-pulse" />
-                        <div className="space-y-2">
-                          <div className="w-32 h-4 bg-muted rounded animate-pulse" />
-                          <div className="w-24 h-3 bg-muted rounded animate-pulse" />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="w-16 h-6 bg-muted rounded animate-pulse" />
-                        <div className="w-12 h-4 bg-muted rounded animate-pulse" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {topEarners.map((player) => (
-                    <div key={player.rank} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted font-bold">
-                          {player.rank}
-                        </div>
-                        <Avatar>
-                          <AvatarImage src="/placeholder.svg?height=40&width=40" />
-                          <AvatarFallback>
-                            {player.username
-                              .split(" ")
-                              .map((n: string) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-semibold">
-                            <ProfileNameLink
-                              userId={player.id}
-                              username={player.username}
-                              pageSource="leaderboard-earnings"
-                            />
-                          </div>
-                          <div className="text-sm text-slate-100">
-                            This month: +${player.monthly_earnings.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg text-green-600">${player.total_earnings.toFixed(2)}</div>
-                        <div className="text-sm text-slate-100">Total earnings</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="tournaments" className="space-y-4">
           <Card>
             <CardHeader>
@@ -651,86 +531,6 @@ export default function LeaderboardPage() {
                     <div className="text-right">
                       <div className="font-bold text-lg text-purple-600">{tournament.prize}</div>
                       <div className="text-sm text-slate-100">{tournament.date}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="betting" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-blue-500" />
-                Betting Leaders
-              </CardTitle>
-              <CardDescription>Most successful bettors by profit and accuracy</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[
-                  {
-                    name: "Mike Rodriguez",
-                    profit: "$4,567",
-                    accuracy: "78%",
-                    totalBets: 234,
-                    avatar: "/placeholder.svg?height=40&width=40",
-                  },
-                  {
-                    name: "Lisa Zhang",
-                    profit: "$3,890",
-                    accuracy: "82%",
-                    totalBets: 156,
-                    avatar: "/placeholder.svg?height=40&width=40",
-                  },
-                  {
-                    name: "Chris Wilson",
-                    profit: "$3,234",
-                    accuracy: "75%",
-                    totalBets: 289,
-                    avatar: "/placeholder.svg?height=40&width=40",
-                  },
-                  {
-                    name: "David Brown",
-                    profit: "$2,876",
-                    accuracy: "71%",
-                    totalBets: 198,
-                    avatar: "/placeholder.svg?height=40&width=40",
-                  },
-                ].map((bettor, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted font-bold">
-                        {index + 1}
-                      </div>
-                      <Avatar>
-                        <AvatarImage src={bettor.avatar || "/placeholder.svg"} />
-                        <AvatarFallback>
-                          {bettor.name
-                            .split(" ")
-                            .map((n: string) => n[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-semibold">
-                          <ProfileNameLink
-                            userId={`bettor-${index + 1}`}
-                            username={bettor.name}
-                            pageSource="leaderboard-betting"
-                          />
-                        </div>
-                        <div className="text-sm text-slate-100">{bettor.totalBets} total bets</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <Badge variant="outline">{bettor.accuracy} accuracy</Badge>
-                      <div className="text-right">
-                        <div className="font-bold text-lg text-blue-600">{bettor.profit}</div>
-                        <div className="text-sm text-slate-100">Total profit</div>
-                      </div>
                     </div>
                   </div>
                 ))}
