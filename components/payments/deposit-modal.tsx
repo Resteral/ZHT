@@ -12,7 +12,7 @@ import { DollarSign, Loader2, CreditCard } from "lucide-react"
 // Initialize Stripe with public key from env
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "pk_test_placeholder")
 
-function CheckoutForm({ amount, onSuccess }: { amount: number; onSuccess: () => void }) {
+function CheckoutForm({ amount, onSuccess, disabled }: { amount: number; onSuccess: () => void; disabled?: boolean }) {
     const stripe = useStripe()
     const elements = useElements()
     const [error, setError] = useState<string | null>(null)
@@ -21,7 +21,7 @@ function CheckoutForm({ amount, onSuccess }: { amount: number; onSuccess: () => 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault()
 
-        if (!stripe || !elements) {
+        if (!stripe || !elements || disabled) {
             return
         }
 
@@ -81,7 +81,7 @@ function CheckoutForm({ amount, onSuccess }: { amount: number; onSuccess: () => 
                 />
             </div>
             {error && <div className="text-sm text-red-500">{error}</div>}
-            <Button type="submit" disabled={!stripe || processing} className="w-full">
+            <Button type="submit" disabled={!stripe || processing || disabled} className="w-full">
                 {processing ? (
                     <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -98,6 +98,7 @@ function CheckoutForm({ amount, onSuccess }: { amount: number; onSuccess: () => 
 export function DepositModal() {
     const [amount, setAmount] = useState<string>("25")
     const [isOpen, setIsOpen] = useState(false)
+    const [isConfirmed, setIsConfirmed] = useState(false)
 
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value
@@ -150,6 +151,27 @@ export function DepositModal() {
                         </div>
                     </div>
 
+                    <div className="flex items-start space-x-2 py-4">
+                        <input
+                            type="checkbox"
+                            id="terms"
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary mt-1"
+                            checked={isConfirmed}
+                            onChange={(e) => setIsConfirmed(e.target.checked)}
+                        />
+                        <div className="grid gap-1.5 leading-none">
+                            <label
+                                htmlFor="terms"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                            >
+                                I confirm I am 18+ and not in a restricted jurisdiction.
+                            </label>
+                            <p className="text-xs text-muted-foreground">
+                                By depositing, you agree to our <a href="/terms" className="underline hover:text-foreground" target="_blank">Terms of Service</a>.
+                            </p>
+                        </div>
+                    </div>
+
                     <div className="border-t pt-4">
                         <Label className="mb-2 block">Card Details</Label>
                         <Elements stripe={stripePromise}>
@@ -160,11 +182,12 @@ export function DepositModal() {
                                     // Ideally trigger a toast or refresh balance here
                                     alert("Deposit Successful!")
                                 }}
+                                disabled={!isConfirmed}
                             />
                         </Elements>
                     </div>
                 </div>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     )
 }

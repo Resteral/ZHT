@@ -16,16 +16,25 @@ export interface QueueEntry {
 }
 
 export interface LobbyQueue {
+  id: string
+  name: string
+  game: string
   queue_type: "maxed" | "unmaxed"
   game_format: string
   player_count: number
   entry_fee: number
   current_players: number
   required_players: number
+  max_players: number
+  prize_pool: number
+  game_mode: string
+  status: string
   estimated_wait_time: number
   queued_users: Array<{
+    id: string
     user_id: string
     username: string
+    avatar_url: string
     elo_rating: number
     wait_time: number
   }>
@@ -79,13 +88,15 @@ export const lobbyQueueService = {
       eloRating = userData?.elo_rating || 1000
 
       // Initialize user_game_ratings for this game
-      await supabase.from("user_game_ratings").insert({
+      const { error: initError } = await supabase.from("user_game_ratings").insert({
         user_id: userId,
         game: game,
         elo_rating: eloRating
-      }).catch(err => {
-        console.warn("Could not insert initial game rating", err)
       })
+
+      if (initError) {
+        console.warn("Could not insert initial game rating", initError)
+      }
     }
 
     const { data: queueEntry, error } = await supabase
@@ -113,7 +124,7 @@ export const lobbyQueueService = {
     }
 
     // Check if we can create a match immediately
-    await this.checkAndCreateMatch(queueType, gameFormat, playerCount, entryFee)
+    await this.checkAndCreateMatch(game, queueType, gameFormat, playerCount, entryFee)
 
     return queueEntry
   },
