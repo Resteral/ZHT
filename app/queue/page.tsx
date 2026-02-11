@@ -11,6 +11,10 @@ import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
+import { joinLobbyQueue, leaveLobbyQueue } from "@/app/actions/lobby-actions"
+
+// ... imports remain the same
+
 export default function QueuePage() {
   const [queues, setQueues] = useState<LobbyQueue[]>([])
   const [userQueue, setUserQueue] = useState<{
@@ -65,7 +69,33 @@ export default function QueuePage() {
 
     setLoading(true)
     try {
-      await lobbyQueueService.joinQueue(user.id, type, format, count)
+      // Hardcoded game "Omega Strikers" for now as per page context, or passed in?
+      // The page doesn't seem to expose game selection, implies standard game?
+      // lobbyQueueService.getAllQueues() fetches for "Omega Strikers" and "Deadlock".
+      // But the join button logic in the original file didn't pass game...
+      // modifying the original joinQueue function signature in the component to match server action?
+      // The original `joinQueue` took (type, format, count). `lobbyQueueService.joinQueue` was called with `user.id, type, format, count`.
+      // Where did `game` come from in original?
+      // In original `joinQueue`: `await lobbyQueueService.joinQueue(user.id, type, format, count)`
+      // Wait, `lobbyQueueService.joinQueue` signature is `(userId, game, type...)`.
+      // The original call was missing `game`?
+      // Let's check `lobby-queue-service.ts` joinQueue signature from step 99.
+      // `joinQueue(userId: string, game: string, ...)`
+      // The original page.tsx call: `await lobbyQueueService.joinQueue(user.id, type, format, count)`
+      // It passed `type` as `game`? No, type is "maxed" | "unmaxed".
+      // PROBABLY BUG in original code or I misread.
+      // Actually, looking at `app/queue/page.tsx` step 111:
+      // `await lobbyQueueService.joinQueue(user.id, type, format, count)`
+      // versus service: `joinQueue(userId, game, ...)`
+      // So `type` was passed as `game`. That means original code was broken or using implicit ordering.
+      // "maxed" passed as game?
+      // I will fix this by defaulting to "Omega Strikers" or looping buttons for games?
+      // Since this seems to be a general queue page, I'll pass "Omega Strikers" for now as default, or check if we can select it.
+      // But let's assume "Omega Strikers" for this specific page view or use a prop if available.
+      // Given the file content, there is no game selector.
+      // I will assume "Omega Strikers" to match `lobbies/page.tsx` default.
+
+      await joinLobbyQueue("Omega Strikers", type, format, count)
       toast.success(`Joined ${type} ${format.replace("_", " ")} queue!`)
       await loadQueues()
     } catch (error) {
@@ -80,7 +110,7 @@ export default function QueuePage() {
 
     setLoading(true)
     try {
-      await lobbyQueueService.leaveQueue(user.id)
+      await leaveLobbyQueue()
       toast.success("Left queue")
       setUserQueue(null)
       await loadQueues()

@@ -21,22 +21,30 @@ CREATE INDEX IF NOT EXISTS idx_lobby_queue_joined_at ON lobby_queue(joined_at);
 -- Enable Row Level Security
 ALTER TABLE lobby_queue ENABLE ROW LEVEL SECURITY;
 
--- Allow users to see all queue entries
+-- Allow users to see all queue entries (public information for queue counts)
 CREATE POLICY "Users can view all queue entries" ON lobby_queue
   FOR SELECT
   USING (true);
 
--- Allow users to insert their own queue entries
+-- Allow users to join queues (insert their own entry)
+-- User ID must match auth.uid()
+-- Initial status must be 'waiting'
 CREATE POLICY "Users can join queues" ON lobby_queue
   FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (
+    auth.uid() = user_id AND
+    status = 'waiting'
+  );
 
--- Allow users to update their own queue entries
-CREATE POLICY "Users can update their own queue entries" ON lobby_queue
+-- Allow users to leave queues (update their own entry)
+-- Can only cancel their own 'waiting' entry
+CREATE POLICY "Users can leave (cancel) their own queue entries" ON lobby_queue
   FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id)
+  WITH CHECK (
+    auth.uid() = user_id AND
+    status = 'cancelled' -- Can only set status to cancelled
+  );
 
--- Allow users to delete their own queue entries
-CREATE POLICY "Users can delete their own queue entries" ON lobby_queue
-  FOR DELETE
-  USING (auth.uid() = user_id);
+-- Users cannot delete entries, only cancel them (soft delete)
+-- Admins/System can clean up later if needed
