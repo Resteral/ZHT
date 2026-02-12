@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { createBrowserClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { toast } from "sonner"
 
@@ -40,7 +40,9 @@ export function TournamentBettingInterface({ tournamentId, tournamentName, parti
   const [selectedMarket, setSelectedMarket] = useState<string | null>(null)
   const [selectedOdds, setSelectedOdds] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
-  const supabase = createBrowserClient()
+
+  // Use client only for reading data. Writes go through Server Actions.
+  const supabase = createClient()
 
   useEffect(() => {
     if (user) {
@@ -67,25 +69,10 @@ export function TournamentBettingInterface({ tournamentId, tournamentName, parti
       if (walletData) {
         setWallet(walletData)
       } else {
-        // Create wallet if it doesn't exist
-        const { data: newWallet, error: createError } = await supabase
-          .from("user_wallets")
-          .insert({
-            user_id: user.id,
-            balance: 1000.0,
-            total_deposited: 1000.0,
-            total_wagered: 0.0,
-            total_winnings: 0.0,
-            total_withdrawn: 0.0,
-          })
-          .select("balance, total_wagered, total_winnings")
-          .single()
-
-        if (createError) {
-          console.error("Error creating wallet:", createError)
-        } else {
-          setWallet(newWallet)
-        }
+        // Create wallet if it doesn't exist (Read-only check usually sufficient if registration handles creation)
+        // But if we need to create one on the fly, we should probably do it server-side or via a specific action.
+        // For now, let's just leave it as null or 0 if not found, or use a fetch.
+        setWallet({ balance: 0, total_wagered: 0, total_winnings: 0 })
       }
     } catch (error) {
       console.error("Error in loadWalletData:", error)
@@ -111,7 +98,7 @@ export function TournamentBettingInterface({ tournamentId, tournamentName, parti
     }
   }
 
-  const placeBet = async () => {
+  const handlePlaceBet = async () => {
     if (!user || !selectedMarket || !selectedOdds || !betAmount) {
       toast.error("Please select a market and enter bet amount")
       return
@@ -123,7 +110,7 @@ export function TournamentBettingInterface({ tournamentId, tournamentName, parti
       return
     }
 
-    if (!wallet || amount > wallet.balance) {
+    if (wallet && amount > wallet.balance) {
       toast.error("Insufficient balance")
       return
     }
@@ -131,56 +118,29 @@ export function TournamentBettingInterface({ tournamentId, tournamentName, parti
     setLoading(true)
 
     try {
-      // Place the bet
-      const { data: betData, error: betError } = await supabase
-        .from("bets")
-        .insert({
-          user_id: user.id,
-          market_id: selectedMarket,
-          stake_amount: amount,
-          odds: selectedOdds,
-          potential_payout: amount * selectedOdds,
-          bet_type: "single",
-          status: "pending",
-        })
-        .select()
-        .single()
+      // Import the server action dynamically to avoid build issues if it's not fully ready in context used (though standard import is better usually)
+      // optimizing for "use client" compatibility.
+      const { placeBet } = await import("@/app/actions/contest-actions")
 
-      if (betError) {
-        console.error("Error placing bet:", betError)
-        toast.error("Failed to place bet")
-        return
+      const result = await placeBet(
+        tournamentId,
+        selectedMarket,
+        "selection", // Placeholder optionId
+        amount,
+        selectedOdds,
+        selectedMarket // betType
+      )
+
+      if (result.success) {
+        toast.success(`Bet placed successfully! Potential payout: $${(amount * selectedOdds).toFixed(2)}`)
+        setBetAmount("")
+        setSelectedMarket(null)
+        setSelectedOdds(null)
+        loadWalletData() // Refresh balance
       }
-
-      // Update wallet balance
-      const { error: walletError } = await supabase
-        .from("user_wallets")
-        .update({
-          balance: wallet.balance - amount,
-          total_wagered: wallet.total_wagered + amount,
-        })
-        .eq("user_id", user.id)
-
-      if (walletError) {
-        console.error("Error updating wallet:", walletError)
-        toast.error("Bet placed but wallet update failed")
-        return
-      }
-
-      // Update local state
-      setWallet({
-        ...wallet,
-        balance: wallet.balance - amount,
-        total_wagered: wallet.total_wagered + amount,
-      })
-
-      setBetAmount("")
-      setSelectedMarket(null)
-      setSelectedOdds(null)
-      toast.success(`Bet placed successfully! Potential payout: $${(amount * selectedOdds).toFixed(2)}`)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in placeBet:", error)
-      toast.error("Failed to place bet")
+      toast.error(error.message || "Failed to place bet")
     } finally {
       setLoading(false)
     }
@@ -246,11 +206,10 @@ export function TournamentBettingInterface({ tournamentId, tournamentName, parti
                     {participants.map((participant, index) => (
                       <div
                         key={participant.id}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                          selectedMarket === `winner_${participant.id}`
-                            ? "border-primary bg-primary/5"
-                            : "hover:border-primary/50"
-                        }`}
+                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedMarket === `winner_${participant.id}`
+                          ? "border-primary bg-primary/5"
+                          : "hover:border-primary/50"
+                          }`}
                         onClick={() => {
                           setSelectedMarket(`winner_${participant.id}`)
                           setSelectedOdds(2.5 + index * 0.2) // Dynamic odds based on position
@@ -277,11 +236,10 @@ export function TournamentBettingInterface({ tournamentId, tournamentName, parti
                     {participants.slice(0, 3).map((participant, index) => (
                       <div
                         key={`kills_${participant.id}`}
-                        className={`p-2 border rounded cursor-pointer transition-colors ${
-                          selectedMarket === `kills_${participant.id}`
-                            ? "border-primary bg-primary/5"
-                            : "hover:border-primary/50"
-                        }`}
+                        className={`p-2 border rounded cursor-pointer transition-colors ${selectedMarket === `kills_${participant.id}`
+                          ? "border-primary bg-primary/5"
+                          : "hover:border-primary/50"
+                          }`}
                         onClick={() => {
                           setSelectedMarket(`kills_${participant.id}`)
                           setSelectedOdds(3.0 + index * 0.5)
@@ -332,7 +290,7 @@ export function TournamentBettingInterface({ tournamentId, tournamentName, parti
                     <span className="text-green-600">${(Number.parseFloat(betAmount) * selectedOdds).toFixed(2)}</span>
                   </div>
                 )}
-                <Button onClick={placeBet} disabled={loading || !betAmount} className="w-full">
+                <Button onClick={handlePlaceBet} disabled={loading || !betAmount} className="w-full">
                   {loading ? "Placing Bet..." : "Place Bet"}
                 </Button>
               </div>

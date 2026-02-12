@@ -9,7 +9,7 @@ import { ArrowLeft, Eye, Crown, Users, DollarSign, TrendingUp } from "lucide-rea
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import { loadBettingMarkets } from "@/lib/supabase/betting-markets" // Declare the variable here
-import { walletService } from "@/lib/services/wallet-service"
+import { joinContest, placeBet as placeBetAction } from "@/app/actions/contest-actions"
 
 interface ELODraftRoomPageProps {
   params: {
@@ -193,61 +193,26 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
     }
   }
 
-  const placeBet = async (marketId: string, optionId: string, amount: number) => {
+  const placeBet = async (marketId: string, optionId: string, amount: number, odds: number) => {
     if (!user) return
 
+    // Optimistic check for own team betting (UI feedback only, server enforces security)
     const userTeam = getUserTeam()
     if (userTeam && isOpposingTeamBet(marketId, optionId, userTeam)) {
       console.log(`[v0] Blocked bet against own team: ${marketId} - ${optionId}`)
+      alert("Cannot bet against your own team")
       return
     }
 
-    const supabase = createClient()
-
     try {
-      const { data: currentUser, error: balanceCheckError } = await supabase
-        .from("users")
-        .select("balance")
-        .eq("id", user.id)
-        .single()
-
-      if (balanceCheckError) throw balanceCheckError
-
-      const currentBalance = currentUser.balance || 0
-      if (currentBalance < amount) {
-        console.log(`[v0] Insufficient balance: ${currentBalance} < ${amount}`)
-        alert(`Insufficient balance. You have $${currentBalance.toFixed(2)} but tried to bet $${amount}`)
-        return
-      }
-
-      const shortBetType = `${marketId.substring(0, 8)}_${optionId.substring(0, 8)}`
-
-      const { error } = await supabase.from("bets").insert({
-        user_id: user.id,
-        market_id: null, // Remove foreign key constraint dependency
-        bet_type: shortBetType, // Use shortened version to fit varchar(20)
-        stake_amount: amount,
-        odds: 2.0, // Default odds, should be calculated from market data
-        potential_payout: amount * 2.0,
-        status: "pending",
-        placed_at: new Date().toISOString(),
-      })
-
-      if (error) throw error
-
-      const newBalance = currentBalance - amount
-
-      const { error: directBalanceError } = await supabase
-        .from("users")
-        .update({ balance: newBalance })
-        .eq("id", user.id)
-
-      if (directBalanceError) throw directBalanceError
-
-      console.log(`[v0] Bet placed: ${marketId} - ${optionId} for $${amount}`)
+      // Pass odds and use marketId as betType for now (or construct if needed)
+      await placeBetAction(params.id, marketId, optionId, amount, odds, marketId)
+      console.log(`[v0] Bet placed: ${marketId} - ${optionId} for $${amount} @ ${odds}x`)
       setTimeout(() => loadPublicBets(), 500)
-    } catch (error) {
+      alert(`Bet placed successfully! Potential payout: $${(amount * odds).toFixed(2)}`)
+    } catch (error: any) {
       console.error("[v0] Error placing bet:", error)
+      alert(error.message || "Failed to place bet")
     }
   }
 
@@ -266,8 +231,8 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
         },
         (payload) => {
           console.log("[v0] Match updated:", payload)
-          if (payload.new && payload.new.draft_state) {
-            setDraftState(payload.new.draft_state)
+          if (payload.new && (payload.new as any).draft_state) {
+            setDraftState((payload.new as any).draft_state)
           }
         },
       )
@@ -325,7 +290,7 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
       }
 
       const participantsWithElo = participantData
-        .map((p) => ({
+        .map((p: any) => ({
           id: p.id,
           user_id: p.user_id,
           username: p.users.username,
@@ -548,40 +513,16 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
 
     try {
       const entryFee = draftData.entry_fee || 0
-      if (entryFee > 0) {
-        const { data: wallet } = await supabase
-          .from("user_wallets")
-          .select("balance")
-          .eq("user_id", user.id)
-          .single()
 
-        if (!wallet || wallet.balance < entryFee) {
-          alert("Insufficient funds to join this lobby")
-          return
-        }
-
-        const success = await walletService.deductEntryFee(user.id, entryFee, `Entry fee for ${draftData.name}`)
-        if (!success) {
-          alert("Transaction failed")
-          return
-        }
-      }
-
-      const { error } = await supabase.from("tournament_participants").insert({
-        tournament_id: params.id,
-        user_id: user.id,
-        status: "registered",
-        joined_at: new Date().toISOString()
-      })
-
-      if (error) throw error
+      // Call Server Action
+      await joinContest(params.id, entryFee, draftData.name || "Contest")
 
       // Refresh page or state
       initializeDraft()
       alert("Successfully joined lobby!")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error joining lobby:", error)
-      alert("Failed to join lobby")
+      alert(error.message || "Failed to join lobby")
     }
   }
 
@@ -830,14 +771,14 @@ export default function ELODraftRoomPage({ params }: ELODraftRoomPageProps) {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => placeBet(market.id, option.id, 5)}
+                                      onClick={() => placeBet(market.id, option.id, 5, option.odds)}
                                       className="text-xs px-3 py-1 border-slate-500 text-slate-200 hover:bg-slate-600 hover:border-slate-400"
                                     >
                                       Bet $5
                                     </Button>
                                     <Button
                                       size="sm"
-                                      onClick={() => placeBet(market.id, option.id, 10)}
+                                      onClick={() => placeBet(market.id, option.id, 10, option.odds)}
                                       className="text-xs px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                                     >
                                       Bet $10

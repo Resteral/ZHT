@@ -148,3 +148,49 @@ export async function leaveLobbyQueue() {
     revalidatePath("/lobbies")
     return { success: true }
 }
+
+export async function ensurePersistentLobbies() {
+    const supabase = await createClient()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) return
+
+    const persistentConfigs = [
+        { game: "Omega Strikers", name: "Public Draft Lobby", fee: 0, participants: 8, format: "snake_draft" },
+        { game: "Deadlock", name: "Deadlock Public Lobby", fee: 0, participants: 12, format: "snake_draft" }
+    ]
+
+    for (const config of persistentConfigs) {
+        // Check if a lobby exists
+        const { data: existing } = await supabase
+            .from("tournaments")
+            .select("id")
+            .eq("game", config.game)
+            .eq("status", "drafting")
+            .eq("name", config.name)
+            .limit(1)
+
+        if (!existing || existing.length === 0) {
+            console.log(`[v0] Creating persistent lobby for ${config.game}`)
+            const { error } = await supabase.from("tournaments").insert({
+                name: config.name,
+                description: "Always open public lobby",
+                game: config.game,
+                tournament_type: "draft",
+                max_participants: config.participants,
+                entry_fee: config.fee,
+                prize_pool: 0,
+                status: "drafting",
+                start_date: new Date().toISOString(),
+                player_pool_settings: {
+                    draft_mode: config.format,
+                    auto_start: true
+                },
+                created_by: user.id
+            })
+            if (error) console.error("Error creating persistent lobby:", error)
+        }
+    }
+}

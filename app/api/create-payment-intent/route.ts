@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
+import { createClient } from "@/lib/supabase/server"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_placeholder", {
-    apiVersion: "2023-10-16" as any, // Cast to any to avoid strict version check errors with rapid updates
+    apiVersion: "2023-10-16" as any,
 })
 
 export async function POST(req: Request) {
     try {
+        const supabase = await createClient()
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
+
+        if (!user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
         const { amount } = await req.json()
 
         if (!amount || amount < 500) { // Minimum $5.00
@@ -19,6 +29,9 @@ export async function POST(req: Request) {
             currency: "usd",
             automatic_payment_methods: {
                 enabled: true,
+            },
+            metadata: {
+                userId: user.id,
             },
         })
 

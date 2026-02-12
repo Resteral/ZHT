@@ -1,7 +1,53 @@
-"use client"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
-import { useState } from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+// ... imports
+
+function CheckoutForm({ amount, onSuccess, disabled }: { amount: number; onSuccess: () => void; disabled?: boolean }) {
+    // ... existing code ...
+    if (result.error) {
+        setError(result.error.message || "Payment failed")
+    } else {
+        if (result.paymentIntent.status === "succeeded") {
+            onSuccess()
+        }
+    }
+    setProcessing(false)
+}
+
+    // ... render ...
+}
+
+export function DepositModal() {
+    const router = useRouter()
+    const [amount, setAmount] = useState<string>("25")
+    const [isOpen, setIsOpen] = useState(false)
+    const [isConfirmed, setIsConfirmed] = useState(false)
+
+    // ... handleAmountChange ...
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            {/* ... Dialog Content ... */}
+            <div className="border-t pt-4">
+                <Label className="mb-2 block">Card Details</Label>
+                <Elements stripe={stripePromise}>
+                    <CheckoutForm
+                        amount={Number(amount) || 0}
+                        onSuccess={() => {
+                            setIsOpen(false)
+                            toast.success(`Successfully deposited $${amount}!`)
+                            router.refresh()
+                        }}
+                        disabled={!isConfirmed}
+                    />
+                </Elements>
+            </div>
+        </div>
+            </DialogContent >
+        </Dialog >
+    )
+}
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

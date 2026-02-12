@@ -114,4 +114,92 @@ export const serverWalletService = {
 
         return true
     },
+
+    /**
+     * Deposit funds to user's wallet (Server Side)
+     */
+    async depositFunds(userId: string, amount: number, paymentIntentId: string): Promise<boolean> {
+        if (amount <= 0) return true
+
+        const supabase = await createClient()
+
+        const { error } = await supabase.rpc("add_balance", {
+            p_user_id: userId,
+            p_amount: amount,
+            p_description: `Deposit via Stripe (${paymentIntentId})`,
+        })
+
+        if (error) {
+            console.error("Error depositing funds:", error)
+            // Fallback
+            const balance = await this.getBalance(userId)
+            const { error: updateError } = await supabase
+                .from("user_wallets")
+                .update({
+                    balance: balance + amount,
+                })
+                .eq("user_id", userId)
+
+            if (updateError) {
+                console.error("Critical: Failed to deposit funds fallback", updateError)
+                return false
+            }
+
+            // Log transaction
+            await supabase.from("transactions").insert({
+                user_id: userId,
+                amount: amount,
+                type: "deposit",
+                description: `Deposit via Stripe (${paymentIntentId})`,
+                status: "completed",
+                created_at: new Date().toISOString(),
+                metadata: { payment_intent_id: paymentIntentId }
+            })
+
+            return true
+        }
+
+        return true
+    },
+
+    /**
+     * Request withdrawal from user's wallet (Server Side)
+     * Deducts funds immediately and creates a pending withdrawal transaction.
+     */
+    async withdrawFunds(userId: string, amount: number): Promise<boolean> {
+        if (amount <= 0) return false
+
+        const supabase = await createClient()
+
+        // 1. Check balance first
+        const balance = await this.getBalance(userId)
+        if (balance < amount) {
+            return false
+        }
+
+        // 2. Perform deduction
+        const { error } = await supabase.rpc("deduct_balance", {
+            p_user_id: userId,
+            p_amount: amount,
+            p_description: "Withdrawal Request",
+        })
+
+        if (error) {
+            console.error("Error processing withdrawal:", error)
+            return false
+        }
+
+        // 3. Record transaction as 'pending' (or 'withdrawal_pending' if you prefer specific status)
+        // We'll use 'pending' to indicate it needs admin action.
+        await supabase.from("transactions").insert({
+            user_id: userId,
+            amount: -amount,
+            type: "withdrawal",
+            description: "Withdrawal Request",
+            status: "pending",
+            created_at: new Date().toISOString(),
+        })
+
+        return true
+    },
 }
