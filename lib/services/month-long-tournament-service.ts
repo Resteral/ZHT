@@ -388,7 +388,7 @@ export const monthLongTournamentService = {
             phases,
             duration_days: Math.ceil(
               (new Date(tournament.end_date).getTime() - new Date(tournament.start_date).getTime()) /
-                (24 * 60 * 60 * 1000),
+              (24 * 60 * 60 * 1000),
             ),
           }
 
@@ -410,7 +410,7 @@ export const monthLongTournamentService = {
             phases: [],
             duration_days: Math.ceil(
               (new Date(tournament.end_date).getTime() - new Date(tournament.start_date).getTime()) /
-                (24 * 60 * 60 * 1000),
+              (24 * 60 * 60 * 1000),
             ),
           }
         }
@@ -441,12 +441,15 @@ export const monthLongTournamentService = {
     const { data: tournament } = await supabase.from("tournaments").select("entry_fee").eq("id", tournamentId).single()
 
     if (tournament?.entry_fee) {
-      await supabase
-        .from("users")
-        .update({
-          balance: supabase.raw("balance - ?", [tournament.entry_fee]),
-        })
-        .eq("id", userId)
+      const { data: user } = await supabase.from("users").select("balance").eq("id", userId).single()
+      if (user) {
+        await supabase
+          .from("users")
+          .update({
+            balance: (user.balance || 0) - tournament.entry_fee,
+          })
+          .eq("id", userId)
+      }
     }
 
     return participant

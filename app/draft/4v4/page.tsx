@@ -46,6 +46,7 @@ export default function Draft4v4Page() {
   const { user } = useAuth()
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const dataHashRef = useRef<string>("")
 
   const loadLobbies = useCallback(async () => {
     try {
@@ -79,15 +80,24 @@ export default function Draft4v4Page() {
       if (matchError) throw matchError
 
       const currentDataHash = JSON.stringify(matches)
-      if (currentDataHash === intervalRef.current) {
+      if (currentDataHash === dataHashRef.current) {
         return // No changes, skip update
       }
-      intervalRef.current = currentDataHash
+      dataHashRef.current = currentDataHash
 
       console.log("[v0] Loaded matches:", matches?.length || 0, "matches")
 
+      const transformedMatches = (matches || []).map((match: any) => ({
+        ...match,
+        current_participants: match.match_participants?.length || 0,
+        match_participants: match.match_participants.map((p: any) => ({
+          ...p,
+          users: Array.isArray(p.users) ? p.users[0] : p.users
+        }))
+      }))
+
       const fullLobbies =
-        matches?.filter((match) => {
+        transformedMatches?.filter((match: any) => {
           const isFull = (match.match_participants?.length || 0) >= match.max_participants
           const notProcessed = !processedLobbies.has(match.id)
           const notCurrentlyCountingDown = !countdownState || countdownState.lobbyId !== match.id
@@ -101,7 +111,7 @@ export default function Draft4v4Page() {
         break
       }
 
-      setLobbies(matches || [])
+      setLobbies(transformedMatches)
     } catch (err) {
       console.error("[v0] Error loading lobbies:", err)
       setError(err instanceof Error ? err.message : "Failed to load lobbies")
@@ -195,7 +205,11 @@ export default function Draft4v4Page() {
       if (participantsError) throw participantsError
 
       const sortedParticipants = participants
-        ?.sort((a, b) => (a.users?.elo_rating || 0) - (b.users?.elo_rating || 0))
+        ?.map((p: any) => ({
+          ...p,
+          users: Array.isArray(p.users) ? p.users[0] : p.users
+        }))
+        .sort((a, b) => (a.users?.elo_rating || 0) - (b.users?.elo_rating || 0))
         .slice(0, 2)
 
       if (!sortedParticipants || sortedParticipants.length < 2) {

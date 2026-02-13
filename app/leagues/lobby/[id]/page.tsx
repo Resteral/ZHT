@@ -21,10 +21,7 @@ interface LobbyData {
   created_at: string
   match_participants: Array<{
     user_id: string
-    users: {
-      username: string
-      elo_rating: number
-    }
+    users: any
   }>
 }
 
@@ -87,7 +84,7 @@ export default function MatchLobbyPage() {
         status: lobbyData.status,
         participants: lobbyData.match_participants.length,
         maxParticipants: lobbyData.max_participants,
-        participantNames: lobbyData.match_participants.map((p) => p.users?.username).join(", "),
+        participantNames: lobbyData.match_participants.map((p: any) => (p.users?.[0]?.username || p.users?.username || "Unknown")).join(", "),
       })
 
       setLobby(lobbyData)
@@ -253,7 +250,7 @@ export default function MatchLobbyPage() {
         isUserInLobby,
         userAuthenticated: isAuthenticated,
         userId: user?.id,
-        userName: user?.email || user?.user_metadata?.username,
+        userName: user?.email || (user as any)?.user_metadata?.username,
         isProcessing,
         lobbyStatus: lobby.status,
         shouldShowJoinButton: !isFull && !isUserInLobby && isAuthenticated,
@@ -373,19 +370,32 @@ export default function MatchLobbyPage() {
     console.log("[v0] Starting lobby activation process")
 
     const sortedPlayers = [...lobby.match_participants]
-      .filter((p) => p.users?.elo_rating)
-      .sort((a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200))
+      .filter((p: any) => {
+        const userData = Array.isArray(p.users) ? p.users[0] : p.users;
+        return userData?.elo_rating;
+      })
+      .sort((a: any, b: any) => {
+        const userA = Array.isArray(a.users) ? a.users[0] : a.users;
+        const userB = Array.isArray(b.users) ? b.users[0] : b.users;
+        return (userB?.elo_rating || 1200) - (userA?.elo_rating || 1200);
+      })
 
     console.log(
       "[v0] Sorted players by ELO:",
-      sortedPlayers.map((p) => `${p.users?.username} (${p.users?.elo_rating})`),
+      sortedPlayers.map((p: any) => {
+        const userData = Array.isArray(p.users) ? p.users[0] : p.users;
+        return `${userData?.username} (${userData?.elo_rating})`;
+      }),
     )
 
-    const topTwoCaptains = sortedPlayers.slice(0, 2).map((p) => ({
-      user_id: p.user_id,
-      username: p.users?.username || "Unknown",
-      elo_rating: p.users?.elo_rating || 1200,
-    }))
+    const topTwoCaptains = sortedPlayers.slice(0, 2).map((p: any) => {
+      const userData = Array.isArray(p.users) ? p.users[0] : p.users;
+      return {
+        user_id: p.user_id,
+        username: userData?.username || "Unknown",
+        elo_rating: userData?.elo_rating || 1200,
+      }
+    })
 
     console.log("[v0] Selected captains:", topTwoCaptains)
     setCaptains(topTwoCaptains)
@@ -623,9 +633,8 @@ export default function MatchLobbyPage() {
                       return (
                         <div
                           key={participant.user_id}
-                          className={`flex items-center justify-between p-3 border rounded-lg transition-all duration-300 ${
-                            isCaptain ? "border-yellow-500 bg-yellow-500/10 animate-pulse" : "hover:bg-muted/50"
-                          }`}
+                          className={`flex items-center justify-between p-3 border rounded-lg transition-all duration-300 ${isCaptain ? "border-yellow-500 bg-yellow-500/10 animate-pulse" : "hover:bg-muted/50"
+                            }`}
                         >
                           <div className="flex items-center gap-3">
                             {isCaptain && <Crown className="h-4 w-4 text-yellow-500 animate-pulse" />}

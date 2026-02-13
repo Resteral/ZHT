@@ -2,9 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { tournamentDraftService } from "@/lib/services/tournament-draft-service"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
+    const resolvedParams = await params
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const { action, ...data } = await request.json()
-    const tournamentId = params.id
+    const tournamentId = resolvedParams.id
 
     switch (action) {
       case "start_draft":
@@ -52,9 +53,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
+    const resolvedParams = await params
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -63,7 +65,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const tournamentId = params.id
+    const tournamentId = resolvedParams.id
     const url = new URL(request.url)
     const type = url.searchParams.get("type")
 

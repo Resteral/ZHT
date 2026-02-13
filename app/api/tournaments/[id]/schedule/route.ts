@@ -2,9 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { tournamentDraftSchedulerService } from "@/lib/services/tournament-draft-scheduler-service"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
+    const resolvedParams = await params
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -14,14 +15,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Verify user is tournament organizer
-    const { data: tournament } = await supabase.from("tournaments").select("created_by").eq("id", params.id).single()
+    const { data: tournament } = await supabase.from("tournaments").select("created_by").eq("id", resolvedParams.id).single()
 
     if (!tournament || tournament.created_by !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const scheduleData = await request.json()
-    const schedule = await tournamentDraftSchedulerService.createDraftSchedule(params.id, scheduleData)
+    const schedule = await tournamentDraftSchedulerService.createDraftSchedule(resolvedParams.id, scheduleData)
 
     return NextResponse.json({ success: true, schedule })
   } catch (error) {
@@ -33,9 +34,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
+    const resolvedParams = await params
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -44,7 +46,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const schedules = await tournamentDraftSchedulerService.getTournamentDraftSchedules(params.id)
+    const schedules = await tournamentDraftSchedulerService.getTournamentDraftSchedules(resolvedParams.id)
     return NextResponse.json({ schedules })
   } catch (error) {
     console.error("Schedule API error:", error)
@@ -55,9 +57,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
+    const resolvedParams = await params
+
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -69,7 +73,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const { scheduleId } = await request.json()
 
     // Verify user is tournament organizer
-    const { data: tournament } = await supabase.from("tournaments").select("created_by").eq("id", params.id).single()
+    const { data: tournament } = await supabase.from("tournaments").select("created_by").eq("id", resolvedParams.id).single()
 
     if (!tournament || tournament.created_by !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })

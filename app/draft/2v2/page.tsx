@@ -74,8 +74,17 @@ export default function TwoVTwoPage() {
       }
       setPreviousLobbyData(currentDataHash)
 
-      console.log("[v0] Loaded lobbies:", data)
-      setLobbies(data || [])
+      const transformedData = (data || []).map((lobby: any) => ({
+        ...lobby,
+        current_participants: lobby.match_participants?.length || 0,
+        match_participants: lobby.match_participants.map((p: any) => ({
+          ...p,
+          users: Array.isArray(p.users) ? p.users[0] : p.users
+        }))
+      }))
+
+      console.log("[v0] Loaded lobbies:", transformedData)
+      setLobbies(transformedData)
     } catch (error) {
       console.error("Error loading lobbies:", error)
       toast.error(`Error loading lobbies: ${error.message}`)

@@ -38,7 +38,7 @@ export const tournamentProgressionService = {
           .from("matches")
           .insert({
             name: `Week ${week} Match ${Math.floor(i / 2) + 1}`,
-            description: `${participants[i].users.username} vs ${participants[i + 1].users.username}`,
+            description: `${(participants[i].users as any)?.[0]?.username || "Player 1"} vs ${(participants[i + 1].users as any)?.[0]?.username || "Player 2"}`,
             match_type: "tournament",
             status: "scheduled",
             creator_id: participants[i].user_id,
@@ -94,7 +94,7 @@ export const tournamentProgressionService = {
 
         return {
           user_id: participant.user_id,
-          username: participant.users.username,
+          username: (participant.users as any)?.[0]?.username || "Unknown",
           wins,
           losses,
           points: wins * 3 + losses * 1, // 3 points for win, 1 for participation
@@ -136,12 +136,17 @@ export const tournamentProgressionService = {
       const prize = prizePool * prizeDistribution[i]
 
       // Add prize to user balance
-      await supabase
-        .from("users")
-        .update({
-          balance: supabase.raw("balance + ?", [prize]),
-        })
-        .eq("id", standings[i].user_id)
+      // Add prize to user balance
+      const { data: user } = await supabase.from("users").select("balance").eq("id", standings[i].user_id).single()
+
+      if (user) {
+        await supabase
+          .from("users")
+          .update({
+            balance: (user.balance || 0) + prize,
+          })
+          .eq("id", standings[i].user_id)
+      }
 
       // Record transaction
       await supabase.from("financial_transactions").insert({

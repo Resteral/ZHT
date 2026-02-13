@@ -10,6 +10,7 @@ function isValidUUID(uuid: string): boolean {
 export const tournamentService = {
   async getTournaments() {
     console.log("[v0] Starting tournament fetch...")
+    const supabase = await createClient()
 
     const [tournamentsData, leaguesData] = await Promise.all([
       supabase
@@ -72,6 +73,7 @@ export const tournamentService = {
 
   async getLeagueTournaments() {
     console.log("[v0] Fetching league tournaments for ZHL League section...")
+    const supabase = await createClient()
 
     const { data: leagueTournaments, error } = await supabase
       .from("tournaments")
@@ -107,6 +109,7 @@ export const tournamentService = {
   },
 
   async getTournament(id: string) {
+    const supabase = await createClient()
     const { data, error } = await supabase
       .from("tournaments")
       .select(`
@@ -128,7 +131,7 @@ export const tournamentService = {
   async createTournament(tournamentData: any, userId?: string) {
     console.log("[v0] Creating regular tournament:", tournamentData)
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     if (!userId) {
       const {
@@ -213,6 +216,7 @@ export const tournamentService = {
 
   async createLobbiesFromTournament(tournamentId: string) {
     console.log("[v0] Creating lobbies from finished tournament:", tournamentId)
+    const supabase = await createClient()
 
     try {
       // Get tournament details
@@ -310,6 +314,7 @@ export const tournamentService = {
   },
 
   async getParticipants(tournamentId: string) {
+    const supabase = await createClient()
     const { data, error } = await supabase
       .from("tournament_participants")
       .select(`
@@ -324,6 +329,7 @@ export const tournamentService = {
   },
 
   async getBracket(tournamentId: string) {
+    const supabase = await createClient()
     const { data, error } = await supabase
       .from("tournament_brackets")
       .select("*")
@@ -340,10 +346,12 @@ export const tournamentService = {
   },
 
   async generateBracket(tournamentId: string) {
+    const supabase = await createClient()
     await supabase.from("tournaments").update({ status: "in_progress" }).eq("id", tournamentId)
   },
 
   async updateMatchScore(matchId: string, scores: { score1: number; score2: number }) {
+    const supabase = await createClient()
     const { error } = await supabase
       .from("tournament_brackets")
       .update({
@@ -362,3 +370,4 @@ export const tournamentService = {
     console.log("[v0] Match score updated:", { matchId, scores })
   },
 }
+

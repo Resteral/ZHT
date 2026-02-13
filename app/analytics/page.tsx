@@ -358,19 +358,25 @@ export default function AnalyticsPage() {
           .eq("match_id", matchId)
 
         // Assign teams based on participant order (first 4 = team 1, next 4 = team 2)
-        const team1Players = (participants || []).slice(0, 4).map((p) => ({
-          id: p.users.id,
-          username: p.users.username,
-          display_name: p.users.display_name,
-          account_id: p.users.account_id,
-        }))
+        const team1Players = (participants || []).slice(0, 4).map((p) => {
+          const user = Array.isArray(p.users) ? p.users[0] : p.users
+          return {
+            id: user?.id,
+            username: user?.username,
+            display_name: user?.display_name,
+            account_id: user?.account_id,
+          }
+        })
 
-        const team2Players = (participants || []).slice(4, 8).map((p) => ({
-          id: p.users.id,
-          username: p.users.username,
-          display_name: p.users.display_name,
-          account_id: p.users.account_id,
-        }))
+        const team2Players = (participants || []).slice(4, 8).map((p) => {
+          const user = Array.isArray(p.users) ? p.users[0] : p.users
+          return {
+            id: user?.id,
+            username: user?.username,
+            display_name: user?.display_name,
+            account_id: user?.account_id,
+          }
+        })
 
         // Get betting information
         const { data: bets } = await supabase.from("bets").select("*").eq("market_id", matchId) // Assuming market_id links to match_id
@@ -434,19 +440,25 @@ export default function AnalyticsPage() {
         }
 
         const { team1_score, team2_score, winning_team } = result
-        const team1_players = (participants || []).slice(0, 4).map((p) => ({
-          id: p.users.id,
-          username: p.users.username,
-          display_name: p.users.display_name,
-          account_id: p.users.account_id,
-        }))
+        const team1_players = (participants || []).slice(0, 4).map((p) => {
+          const user = Array.isArray(p.users) ? p.users[0] : p.users
+          return {
+            id: user?.id,
+            username: user?.username,
+            display_name: user?.display_name,
+            account_id: user?.account_id,
+          }
+        })
 
-        const team2_players = (participants || []).slice(4, 8).map((p) => ({
-          id: p.users.id,
-          username: p.users.username,
-          display_name: p.users.display_name,
-          account_id: p.users.account_id,
-        }))
+        const team2_players = (participants || []).slice(4, 8).map((p) => {
+          const user = Array.isArray(p.users) ? p.users[0] : p.users
+          return {
+            id: user?.id,
+            username: user?.username,
+            display_name: user?.display_name,
+            account_id: user?.account_id,
+          }
+        })
 
         detailedMatchData.push({
           id: matchId,
@@ -744,13 +756,12 @@ export default function AnalyticsPage() {
                             </div>
                             <Badge
                               variant="outline"
-                              className={`${
-                                match.winner === "Team 1"
-                                  ? "border-blue-500 text-blue-400 bg-blue-900/30"
-                                  : match.winner === "Team 2"
-                                    ? "border-red-500 text-red-400 bg-red-900/30"
-                                    : "border-slate-500 text-slate-400 bg-slate-900/30"
-                              }`}
+                              className={`${match.winner === "Team 1"
+                                ? "border-blue-500 text-blue-400 bg-blue-900/30"
+                                : match.winner === "Team 2"
+                                  ? "border-red-500 text-red-400 bg-red-900/30"
+                                  : "border-slate-500 text-slate-400 bg-slate-900/30"
+                                }`}
                             >
                               Winner: {match.winner}
                             </Badge>
@@ -898,13 +909,12 @@ export default function AnalyticsPage() {
                                       <td className="px-3 py-2 text-slate-200 font-semibold">{stat.player_name}</td>
                                       <td className="px-3 py-2 text-center">
                                         <span
-                                          className={`px-2 py-1 rounded text-xs font-medium ${
-                                            stat.team === 1
-                                              ? "bg-blue-600 text-white"
-                                              : stat.team === 2
-                                                ? "bg-red-600 text-white"
-                                                : "bg-slate-600 text-slate-300"
-                                          }`}
+                                          className={`px-2 py-1 rounded text-xs font-medium ${stat.team === 1
+                                            ? "bg-blue-600 text-white"
+                                            : stat.team === 2
+                                              ? "bg-red-600 text-white"
+                                              : "bg-slate-600 text-slate-300"
+                                            }`}
                                         >
                                           {stat.team}
                                         </span>
@@ -1059,11 +1069,10 @@ export default function AnalyticsPage() {
                           <Button
                             key={match.id}
                             variant={selectedMatch === match.id ? "default" : "outline"}
-                            className={`w-full justify-start text-left h-auto p-4 rounded-xl transition-all duration-200 ${
-                              selectedMatch === match.id
-                                ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
-                                : "border-slate-600 hover:bg-slate-700 bg-slate-800 text-slate-200"
-                            }`}
+                            className={`w-full justify-start text-left h-auto p-4 rounded-xl transition-all duration-200 ${selectedMatch === match.id
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                              : "border-slate-600 hover:bg-slate-700 bg-slate-800 text-slate-200"
+                              }`}
                             onClick={() => setSelectedMatch(match.id)}
                           >
                             <div className="space-y-2">
@@ -1232,11 +1241,10 @@ export default function AnalyticsPage() {
                                   <td className="px-4 py-4 text-center">
                                     <Badge
                                       variant="outline"
-                                      className={`font-semibold text-xs ${
-                                        hasCsvMapping
-                                          ? "border-green-500 text-green-400 bg-green-900/30"
-                                          : "border-red-500 text-red-400 bg-red-900/30"
-                                      }`}
+                                      className={`font-semibold text-xs ${hasCsvMapping
+                                        ? "border-green-500 text-green-400 bg-green-900/30"
+                                        : "border-red-500 text-red-400 bg-red-900/30"
+                                        }`}
                                     >
                                       {hasCsvMapping ? "✓ Mapped" : "✗ Not Found"}
                                     </Badge>
@@ -1244,13 +1252,12 @@ export default function AnalyticsPage() {
                                   <td className="px-4 py-4 text-center">
                                     <Badge
                                       variant="outline"
-                                      className={`font-semibold text-xs ${
-                                        tier === "Elite"
-                                          ? "border-yellow-500 text-yellow-400 bg-yellow-900/30"
-                                          : tier === "Advanced"
-                                            ? "border-purple-500 text-purple-400 bg-purple-900/30"
-                                            : "border-slate-500 text-slate-400 bg-slate-900/30"
-                                      }`}
+                                      className={`font-semibold text-xs ${tier === "Elite"
+                                        ? "border-yellow-500 text-yellow-400 bg-yellow-900/30"
+                                        : tier === "Advanced"
+                                          ? "border-purple-500 text-purple-400 bg-purple-900/30"
+                                          : "border-slate-500 text-slate-400 bg-slate-900/30"
+                                        }`}
                                     >
                                       {tier}
                                     </Badge>

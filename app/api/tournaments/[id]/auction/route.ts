@@ -1,27 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+import { createClient } from "@/lib/supabase/server"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          request.cookies.set(name, value)
-        })
-      },
-    },
-  })
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createClient()
+  const resolvedParams = await params
 
   try {
-    console.log("[v0] Fetching auction session for tournament:", params.id)
+    console.log("[v0] Fetching auction session for tournament:", resolvedParams.id)
 
     const { data: tournament, error: tournamentError } = await supabase
       .from("tournaments")
       .select("player_pool_settings")
-      .eq("id", params.id)
+      .eq("id", resolvedParams.id)
       .single()
 
     if (tournamentError) {
@@ -36,7 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { data: auctionSession, error: sessionError } = await supabase
       .from("tournament_auction_sessions")
       .select("*")
-      .eq("tournament_id", params.id)
+      .eq("tournament_id", resolvedParams.id)
       .maybeSingle()
 
     if (sessionError && sessionError.code !== "PGRST116") {
@@ -70,29 +60,32 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         budget_remaining,
         users!tournament_teams_team_captain_fkey(username)
       `)
-      .eq("tournament_id", params.id)
+      .eq("tournament_id", resolvedParams.id)
 
     if (teamsError) {
       console.error("[v0] Error fetching tournament teams:", teamsError)
       return NextResponse.json({ error: "Failed to fetch tournament teams" }, { status: 500 })
     }
 
-    let teamBudgets = []
+    let teamBudgets: any[] = []
     if (tournamentTeams && tournamentTeams.length > 0) {
       const teamBudgetsPromises = tournamentTeams.map(async (team) => {
         // Count players assigned to this team
         const { count: playersAcquired } = await supabase
           .from("tournament_player_pool")
           .select("*", { count: "exact", head: true })
-          .eq("tournament_id", params.id)
+          .eq("tournament_id", resolvedParams.id)
           .eq("team_id", team.id)
+
+        // Handle users array from join
+        const captainUser = Array.isArray(team.users) ? team.users[0] : team.users;
 
         return {
           team_id: team.id,
           team: {
             team_name: team.team_name,
             team_captain: team.team_captain,
-            users: team.users,
+            users: captainUser,
           },
           current_budget: team.budget_remaining,
           max_players: playersPerTeam, // From tournament settings, not database
@@ -111,7 +104,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         status,
         users(username, elo_rating)
       `)
-      .eq("tournament_id", params.id)
+      .eq("tournament_id", resolvedParams.id)
       .eq("status", "available")
 
     if (poolError) {
@@ -130,19 +123,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          request.cookies.set(name, value)
-        })
-      },
-    },
-  })
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createClient()
+  const resolvedParams = await params
 
   try {
     const body = await request.json()
@@ -152,13 +135,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { captainIds, userId } = body
 
       console.log("[v0] Starting auction with captains:", captainIds)
-      console.log("[v0] Tournament ID:", params.id)
+      console.log("[v0] Tournament ID:", resolvedParams.id)
       console.log("[v0] User ID:", userId)
 
       const { data: tournament, error: tournamentError } = await supabase
         .from("tournaments")
         .select("player_pool_settings")
-        .eq("id", params.id)
+        .eq("id", resolvedParams.id)
         .single()
 
       if (tournamentError) {
@@ -184,7 +167,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             users(username)
           `)
           .eq("id", captainPlayerId)
-          .eq("tournament_id", params.id)
+          .eq("tournament_id", resolvedParams.id)
           .single()
 
         if (playerError) {
@@ -194,12 +177,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
         console.log("[v0] Captain player data:", captainPlayer)
 
-        const teamName = `Team ${captainPlayer.users?.username || index + 1}`
+        const teamName = `Team ${captainPlayer.users && Array.isArray(captainPlayer.users) && captainPlayer.users[0]?.username ? captainPlayer.users[0].username : "Captain"}`
 
         const { data: team, error: teamError } = await supabase
           .from("tournament_teams")
           .insert({
-            tournament_id: params.id,
+            tournament_id: resolvedParams.id,
             team_name: teamName,
             team_captain: captainPlayer.user_id,
             budget_remaining: auctionBudget,
@@ -222,7 +205,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             team_id: team.id,
           })
           .eq("id", captainPlayerId)
-          .eq("tournament_id", params.id)
+          .eq("tournament_id", resolvedParams.id)
 
         if (statusError) {
           console.error("[v0] Error updating player status:", statusError)
@@ -240,7 +223,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { data: firstPlayer } = await supabase
         .from("tournament_player_pool")
         .select("id")
-        .eq("tournament_id", params.id)
+        .eq("tournament_id", resolvedParams.id)
         .eq("status", "available")
         .limit(1)
         .single()
@@ -250,7 +233,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { data: session, error: sessionError } = await supabase
         .from("tournament_auction_sessions")
         .insert({
-          tournament_id: params.id,
+          tournament_id: resolvedParams.id,
           status: "active",
           current_player_id: firstPlayer?.id,
           bid_deadline: new Date(Date.now() + 30000).toISOString(),
@@ -271,7 +254,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { error: statusError } = await supabase
         .from("tournaments")
         .update({ status: "drafting" })
-        .eq("id", params.id)
+        .eq("id", resolvedParams.id)
 
       if (statusError) {
         console.error("[v0] Error updating tournament status:", statusError)
@@ -289,7 +272,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { data: tournament, error: tournamentError } = await supabase
         .from("tournaments")
         .select("player_pool_settings")
-        .eq("id", params.id)
+        .eq("id", resolvedParams.id)
         .single()
 
       if (tournamentError) throw tournamentError
@@ -303,7 +286,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const { error: statusError } = await supabase
           .from("tournaments")
           .update({ status: "drafting" })
-          .eq("id", params.id)
+          .eq("id", resolvedParams.id)
 
         if (statusError) {
           console.error("[v0] Error updating tournament status:", statusError)
@@ -312,7 +295,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const { data: session, error: sessionError } = await supabase
           .from("tournament_auction_sessions")
           .insert({
-            tournament_id: params.id,
+            tournament_id: resolvedParams.id,
             status: "waiting_for_captains",
             started_at: new Date().toISOString(),
             auction_round: 1,
@@ -332,7 +315,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { error: budgetError } = await supabase
         .from("tournament_teams")
         .update({ budget_remaining: auctionBudget })
-        .eq("tournament_id", params.id)
+        .eq("tournament_id", resolvedParams.id)
 
       if (budgetError) {
         console.error("[v0] Error initializing team budgets:", budgetError)
@@ -341,7 +324,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { data: firstPlayer } = await supabase
         .from("tournament_player_pool")
         .select("id")
-        .eq("tournament_id", params.id)
+        .eq("tournament_id", resolvedParams.id)
         .eq("status", "available")
         .limit(1)
         .single()
@@ -349,7 +332,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { data: session, error: sessionError } = await supabase
         .from("tournament_auction_sessions")
         .insert({
-          tournament_id: params.id,
+          tournament_id: resolvedParams.id,
           status: "active",
           current_player_id: firstPlayer?.id,
           bid_deadline: new Date(Date.now() + 30000).toISOString(),
@@ -376,7 +359,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const { data: team, error: teamError } = await supabase
         .from("tournament_teams")
         .insert({
-          tournament_id: params.id,
+          tournament_id: resolvedParams.id,
           team_name: team_name || `Team ${Date.now()}`,
           team_captain: player_id,
           budget_remaining: 500,
@@ -397,7 +380,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           team_id: team.id,
         })
         .eq("user_id", player_id)
-        .eq("tournament_id", params.id)
+        .eq("tournament_id", resolvedParams.id)
 
       if (playerError) {
         console.error("[v0] Error updating player status:", playerError)

@@ -1,59 +1,22 @@
+"use client"
+
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-
-// ... imports
-
-function CheckoutForm({ amount, onSuccess, disabled }: { amount: number; onSuccess: () => void; disabled?: boolean }) {
-    // ... existing code ...
-    if (result.error) {
-        setError(result.error.message || "Payment failed")
-    } else {
-        if (result.paymentIntent.status === "succeeded") {
-            onSuccess()
-        }
-    }
-    setProcessing(false)
-}
-
-    // ... render ...
-}
-
-export function DepositModal() {
-    const router = useRouter()
-    const [amount, setAmount] = useState<string>("25")
-    const [isOpen, setIsOpen] = useState(false)
-    const [isConfirmed, setIsConfirmed] = useState(false)
-
-    // ... handleAmountChange ...
-
-    return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            {/* ... Dialog Content ... */}
-            <div className="border-t pt-4">
-                <Label className="mb-2 block">Card Details</Label>
-                <Elements stripe={stripePromise}>
-                    <CheckoutForm
-                        amount={Number(amount) || 0}
-                        onSuccess={() => {
-                            setIsOpen(false)
-                            toast.success(`Successfully deposited $${amount}!`)
-                            router.refresh()
-                        }}
-                        disabled={!isConfirmed}
-                    />
-                </Elements>
-            </div>
-        </div>
-            </DialogContent >
-        </Dialog >
-    )
-}
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
 import { loadStripe } from "@stripe/stripe-js"
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js"
-import { DollarSign, Loader2, CreditCard } from "lucide-react"
+import { DollarSign, Loader2 } from "lucide-react"
 
 // Initialize Stripe with public key from env
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "pk_test_placeholder")
@@ -142,6 +105,7 @@ function CheckoutForm({ amount, onSuccess, disabled }: { amount: number; onSucce
 }
 
 export function DepositModal() {
+    const router = useRouter()
     const [amount, setAmount] = useState<string>("25")
     const [isOpen, setIsOpen] = useState(false)
     const [isConfirmed, setIsConfirmed] = useState(false)
@@ -225,8 +189,8 @@ export function DepositModal() {
                                 amount={Number(amount) || 0}
                                 onSuccess={() => {
                                     setIsOpen(false)
-                                    // Ideally trigger a toast or refresh balance here
-                                    alert("Deposit Successful!")
+                                    toast.success(`Successfully deposited $${amount}!`)
+                                    router.refresh()
                                 }}
                                 disabled={!isConfirmed}
                             />
@@ -234,6 +198,6 @@ export function DepositModal() {
                     </div>
                 </div>
             </DialogContent>
-        </Dialog >
+        </Dialog>
     )
 }

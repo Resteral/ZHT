@@ -11,25 +11,25 @@ export interface GameResult {
 }
 
 export class IntegrationService {
-  private supabase = createClient() // Assuming createClient() is synchronous as it's a class property. If it were async, this would require a different initialization pattern.
 
   // Sequence: Game completion -> ELO updates -> Bet settlements -> Analytics updates
   async processGameCompletion(gameResult: GameResult) {
+    const supabase = await createClient()
     try {
       // 1. Update game status
-      await this.updateGameStatus(gameResult.game_id, "completed", gameResult)
+      await this.updateGameStatus(supabase, gameResult.game_id, "completed", gameResult)
 
       // 2. Update ELO ratings for both teams
-      await this.updateEloRatings(gameResult)
+      await this.updateEloRatings(supabase, gameResult)
 
       // 3. Settle all bets for this game
-      await this.settleBetsForGame(gameResult.game_id, gameResult)
+      await this.settleBetsForGame(supabase, gameResult.game_id, gameResult)
 
       // 4. Update analytics and statistics
-      await this.updateGameAnalytics(gameResult)
+      await this.updateGameAnalytics(supabase, gameResult)
 
       // 5. Create automatic announcements
-      await this.createGameResultAnnouncement(gameResult)
+      await this.createGameResultAnnouncement(supabase, gameResult)
 
       return { success: true, message: "Game completion processed successfully" }
     } catch (error) {
@@ -40,18 +40,19 @@ export class IntegrationService {
 
   // Sequence: Draft completion -> Team rosters -> Betting markets -> Schedule updates
   async processDraftCompletion(draftId: string) {
+    const supabase = await createClient()
     try {
       // 1. Finalize team rosters
-      await this.finalizeTeamRosters(draftId)
+      await this.finalizeTeamRosters(supabase, draftId)
 
       // 2. Create betting markets for upcoming games
-      await this.createBettingMarketsForDraft(draftId)
+      await this.createBettingMarketsForDraft(supabase, draftId)
 
       // 3. Update league schedule
-      await this.updateLeagueSchedule(draftId)
+      await this.updateLeagueSchedule(supabase, draftId)
 
       // 4. Send draft completion announcements
-      await this.createDraftCompletionAnnouncement(draftId)
+      await this.createDraftCompletionAnnouncement(supabase, draftId)
 
       return { success: true, message: "Draft completion processed successfully" }
     } catch (error) {
@@ -62,12 +63,13 @@ export class IntegrationService {
 
   // Sequence: Schedule creation -> Betting markets -> PR announcements
   async processScheduleCreation(gameId: string) {
+    const supabase = await createClient()
     try {
       // 1. Create betting markets for the new game
-      await this.createBettingMarketsForGame(gameId)
+      await this.createBettingMarketsForGame(supabase, gameId)
 
       // 2. Create PR announcement for the scheduled game
-      await this.createScheduleAnnouncement(gameId)
+      await this.createScheduleAnnouncement(supabase, gameId)
 
       // 3. Set up automated reminders
       await this.setupGameReminders(gameId)
@@ -79,7 +81,7 @@ export class IntegrationService {
     }
   }
 
-  private async updateGameStatus(gameId: string, status: string, result?: GameResult) {
+  private async updateGameStatus(supabase: any, gameId: string, status: string, result?: GameResult) {
     const updateData: any = { status, updated_at: new Date().toISOString() }
 
     if (result) {
@@ -90,22 +92,22 @@ export class IntegrationService {
       updateData.completed_at = result.completed_at
     }
 
-    const { error } = await this.supabase.from("games").update(updateData).eq("id", gameId)
+    const { error } = await supabase.from("games").update(updateData).eq("id", gameId)
 
     if (error) throw error
   }
 
-  private async updateEloRatings(gameResult: GameResult) {
+  private async updateEloRatings(supabase: any, gameResult: GameResult) {
     // Get current ELO ratings for both teams
-    const { data: teams, error: teamsError } = await this.supabase
+    const { data: teams, error: teamsError } = await supabase
       .from("teams")
       .select("id, elo_rating")
       .in("id", [gameResult.winner_id, gameResult.loser_id])
 
     if (teamsError) throw teamsError
 
-    const winner = teams?.find((t) => t.id === gameResult.winner_id)
-    const loser = teams?.find((t) => t.id === gameResult.loser_id)
+    const winner = teams?.find((t: any) => t.id === gameResult.winner_id)
+    const loser = teams?.find((t: any) => t.id === gameResult.loser_id)
 
     if (!winner || !loser) throw new Error("Teams not found")
 
@@ -119,12 +121,12 @@ export class IntegrationService {
 
     // Update ELO ratings
     await Promise.all([
-      this.supabase.from("teams").update({ elo_rating: newWinnerRating }).eq("id", gameResult.winner_id),
-      this.supabase.from("teams").update({ elo_rating: newLoserRating }).eq("id", gameResult.loser_id),
+      supabase.from("teams").update({ elo_rating: newWinnerRating }).eq("id", gameResult.winner_id),
+      supabase.from("teams").update({ elo_rating: newLoserRating }).eq("id", gameResult.loser_id),
     ])
 
     // Record ELO history
-    await this.supabase.from("elo_history").insert([
+    await supabase.from("elo_history").insert([
       {
         team_id: gameResult.winner_id,
         old_rating: winner.elo_rating,
@@ -142,9 +144,9 @@ export class IntegrationService {
     ])
   }
 
-  private async settleBetsForGame(gameId: string, gameResult: GameResult) {
+  private async settleBetsForGame(supabase: any, gameId: string, gameResult: GameResult) {
     // Get all pending bets for this game
-    const { data: bets, error: betsError } = await this.supabase
+    const { data: bets, error: betsError } = await supabase
       .from("bets")
       .select(`
         *,
@@ -172,13 +174,46 @@ export class IntegrationService {
       // Add more market type logic here...
 
       // Settle the bet
-      await bettingService.settleBet(bet.id, result)
+      // Note: bettingService needs to be imported or handled similarly. Assuming it's available or we fix it.
+      // For now, let's assume we can't easily call bettingService if it also uses faulty createClient pattern.
+      // But bettingService is not imported in original code (TS Error revealed that).
+      // Reverting to manual settlement to avoid dependency hell for this fix.
+      await this.settleBetInternal(supabase, bet.id, result, bet.potential_payout, bet.user_id)
     }
   }
 
-  private async updateGameAnalytics(gameResult: GameResult) {
+  private async settleBetInternal(supabase: any, betId: string, result: "won" | "lost", payout: number, userId: string) {
+    // Update bet status
+    const { error: updateError } = await supabase
+      .from("bets")
+      .update({
+        status: result,
+        settled_at: new Date().toISOString(),
+      })
+      .eq("id", betId)
+
+    if (updateError) throw updateError
+
+    // If won, add payout to user balance
+    if (result === "won") {
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("balance")
+        .eq("id", userId)
+        .single()
+
+      if (userError) throw userError
+
+      await supabase
+        .from("users")
+        .update({ balance: (user.balance || 0) + payout })
+        .eq("id", userId)
+    }
+  }
+
+  private async updateGameAnalytics(supabase: any, gameResult: GameResult) {
     // Update game statistics
-    await this.supabase.from("game_stats").insert({
+    await supabase.from("game_stats").insert({
       game_id: gameResult.game_id,
       winner_id: gameResult.winner_id,
       loser_id: gameResult.loser_id,
@@ -190,21 +225,21 @@ export class IntegrationService {
     })
   }
 
-  private async createGameResultAnnouncement(gameResult: GameResult) {
+  private async createGameResultAnnouncement(supabase: any, gameResult: GameResult) {
     // Get team names
-    const { data: teams, error } = await this.supabase
+    const { data: teams, error } = await supabase
       .from("teams")
       .select("id, name")
       .in("id", [gameResult.winner_id, gameResult.loser_id])
 
     if (error) return
 
-    const winner = teams?.find((t) => t.id === gameResult.winner_id)
-    const loser = teams?.find((t) => t.id === gameResult.loser_id)
+    const winner = teams?.find((t: any) => t.id === gameResult.winner_id)
+    const loser = teams?.find((t: any) => t.id === gameResult.loser_id)
 
     if (!winner || !loser) return
 
-    await this.supabase.from("announcements").insert({
+    await supabase.from("announcements").insert({
       title: `Game Result: ${winner.name} defeats ${loser.name}`,
       content: `Final Score: ${winner.name} ${gameResult.winner_score} - ${gameResult.loser_score} ${loser.name}`,
       priority: "medium",
@@ -214,16 +249,16 @@ export class IntegrationService {
     })
   }
 
-  private async finalizeTeamRosters(draftId: string) {
+  private async finalizeTeamRosters(supabase: any, draftId: string) {
     // Mark all draft picks as finalized
-    const { error } = await this.supabase.from("draft_picks").update({ status: "finalized" }).eq("draft_id", draftId)
+    const { error } = await supabase.from("draft_picks").update({ status: "finalized" }).eq("draft_id", draftId)
 
     if (error) throw error
   }
 
-  private async createBettingMarketsForDraft(draftId: string) {
+  private async createBettingMarketsForDraft(supabase: any, draftId: string) {
     // Get upcoming games for teams in this draft
-    const { data: games, error } = await this.supabase
+    const { data: games, error } = await supabase
       .from("games")
       .select("*")
       .eq("league_id", draftId) // Assuming draft_id relates to league
@@ -233,11 +268,11 @@ export class IntegrationService {
 
     // Create betting markets for each game
     for (const game of games || []) {
-      await this.createBettingMarketsForGame(game.id)
+      await this.createBettingMarketsForGame(supabase, game.id)
     }
   }
 
-  private async createBettingMarketsForGame(gameId: string) {
+  private async createBettingMarketsForGame(supabase: any, gameId: string) {
     const markets = [
       { market_type: "moneyline", selection: "home_win", odds: -110 },
       { market_type: "moneyline", selection: "away_win", odds: -110 },
@@ -257,13 +292,13 @@ export class IntegrationService {
       created_at: new Date().toISOString(),
     }))
 
-    const { error } = await this.supabase.from("betting_markets").insert(marketData)
+    const { error } = await supabase.from("betting_markets").insert(marketData)
     if (error) throw error
   }
 
-  private async updateLeagueSchedule(draftId: string) {
+  private async updateLeagueSchedule(supabase: any, draftId: string) {
     // Update league status to active after draft completion
-    const { error } = await this.supabase
+    const { error } = await supabase
       .from("leagues")
       .update({ status: "active", updated_at: new Date().toISOString() })
       .eq("id", draftId)
@@ -271,12 +306,12 @@ export class IntegrationService {
     if (error) throw error
   }
 
-  private async createDraftCompletionAnnouncement(draftId: string) {
-    const { data: league, error } = await this.supabase.from("leagues").select("name").eq("id", draftId).single()
+  private async createDraftCompletionAnnouncement(supabase: any, draftId: string) {
+    const { data: league, error } = await supabase.from("leagues").select("name").eq("id", draftId).single()
 
     if (error) return
 
-    await this.supabase.from("announcements").insert({
+    await supabase.from("announcements").insert({
       title: `Draft Completed: ${league.name}`,
       content: `The auction draft for ${league.name} has been completed. All team rosters are now finalized and the season is ready to begin!`,
       priority: "high",
@@ -286,8 +321,8 @@ export class IntegrationService {
     })
   }
 
-  private async createScheduleAnnouncement(gameId: string) {
-    const { data: game, error } = await this.supabase
+  private async createScheduleAnnouncement(supabase: any, gameId: string) {
+    const { data: game, error } = await supabase
       .from("games")
       .select(`
         *,
@@ -299,7 +334,7 @@ export class IntegrationService {
 
     if (error) return
 
-    await this.supabase.from("announcements").insert({
+    await supabase.from("announcements").insert({
       title: `Game Scheduled: ${game.away_teams.name} @ ${game.teams.name}`,
       content: `New game scheduled for ${new Date(game.scheduled_time).toLocaleString()}. Betting markets are now open!`,
       priority: "medium",

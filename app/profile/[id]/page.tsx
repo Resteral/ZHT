@@ -293,8 +293,8 @@ export default function PlayerProfilePage() {
           created_at: team.created_at,
           players:
             team.elo_team_players?.map((player: any) => ({
-              username: player.users?.username || "Unknown",
-              elo_rating: player.users?.elo_rating || 1200,
+              username: (Array.isArray(player.users) ? player.users[0] : player.users)?.username || "Unknown",
+              elo_rating: (Array.isArray(player.users) ? player.users[0] : player.users)?.elo_rating || 1200,
               acquisition_cost: player.acquisition_cost || 0,
             })) || [],
         }))
@@ -1014,13 +1014,12 @@ export default function PlayerProfilePage() {
                             <td className="px-4 py-3 font-medium">{stat.matchName}</td>
                             <td className="px-4 py-3 text-center">
                               <span
-                                className={`px-2 py-1 rounded text-xs font-medium ${
-                                  stat.team === 1
-                                    ? "bg-blue-100 text-blue-800"
-                                    : stat.team === 2
-                                      ? "bg-red-100 text-red-800"
-                                      : "bg-muted text-muted-foreground"
-                                }`}
+                                className={`px-2 py-1 rounded text-xs font-medium ${stat.team === 1
+                                  ? "bg-blue-100 text-blue-800"
+                                  : stat.team === 2
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-muted text-muted-foreground"
+                                  }`}
                               >
                                 Team {stat.team}
                               </span>

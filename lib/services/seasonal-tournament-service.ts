@@ -182,59 +182,35 @@ class SeasonalTournamentService {
       if (error) throw error
 
       // Convert to leaderboard format with ranks
-      return (data || []).map((participant, index) => ({
-        id: participant.id,
-        seasonal_tournament_id: participant.tournament_id,
-        user_id: participant.user_id,
-        username: participant.users.username,
-        division: this.getDivisionFromElo(participant.users.elo_rating),
-        rank: index + 1,
-        elo_rating: participant.users.elo_rating,
-        seasonal_points: participant.users.elo_rating, // Use ELO as seasonal points for now
-        matches_played: participant.users.total_games || 0,
-        win_rate:
-          participant.users.total_games > 0 ? (participant.users.wins / participant.users.total_games) * 100 : 0,
-        elo_change_from_start: 0, // Would need historical data
-        weekly_elo_change: 0,
-        streak_type: null,
-        current_streak: 0,
-        best_streak: 0,
-        updated_at: participant.joined_at,
-      }))
+      return (data || []).map((participant, index) => {
+        const userData = (participant.users as any)?.[0] || (participant.users as any) || {};
+        return {
+          id: participant.id,
+          seasonal_tournament_id: participant.tournament_id,
+          user_id: participant.user_id,
+          username: userData.username || "Unknown",
+          division: this.getDivisionFromElo(userData.elo_rating || 1000),
+          rank: index + 1,
+          elo_rating: userData.elo_rating || 1000,
+          seasonal_points: userData.elo_rating || 1000, // Use ELO as seasonal points for now
+          matches_played: userData.total_games || 0,
+          win_rate:
+            userData.total_games > 0 ? (userData.wins / userData.total_games) * 100 : 0,
+          elo_change_from_start: 0, // Would need historical data
+          weekly_elo_change: 0,
+          streak_type: null,
+          current_streak: 0,
+          best_streak: 0,
+          updated_at: participant.joined_at,
+        }
+      })
     } catch (error) {
       console.error("Error fetching seasonal leaderboard:", error)
       return []
     }
   }
 
-  async getUserSeasonalStats(seasonId: string, userId: string): Promise<SeasonalParticipant | null> {
-    try {
-      // Get user's current ELO
-      const { data: user, error: userError } = await this.supabase
-        .from("users")
-        .select("username, elo_rating")
-        .eq("id", userId)
-        .single()
 
-      if (userError) throw userError
-
-      const currentDivision = this.getDivisionFromElo(user.elo_rating)
-
-      const { error } = await this.supabase.from("tournament_participants").insert({
-        tournament_id: seasonId,
-        user_id: userId,
-        status: "active",
-        joined_at: new Date().toISOString(),
-      })
-
-      if (error && error.code !== "23505") throw error // Ignore duplicate key errors
-
-      return true
-    } catch (error) {
-      console.error("Error joining season:", error)
-      return false
-    }
-  }
 
   async getUserSeasonalStats(seasonId: string, userId: string): Promise<SeasonalParticipant | null> {
     try {
@@ -252,21 +228,23 @@ class SeasonalTournamentService {
 
       if (!data) return null
 
+      const userData = (data.users as any)?.[0] || (data.users as any) || {};
+
       return {
         id: data.id,
         seasonal_tournament_id: data.tournament_id,
         user_id: data.user_id,
-        username: data.users.username,
-        starting_elo: data.users.elo_rating, // Would need historical data for actual starting ELO
-        current_elo: data.users.elo_rating,
-        peak_elo: data.users.elo_rating,
-        lowest_elo: data.users.elo_rating,
-        total_matches_played: data.users.total_games || 0,
-        total_wins: data.users.wins || 0,
-        total_losses: data.users.losses || 0,
-        seasonal_points: data.users.elo_rating,
-        current_division: this.getDivisionFromElo(data.users.elo_rating),
-        highest_division_reached: this.getDivisionFromElo(data.users.elo_rating),
+        username: userData.username,
+        starting_elo: userData.elo_rating, // Would need historical data for actual starting ELO
+        current_elo: userData.elo_rating,
+        peak_elo: userData.elo_rating,
+        lowest_elo: userData.elo_rating,
+        total_matches_played: userData.total_games || 0,
+        total_wins: userData.wins || 0,
+        total_losses: userData.losses || 0,
+        seasonal_points: userData.elo_rating,
+        current_division: this.getDivisionFromElo(userData.elo_rating),
+        highest_division_reached: this.getDivisionFromElo(userData.elo_rating),
         current_rank: null,
         best_rank: null,
         lobby_stats: {},

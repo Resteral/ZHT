@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { toast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 import { Bell, Trophy, Target, Users } from "lucide-react"
 
 const supabase = createClient()
 
 export function NotificationSystem({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<any[]>([])
+  const { toast } = useToast()
 
   useEffect(() => {
     if (!userId) return

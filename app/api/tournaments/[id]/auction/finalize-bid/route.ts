@@ -1,25 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+import { createClient } from "@/lib/supabase/server"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          request.cookies.set(name, value)
-        })
-      },
-    },
-  })
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createClient()
+  const resolvedParams = await params
 
   try {
     const { data: auctionSession, error: sessionError } = await supabase
       .from("tournament_auction_sessions")
       .select("*")
-      .eq("tournament_id", params.id)
+      .eq("tournament_id", resolvedParams.id)
       .eq("status", "active")
       .single()
 
@@ -52,7 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (memberError) throw memberError
 
     await supabase.rpc("update_team_budget_after_bid", {
-      tournament_id_param: params.id,
+      tournament_id_param: resolvedParams.id,
       team_id_param: auctionSession.current_bidder_id,
       bid_amount_param: auctionSession.current_bid_amount,
     })
@@ -67,7 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: nextPlayer } = await supabase
       .from("tournament_player_pool")
       .select("id")
-      .eq("tournament_id", params.id)
+      .eq("tournament_id", resolvedParams.id)
       .eq("status", "available")
       .limit(1)
       .single()

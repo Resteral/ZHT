@@ -1,53 +1,23 @@
+"use client"
+
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-// ... imports
-
-export function WithdrawalModal() {
-    const router = useRouter()
-    const [amount, setAmount] = useState<string>("")
-    // ... state ...
-
-    // ... handleAmountChange ...
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
-        setError(null)
-
-        try {
-            const response = await fetch("/api/request-withdrawal", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount: Number(amount) }),
-            })
-
-            const data = await response.json()
-
-            if (!response.ok) {
-                throw new Error(data.error || "Failed to process withdrawal")
-            }
-
-            setIsOpen(false)
-            toast.success("Withdrawal requested successfully! Funds pending approval.")
-            setAmount("")
-            router.refresh()
-        } catch (err: any) {
-            setError(err.message)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    return (
-        // ... JSX ...
-    )
-}
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowUpRight, Loader2 } from "lucide-react"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
 
 export function WithdrawalModal() {
+    const router = useRouter()
     const [amount, setAmount] = useState<string>("")
     const [isOpen, setIsOpen] = useState(false)
     const [loading, setLoading] = useState(false)
@@ -79,8 +49,9 @@ export function WithdrawalModal() {
             }
 
             setIsOpen(false)
-            alert("Withdrawal requested successfully! Funds will be transferred to your connected Stripe account.")
+            toast.success("Withdrawal requested successfully! Funds pending approval.")
             setAmount("")
+            router.refresh()
         } catch (err: any) {
             setError(err.message)
         } finally {

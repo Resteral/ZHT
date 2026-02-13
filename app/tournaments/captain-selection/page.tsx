@@ -10,8 +10,8 @@ import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 
 export default function CaptainSelectionPage() {
-  const [tournaments, setTournaments] = useState([])
-  const [selectedTournament, setSelectedTournament] = useState(null)
+  const [tournaments, setTournaments] = useState<any[]>([])
+  const [selectedTournament, setSelectedTournament] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {

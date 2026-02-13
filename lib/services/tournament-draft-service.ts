@@ -118,12 +118,12 @@ export const tournamentDraftService = {
         auction_state:
           settings.draft_type === "auction"
             ? {
-                current_player_id: null,
-                current_bid: 0,
-                highest_bidder_team_id: null,
-                bid_history: [],
-                auction_time_remaining: 60, // 1 minute per auction
-              }
+              current_player_id: null,
+              current_bid: 0,
+              highest_bidder_team_id: null,
+              bid_history: [],
+              auction_time_remaining: 60, // 1 minute per auction
+            }
             : undefined,
       }
 
@@ -242,7 +242,7 @@ export const tournamentDraftService = {
         pick_number: currentState.current_pick,
         team_id: teamId,
         player_id: playerId,
-        player_name: player.users?.username || "Unknown",
+        player_name: ((player.users as any)?.[0]?.username) || "Unknown",
         cost: 0,
         timestamp: new Date().toISOString(),
       }
@@ -398,7 +398,7 @@ export const tournamentDraftService = {
         pick_number: currentState.current_pick,
         team_id: auction_state.highest_bidder_team_id,
         player_id: auction_state.current_player_id,
-        player_name: player?.users?.username || "Unknown",
+        player_name: (player?.users && Array.isArray(player.users) ? player.users[0]?.username : "") || "Unknown",
         cost: auction_state.current_bid,
         timestamp: new Date().toISOString(),
       }
@@ -446,12 +446,15 @@ export const tournamentDraftService = {
 
       // Update team budget if cost > 0
       if (cost > 0) {
-        await supabase
-          .from("tournament_teams")
-          .update({
-            budget_remaining: supabase.raw("budget_remaining - ?", [cost]),
-          })
-          .eq("id", teamId)
+        const { data: team } = await supabase.from("tournament_teams").select("budget_remaining").eq("id", teamId).single()
+        if (team) {
+          await supabase
+            .from("tournament_teams")
+            .update({
+              budget_remaining: (team.budget_remaining || 0) - cost,
+            })
+            .eq("id", teamId)
+        }
       }
     } catch (error) {
       console.error("Error executing draft pick:", error)
@@ -569,10 +572,7 @@ export const tournamentDraftService = {
           }
         }
 
-        // Stop timer if draft is completed
-        if (currentState.status === "completed") {
-          clearInterval(timer)
-        }
+
       } catch (error) {
         console.error("Error in draft timer:", error)
         clearInterval(timer)
@@ -597,13 +597,17 @@ export const tournamentDraftService = {
 
       return data
         .map((entry) => {
-          const stats = entry.player_analytics || { goals: 0, assists: 0, saves: 0, games_played: 0 }
+          const analyticsArray = entry.player_analytics as any;
+          const stats = (Array.isArray(analyticsArray) ? analyticsArray[0] : analyticsArray) || { goals: 0, assists: 0, saves: 0, games_played: 0 }
           const totalScore = stats.goals + stats.assists + Math.abs(stats.saves)
+
+          const usersArray = entry.users as any;
+          const userData = Array.isArray(usersArray) ? usersArray[0] : usersArray;
 
           return {
             id: entry.user_id,
-            username: entry.users?.username || "Unknown",
-            elo_rating: entry.users?.elo_rating || 1000,
+            username: userData?.username || "Unknown",
+            elo_rating: userData?.elo_rating || 1000,
             csv_stats: stats,
             total_score: totalScore,
             status: entry.status as "available" | "drafted",
@@ -638,25 +642,32 @@ export const tournamentDraftService = {
 
       if (!teams) return []
 
-      return teams.map((team) => ({
-        id: team.id,
-        name: team.team_name,
-        captain_id: team.team_captain || "",
-        captain_name: team.users?.username || "TBD",
-        budget_remaining: team.budget_remaining || 0,
-        draft_order: team.draft_order || 0,
-        players:
-          team.team_members?.map((member: any) => ({
-            id: member.user_id,
-            username: member.users?.username || "Unknown",
-            elo_rating: member.users?.elo_rating || 1000,
-            csv_stats: { goals: 0, assists: 0, saves: 0, games_played: 0 }, // Would need to join with analytics
-            total_score: 0,
-            status: "drafted" as const,
-            draft_cost: member.draft_cost,
-            team_id: team.id,
-          })) || [],
-      }))
+      return teams.map((team) => {
+        const captainUser = Array.isArray(team.users) ? team.users[0] : team.users;
+
+        return {
+          id: team.id,
+          name: team.team_name,
+          captain_id: team.team_captain || "",
+          captain_name: captainUser?.username || "TBD",
+          budget_remaining: team.budget_remaining || 0,
+          draft_order: team.draft_order || 0,
+          players:
+            team.team_members?.map((member: any) => {
+              const memberUser = Array.isArray(member.users) ? member.users[0] : member.users;
+              return {
+                id: member.user_id,
+                username: memberUser?.username || "Unknown",
+                elo_rating: memberUser?.elo_rating || 1000,
+                csv_stats: { goals: 0, assists: 0, saves: 0, games_played: 0 }, // Would need to join with analytics
+                total_score: 0,
+                status: "drafted" as const,
+                draft_cost: member.draft_cost,
+                team_id: team.id,
+              }
+            }) || [],
+        }
+      })
     } catch (error) {
       console.error("Error loading teams with rosters:", error)
       return []

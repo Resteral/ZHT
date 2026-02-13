@@ -71,8 +71,17 @@ export default function Draft6v6Page() {
       }
       setPreviousLobbyData(currentDataHash)
 
-      console.log("[v0] Loaded 6v6 matches:", matches)
-      setLobbies(matches || [])
+      const transformedData = (matches || []).map((lobby: any) => ({
+        ...lobby,
+        current_participants: lobby.match_participants?.length || 0,
+        match_participants: lobby.match_participants.map((p: any) => ({
+          ...p,
+          users: Array.isArray(p.users) ? p.users[0] : p.users
+        }))
+      }))
+
+      console.log("[v0] Loaded lobbies:", transformedData)
+      setLobbies(transformedData)
     } catch (err) {
       console.error("[v0] Error loading lobbies:", err)
       setError(err instanceof Error ? err.message : "Failed to load lobbies")

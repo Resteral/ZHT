@@ -1,19 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+import { createClient } from "@/lib/supabase/server"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          request.cookies.set(name, value)
-        })
-      },
-    },
-  })
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createClient()
+  const resolvedParams = await params
 
   try {
     const { teamId, playerId, bidAmount, userId } = await request.json()
@@ -23,7 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: teamBudget, error: budgetError } = await supabase
       .from("tournament_team_budgets")
       .select("current_budget, players_acquired, max_players")
-      .eq("tournament_id", params.id)
+      .eq("tournament_id", resolvedParams.id)
       .eq("team_id", teamId)
       .single()
 
@@ -40,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: auctionSession, error: sessionError } = await supabase
       .from("tournament_auction_sessions")
       .select("*")
-      .eq("tournament_id", params.id)
+      .eq("tournament_id", resolvedParams.id)
       .eq("status", "active")
       .single()
 
@@ -52,7 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const { error: bidError } = await supabase.from("tournament_auction_bids").insert({
       auction_session_id: auctionSession.id,
-      tournament_id: params.id,
+      tournament_id: resolvedParams.id,
       team_id: teamId,
       player_id: playerId,
       bid_amount: bidAmount,

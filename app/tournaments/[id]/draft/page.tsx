@@ -151,8 +151,8 @@ export default function TournamentDraftPage() {
         team_name: team.team_name,
         team_captain: team.team_captain,
         budget_remaining: team.budget_remaining || 1000,
-        captain_username: team.users?.username || "Unknown",
-        captain_elo: team.users?.elo_rating || 1200,
+        captain_username: (team.users as any)?.[0]?.username || (team.users as any)?.username || "Unknown",
+        captain_elo: (team.users as any)?.[0]?.elo_rating || (team.users as any)?.elo_rating || 1200,
         players: [],
         logo_url: team.logo_url,
       }))
@@ -198,8 +198,8 @@ export default function TournamentDraftPage() {
         .filter((player) => player.status === "available" && !captainIds.includes(player.user_id))
         .map((player) => ({
           user_id: player.user_id,
-          username: player.users?.username || "Unknown",
-          elo_rating: player.users?.elo_rating || 1200,
+          username: (player.users as any)?.[0]?.username || (player.users as any)?.username || "Unknown",
+          elo_rating: (player.users as any)?.[0]?.elo_rating || (player.users as any)?.elo_rating || 1200,
           status: player.status,
           captain_type: player.captain_type,
           current_bid: 0,
@@ -375,10 +375,10 @@ export default function TournamentDraftPage() {
           const updatedTeams = teams.map((team) =>
             team.id === currentPlayer.highest_bidder
               ? {
-                  ...team,
-                  budget_remaining: team.budget_remaining - (currentPlayer.current_bid || 0),
-                  players: [...team.players, currentPlayer],
-                }
+                ...team,
+                budget_remaining: team.budget_remaining - (currentPlayer.current_bid || 0),
+                players: [...team.players, currentPlayer],
+              }
               : team,
           )
           setTeams(updatedTeams)
@@ -465,10 +465,10 @@ export default function TournamentDraftPage() {
         prev.map((team) =>
           team.id === teamId
             ? {
-                ...team,
-                team_name: teamName,
-                logo_url: teamLogo,
-              }
+              ...team,
+              team_name: teamName,
+              logo_url: teamLogo,
+            }
             : team,
         ),
       )
@@ -604,7 +604,7 @@ export default function TournamentDraftPage() {
                         if (e.key === "Enter") {
                           const value = Number.parseInt((e.target as HTMLInputElement).value) || 0
                           updatePlayerPrice(currentPlayer.user_id, value)
-                          ;(e.target as HTMLInputElement).value = ""
+                            ; (e.target as HTMLInputElement).value = ""
                         }
                       }}
                     />
@@ -811,9 +811,8 @@ export default function TournamentDraftPage() {
                 .map((player, index) => (
                   <div
                     key={player.user_id}
-                    className={`flex items-center gap-3 p-3 border rounded-lg ${
-                      currentPlayer?.user_id === player.user_id ? "border-yellow-500 bg-yellow-50" : ""
-                    }`}
+                    className={`flex items-center gap-3 p-3 border rounded-lg ${currentPlayer?.user_id === player.user_id ? "border-yellow-500 bg-yellow-50" : ""
+                      }`}
                   >
                     <Badge variant="secondary" className="min-w-[2rem]">
                       #{index + 1}

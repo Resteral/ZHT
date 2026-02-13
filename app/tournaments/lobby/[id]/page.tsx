@@ -27,10 +27,7 @@ interface TournamentLobby {
   creator_id: string
   match_participants: Array<{
     user_id: string
-    users: {
-      username: string
-      elo_rating: number
-    }
+    users: any
   }>
 }
 
@@ -140,7 +137,11 @@ export default function TournamentLobbyPage({ params }: { params: { id: string }
         return
       }
 
-      const sortedByElo = participants.sort((a, b) => (b.users?.elo_rating || 1200) - (a.users?.elo_rating || 1200))
+      const sortedByElo = participants.sort((a, b) => {
+        const userA = Array.isArray(a.users) ? a.users[0] : a.users
+        const userB = Array.isArray(b.users) ? b.users[0] : b.users
+        return (userB?.elo_rating || 1200) - (userA?.elo_rating || 1200)
+      })
 
       const highestElo = sortedByElo[0] // Highest ELO becomes tournament owner
       const lowestElo = sortedByElo[sortedByElo.length - 1] // Lowest ELO gets first pick
@@ -401,7 +402,7 @@ export default function TournamentLobbyPage({ params }: { params: { id: string }
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center text-sm font-medium">
-                        {(participant.users?.username || "?").charAt(0).toUpperCase()}
+                        {((Array.isArray(participant.users) ? participant.users[0] : participant.users)?.username || "?").charAt(0).toUpperCase()}
                       </div>
                       <div>
                         <div className="font-medium">{participant.users?.username || "Unknown Player"}</div>

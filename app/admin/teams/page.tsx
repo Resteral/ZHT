@@ -64,14 +64,14 @@ export default function TeamManagement() {
           id: team.id,
           name: team.name || "Unnamed Team",
           game: team.game || "Unknown",
-          owner: team.users?.username || "Unknown Owner",
+          owner: (team.users as any)?.[0]?.username || (team.users as any)?.username || "Unknown Owner",
           players: team.team_members?.length || 0,
           maxPlayers: team.max_players || 5,
           wins: 0, // Would need match results to calculate
           losses: 0, // Would need match results to calculate
           winRate: 0, // Would need match results to calculate
           value: Math.floor(Math.random() * 20000) + 5000, // Placeholder calculation
-          league: team.leagues?.name || "No League",
+          league: (Array.isArray(team.leagues) ? team.leagues[0] : team.leagues)?.name || "No League",
           status: team.team_members?.length >= team.max_players ? "active" : "recruiting",
         })) || []
 
