@@ -154,12 +154,12 @@ export default function ProfilePage() {
       if (error) throw error
 
       const processedAwards =
-        data?.map((award) => ({
+        data?.map((award: any) => ({
           id: award.id,
           match_id: award.match_id,
           awarded_at: award.awarded_at,
-          match_name: award.matches?.name || "Unknown Match",
-          game: award.matches?.game || "Unknown Game",
+          match_name: Array.isArray(award.matches) ? award.matches[0]?.name : award.matches?.name || "Unknown Match",
+          game: Array.isArray(award.matches) ? award.matches[0]?.game : award.matches?.game || "Unknown Game",
         })) || []
 
       setMvpAwards(processedAwards)
@@ -189,13 +189,13 @@ export default function ProfilePage() {
       if (error) throw error
 
       const processedFlags =
-        data?.map((flag) => ({
+        data?.map((flag: any) => ({
           id: flag.id,
           flag_type: flag.flag_type,
           description: flag.description,
           match_id: flag.match_id,
           created_at: flag.created_at,
-          reporter_username: flag.reporter?.username || "Anonymous",
+          reporter_username: Array.isArray(flag.reporter) ? flag.reporter[0]?.username : flag.reporter?.username || "Anonymous",
         })) || []
 
       setPlayerFlags(processedFlags)
@@ -208,7 +208,7 @@ export default function ProfilePage() {
     if (!authUser) return
 
     try {
-      // Query match analytics for CSV data related to this user
+      // Query match analytics forCSV data related to this user
       const { data, error } = await supabase.from("match_analytics").select("csv_data").not("csv_data", "is", null)
 
       if (error) throw error
@@ -226,7 +226,7 @@ export default function ProfilePage() {
         if (match.csv_data) {
           // Parse CSV data and look for user's stats
           const lines = match.csv_data.split("\n")
-          lines.forEach((line) => {
+          lines.forEach((line: string) => {
             const fields = line.split(",")
             if (fields.length >= 14) {
               // Extract player ID from the identifier (e.g., "1-S2-1-6820063" -> "6820063")
@@ -288,9 +288,17 @@ export default function ProfilePage() {
 
       if (error) throw error
 
-      const completedDrafts = data?.filter((p) => p.captain_drafts.status === "completed") || []
+      const completedDrafts = data?.filter((p: any) => {
+        const draft = Array.isArray(p.captain_drafts) ? p.captain_drafts[0] : p.captain_drafts
+        return draft?.status === "completed"
+      }) || []
+
       const totalCaptainGames = completedDrafts.length
-      const captainWins = completedDrafts.filter((p) => p.captain_drafts.winner_team === 1).length // Assuming team 1 is captain's team
+      const captainWins = completedDrafts.filter((p: any) => {
+        const draft = Array.isArray(p.captain_drafts) ? p.captain_drafts[0] : p.captain_drafts
+        return draft?.winner_team === 1
+      }).length // Assuming team 1 is captain's team
+
       const captainLosses = totalCaptainGames - captainWins
       const captainWinRate = totalCaptainGames > 0 ? (captainWins / totalCaptainGames) * 100 : 0
 
@@ -413,7 +421,10 @@ export default function ProfilePage() {
         `)
         .eq("user_id", authUser.id)
 
-      const completedMatches = matchStats?.filter((m) => m.matches.status === "completed") || []
+      const completedMatches = matchStats?.filter((m: any) => {
+        const match = Array.isArray(m.matches) ? m.matches[0] : m.matches
+        return match?.status === "completed"
+      }) || []
       const totalGames = completedMatches.length
 
       // Calculate wins/losses (simplified - in real app, you'd track actual results)

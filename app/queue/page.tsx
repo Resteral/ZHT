@@ -61,7 +61,13 @@ export default function QueuePage() {
     }
   }
 
-  const joinQueue = async (type: "maxed" | "unmaxed", format: "snake_draft" | "auction_draft", count: number) => {
+  const joinQueue = async (
+    game: string,
+    type: "maxed" | "unmaxed",
+    format: "snake_draft" | "auction_draft",
+    count: number,
+    entryFee: number,
+  ) => {
     if (!user) {
       toast.error("Please log in to join a queue")
       return
@@ -95,7 +101,7 @@ export default function QueuePage() {
       // Given the file content, there is no game selector.
       // I will assume "Omega Strikers" to match `lobbies/page.tsx` default.
 
-      await joinLobbyQueue("Omega Strikers", type, format, count)
+      await joinLobbyQueue(game, type, format, count, entryFee)
       toast.success(`Joined ${type} ${format.replace("_", " ")} queue!`)
       await loadQueues()
     } catch (error) {
@@ -233,11 +239,19 @@ export default function QueuePage() {
                       <Button
                         className="w-full"
                         size="sm"
-                        onClick={() => joinQueue("maxed", queue.game_format as any, queue.player_count)}
+                        onClick={() =>
+                          joinQueue(
+                            queue.game,
+                            "maxed",
+                            queue.game_format as any,
+                            queue.player_count,
+                            queue.entry_fee,
+                          )
+                        }
                         disabled={loading || !!userQueue}
                       >
                         <Zap className="h-3 w-3 mr-1" />
-                        Join Ranked
+                        Join Ranked {queue.entry_fee > 0 ? `($${queue.entry_fee})` : ""}
                       </Button>
                     </div>
                   </CardContent>
@@ -298,11 +312,19 @@ export default function QueuePage() {
                         className="w-full"
                         size="sm"
                         variant="secondary"
-                        onClick={() => joinQueue("unmaxed", queue.game_format as any, queue.player_count)}
+                        onClick={() =>
+                          joinQueue(
+                            queue.game,
+                            "unmaxed",
+                            queue.game_format as any,
+                            queue.player_count,
+                            queue.entry_fee,
+                          )
+                        }
                         disabled={loading || !!userQueue}
                       >
                         <Zap className="h-3 w-3 mr-1" />
-                        Join Quick Play
+                        Join Quick Play {queue.entry_fee > 0 ? `($${queue.entry_fee})` : ""}
                       </Button>
                     </div>
                   </CardContent>

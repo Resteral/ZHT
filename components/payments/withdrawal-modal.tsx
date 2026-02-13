@@ -36,17 +36,9 @@ export function WithdrawalModal() {
         setError(null)
 
         try {
-            const response = await fetch("/api/request-withdrawal", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount: Number(amount) }),
-            })
-
-            const data = await response.json()
-
-            if (!response.ok) {
-                throw new Error(data.error || "Failed to process withdrawal")
-            }
+            // Dynamically import to ensure server action usage
+            const { requestWithdrawal } = await import("@/app/actions/wallet-actions")
+            await requestWithdrawal(Number(amount))
 
             setIsOpen(false)
             toast.success("Withdrawal requested successfully! Funds pending approval.")

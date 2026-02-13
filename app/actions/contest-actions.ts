@@ -194,7 +194,78 @@ export async function placeBet(
         throw new Error("Failed to place bet: " + error.message)
     }
 
-    revalidatePath(`/draft/room/${contestId}`)
     revalidatePath(`/tournaments/${contestId}`)
+    return { success: true }
+}
+
+export async function placeMVPBet(
+    matchId: string,
+    playerId: string,
+    odds: number,
+    stake: number
+) {
+    const supabase = await createClient()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error("You must be logged in to place a bet")
+    }
+
+    if (stake <= 0) {
+        throw new Error("Stake amount must be greater than 0")
+    }
+
+    // 1. Deduct Funds
+    const success = await serverWalletService.deductEntryFee(
+        user.id,
+        stake,
+        `MVP Bet on Match ${matchId}`
+    )
+
+    if (!success) {
+        throw new Error("Insufficient funds based on wallet balance.")
+    }
+
+    // 2. Ensure Market Exists (Upsert)
+    // Server-side upsert is safer than client-side
+    const { data: market, error: marketError } = await supabase
+        .from("betting_markets")
+        .upsert({
+            game_id: matchId,
+            market_type: "mvp",
+            description: `MVP of Match`,
+            status: "active",
+        })
+        .select()
+        .single()
+
+    if (marketError) {
+        // Refund
+        await serverWalletService.awardPrize(user.id, stake, "Refund: Market error")
+        throw new Error("Failed to access betting market")
+    }
+
+    // 3. Place Bet
+    const { error: betError } = await supabase.from("bets").insert({
+        user_id: user.id,
+        market_id: market.id,
+        // Store player selection in bet_type for now as a composite key like 'mvp_USERID'
+        bet_type: `mvp_${playerId}`,
+        stake_amount: stake,
+        odds: odds,
+        potential_payout: stake * (odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1),
+        status: "pending",
+        placed_at: new Date().toISOString(),
+    })
+
+    if (betError) {
+        // Refund
+        await serverWalletService.awardPrize(user.id, stake, "Refund: Bet placement failed")
+        throw new Error("Failed to place bet: " + betError.message)
+    }
+
+    revalidatePath("/contests")
     return { success: true }
 }

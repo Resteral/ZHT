@@ -38,33 +38,30 @@ function CheckoutForm({ amount, onSuccess, disabled }: { amount: number; onSucce
         setError(null)
 
         // 1. Create PaymentIntent on the server
-        const response = await fetch("/api/create-payment-intent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ amount: amount * 100 }), // Amount in cents
-        })
+        try {
+            const { createDepositPaymentIntent } = await import("@/app/actions/wallet-actions")
+            const { clientSecret } = await createDepositPaymentIntent(amount)
 
-        const { clientSecret, error: backendError } = await response.json()
-
-        if (backendError) {
-            setError(backendError)
-            setProcessing(false)
-            return
-        }
-
-        // 2. Confirm Card Payment
-        const result = await stripe.confirmCardPayment(clientSecret, {
-            payment_method: {
-                card: elements.getElement(CardElement)!,
-            },
-        })
-
-        if (result.error) {
-            setError(result.error.message || "Payment failed")
-        } else {
-            if (result.paymentIntent.status === "succeeded") {
-                onSuccess()
+            if (!clientSecret) {
+                throw new Error("Failed to initialize payment")
             }
+
+            // 2. Confirm Card Payment
+            const result = await stripe.confirmCardPayment(clientSecret, {
+                payment_method: {
+                    card: elements.getElement(CardElement)!,
+                },
+            })
+
+            if (result.error) {
+                setError(result.error.message || "Payment failed")
+            } else {
+                if (result.paymentIntent.status === "succeeded") {
+                    onSuccess()
+                }
+            }
+        } catch (err: any) {
+            setError(err.message || "An unexpected error occurred")
         }
         setProcessing(false)
     }

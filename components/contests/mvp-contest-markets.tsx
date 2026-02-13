@@ -96,61 +96,10 @@ export function MVPContestMarkets() {
 
   const placeMVPBet = async (matchId: string, playerId: string, odds: number, stake: number) => {
     try {
-      const { data: user, error: userError } = await supabase.auth.getUser()
-      if (userError || !user.user) throw new Error("Not authenticated")
+      // Import the server action dynamically
+      const { placeMVPBet } = await import("@/app/actions/contest-actions")
 
-      const { data: market, error: marketError } = await supabase
-        .from("betting_markets")
-        .upsert({
-          game_id: matchId,
-          market_type: "mvp",
-          description: `MVP of Match`,
-          status: "active",
-        })
-        .select()
-        .single()
-
-      if (marketError) throw marketError
-
-      const { error: betError } = await supabase.from("bets").insert({
-        user_id: user.user.id,
-        market_id: market.id,
-        bet_type: "mvp",
-        stake_amount: stake,
-        odds: odds,
-        potential_payout: stake * (odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1),
-        status: "pending",
-      })
-
-      if (betError) throw betError
-
-      const { data: wallet, error: walletCheckError } = await supabase
-        .from("user_wallets")
-        .select("balance, total_wagered")
-        .eq("user_id", user.user.id)
-        .single()
-
-      if (walletCheckError && walletCheckError.code !== "PGRST116") {
-        throw walletCheckError
-      }
-
-      if (!wallet) {
-        await supabase.from("user_wallets").insert({
-          user_id: user.user.id,
-          balance: 1000 - stake,
-          total_wagered: stake,
-        })
-      } else {
-        const { error: walletError } = await supabase
-          .from("user_wallets")
-          .update({
-            balance: wallet.balance - stake,
-            total_wagered: (wallet.total_wagered || 0) + stake,
-          })
-          .eq("user_id", user.user.id)
-
-        if (walletError) throw walletError
-      }
+      await placeMVPBet(matchId, playerId, odds, stake)
 
       setSelectedBets((prev) => {
         const newBets = { ...prev }
@@ -160,9 +109,9 @@ export function MVPContestMarkets() {
 
       alert("MVP bet placed successfully!")
       loadMVPMarkets()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error placing MVP bet:", error)
-      alert("Failed to place bet. Please try again.")
+      alert(error.message || "Failed to place bet. Please try again.")
     }
   }
 

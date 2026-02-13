@@ -240,11 +240,11 @@ export default function PlayerProfilePage() {
         .order("awarded_at", { ascending: false })
 
       if (!mvpError && mvpData) {
-        const awards: MVPAward[] = mvpData.map((award) => ({
+        const awards: MVPAward[] = mvpData.map((award: any) => ({
           id: award.id,
           match_id: award.match_id,
           awarded_at: award.awarded_at,
-          match_name: award.matches?.name || "Unknown Match",
+          match_name: Array.isArray(award.matches) ? award.matches[0]?.name : award.matches?.name || "Unknown Match",
         }))
         setMvpAwards(awards)
         console.log("[v0] MVP awards loaded:", awards.length)
@@ -321,16 +321,21 @@ export default function PlayerProfilePage() {
         .limit(50)
 
       if (!bidsError && bidsData) {
-        const processedBids = bidsData.map((bid) => ({
-          id: bid.id,
-          auction_id: bid.auction_id,
-          player_username: bid.player_auctions?.users?.username || "Unknown",
-          bid_amount: bid.bid_amount,
-          bid_time: bid.bid_time,
-          is_winning: bid.player_auctions?.highest_bidder_id === userId,
-          is_auto_bid: bid.is_auto_bid || false,
-          auction_status: bid.player_auctions?.status || "unknown",
-        }))
+        const processedBids = bidsData.map((bid: any) => {
+          const auction = Array.isArray(bid.player_auctions) ? bid.player_auctions[0] : bid.player_auctions
+          const playerUser = auction ? (Array.isArray(auction.users) ? auction.users[0] : auction.users) : null
+
+          return {
+            id: bid.id,
+            auction_id: bid.auction_id,
+            player_username: playerUser?.username || "Unknown",
+            bid_amount: bid.bid_amount,
+            bid_time: bid.bid_time,
+            is_winning: auction?.highest_bidder_id === userId,
+            is_auto_bid: bid.is_auto_bid || false,
+            auction_status: auction?.status || "unknown",
+          }
+        })
 
         setBiddingHistory(processedBids)
         console.log("[v0] Bidding history loaded:", processedBids.length)
@@ -393,7 +398,7 @@ export default function PlayerProfilePage() {
         const matchStats = CSVStatsService.parseCSVData(
           submission.csv_code,
           submission.match_id,
-          submission.matches?.name || "Unknown Match",
+          Array.isArray(submission.matches) ? (submission.matches as any)[0]?.name : (submission.matches as any)?.name || "Unknown Match",
         )
 
         const playerMatchStats = matchStats.filter((stat) => stat.accountId === accountId)
@@ -939,7 +944,7 @@ export default function PlayerProfilePage() {
                           "Account ID,Player Name,Team,Steals,Goals,Assists,Shots,Pickups,Passes,Passes Received,Save %,Shots on Goalie,Shots Saved,Goalie Minutes,Skater Minutes,Match,Submitted At",
                           ...csvStats.map(
                             (stat) =>
-                              `${stat.accountId},"${stat.username}",${stat.team},${stat.steals},${stat.goals},${stat.assists},${stat.shots},${stat.pickups},${stat.passes},${stat.passesReceived},${stat.savePercentage},${stat.shotsOnGoalie},${stat.shotsSaved},${stat.goalieMinutes},${stat.skaterMinutes},"${stat.matchName}","${new Date(stat.submittedAt).toLocaleString()}"`,
+                              `${stat.accountId},"${stat.username}",${stat.team},${stat.steals},${stat.goals},${stat.assists},${stat.shots},${stat.pickups},${stat.passes},${stat.passesReceived},${stat.savePercentage},${(stat as any).saveAmount || 0},${stat.saves},${(stat as any).goalTended || 0},${(stat as any).skatingTime || 0},"${stat.matchName}","${new Date(stat.submittedAt).toLocaleString()}"`,
                           ),
                         ].join("\n")
 
@@ -1031,7 +1036,7 @@ export default function PlayerProfilePage() {
                             <td className="px-4 py-3 text-center">{stat.pickups}</td>
                             <td className="px-4 py-3 text-center">{stat.passes}</td>
                             <td className="px-4 py-3 text-center">{stat.savePercentage.toFixed(1)}%</td>
-                            <td className="px-4 py-3 text-center">{stat.skaterMinutes + stat.goalieMinutes}</td>
+                            <td className="px-4 py-3 text-center">{((stat as any).skatingTime || 0) + ((stat as any).goalTended || 0)}</td>
                           </tr>
                         ))}
                       </tbody>
