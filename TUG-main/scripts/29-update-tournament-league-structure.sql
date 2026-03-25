@@ -14,8 +14,10 @@ ADD COLUMN IF NOT EXISTS max_duration_days INTEGER DEFAULT 90;
 
 -- Update captain drafts to remove entry fees and set $50 reward
 ALTER TABLE captain_drafts 
-ALTER COLUMN entry_fee SET DEFAULT 0,
+ADD COLUMN IF NOT EXISTS entry_fee DECIMAL(12,2) DEFAULT 0,
 ADD COLUMN IF NOT EXISTS game_reward INTEGER DEFAULT 50;
+
+ALTER TABLE captain_drafts ALTER COLUMN entry_fee SET DEFAULT 0;
 
 -- Create function to award $50 per game played
 CREATE OR REPLACE FUNCTION award_game_participation(user_id UUID, draft_id UUID)

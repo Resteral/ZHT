@@ -44,21 +44,31 @@ CREATE INDEX IF NOT EXISTS idx_csv_upload_sessions_status ON csv_upload_sessions
 ALTER TABLE csv_analytics_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE csv_upload_sessions ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies - Users can access data for their account IDs
-CREATE POLICY "Users can view CSV data for their account IDs" ON csv_analytics_data
-  FOR SELECT USING (
-    account_id IN (
-      SELECT DISTINCT account_id 
-      FROM csv_analytics_data 
-      WHERE user_id = auth.uid()
-    )
-  );
+-- RLS Policies - Safe creation with DO blocks to prevent 'already exists' errors
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view CSV data for their account IDs' AND tablename = 'csv_analytics_data') THEN
+    CREATE POLICY "Users can view CSV data for their account IDs" ON csv_analytics_data
+      FOR SELECT USING (
+        account_id IN (
+          SELECT DISTINCT account_id 
+          FROM csv_analytics_data 
+          WHERE user_id = auth.uid()
+        )
+      );
+  END IF;
 
-CREATE POLICY "Users can insert their own CSV data" ON csv_analytics_data
-  FOR INSERT WITH CHECK (user_id = auth.uid());
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert their own CSV data' AND tablename = 'csv_analytics_data') THEN
+    CREATE POLICY "Users can insert their own CSV data" ON csv_analytics_data
+      FOR INSERT WITH CHECK (user_id = auth.uid());
+  END IF;
 
-CREATE POLICY "Users can view their upload sessions" ON csv_upload_sessions
-  FOR SELECT USING (user_id = auth.uid());
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their upload sessions' AND tablename = 'csv_upload_sessions') THEN
+    CREATE POLICY "Users can view their upload sessions" ON csv_upload_sessions
+      FOR SELECT USING (user_id = auth.uid());
+  END IF;
 
-CREATE POLICY "Users can insert their upload sessions" ON csv_upload_sessions
-  FOR INSERT WITH CHECK (user_id = auth.uid());
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert their upload sessions' AND tablename = 'csv_upload_sessions') THEN
+    CREATE POLICY "Users can insert their upload sessions" ON csv_upload_sessions
+      FOR INSERT WITH CHECK (user_id = auth.uid());
+  END IF;
+END $$;

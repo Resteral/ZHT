@@ -122,6 +122,54 @@ CREATE TABLE IF NOT EXISTS matches (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Ensure creator_id exists in matches (handle legacy created_by)
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'created_by') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'creator_id') THEN
+            ALTER TABLE matches RENAME COLUMN created_by TO creator_id;
+        END IF;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'creator_id') THEN
+        ALTER TABLE matches ADD COLUMN creator_id UUID REFERENCES users(id) ON DELETE CASCADE;
+    END IF;
+    
+    -- Ensure status column exists in matches
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'status') THEN
+        ALTER TABLE matches ADD COLUMN status TEXT DEFAULT 'waiting';
+    END IF;
+
+    -- Ensure game column exists in matches
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'matches' AND column_name = 'game') THEN
+        ALTER TABLE matches ADD COLUMN game TEXT NOT NULL DEFAULT 'omega_strikers';
+    END IF;
+END $$;
+
+-- Ensure creator_id exists in captain_drafts (handle legacy created_by)
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'captain_drafts' AND column_name = 'created_by') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'captain_drafts' AND column_name = 'creator_id') THEN
+            ALTER TABLE captain_drafts RENAME COLUMN created_by TO creator_id;
+        END IF;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'captain_drafts' AND column_name = 'creator_id') THEN
+        ALTER TABLE captain_drafts ADD COLUMN creator_id UUID REFERENCES users(id) ON DELETE CASCADE;
+    END IF;
+
+    -- Ensure status column exists in captain_drafts
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'captain_drafts' AND column_name = 'status') THEN
+        ALTER TABLE captain_drafts ADD COLUMN status TEXT DEFAULT 'waiting';
+    END IF;
+
+    -- Ensure game column exists in captain_drafts
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'captain_drafts' AND column_name = 'game') THEN
+        ALTER TABLE captain_drafts ADD COLUMN game TEXT NOT NULL DEFAULT 'omega_strikers';
+    END IF;
+END $$;
+
 -- Create match participants table if it doesn't exist
 CREATE TABLE IF NOT EXISTS match_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,6 +1,14 @@
--- Adding comprehensive analytics tables for expanded tracking
--- Enhanced player performance tracking
-CREATE TABLE IF NOT EXISTS player_performance_history (
+-- Explicitly ensure player_analytics has the required columns for advanced views
+ALTER TABLE public.player_analytics ADD COLUMN IF NOT EXISTS kills INTEGER DEFAULT 0;
+ALTER TABLE public.player_analytics ADD COLUMN IF NOT EXISTS deaths INTEGER DEFAULT 0;
+ALTER TABLE public.player_analytics ADD COLUMN IF NOT EXISTS assists INTEGER DEFAULT 0;
+ALTER TABLE public.player_analytics ADD COLUMN IF NOT EXISTS damage_dealt INTEGER DEFAULT 0;
+ALTER TABLE public.player_analytics ADD COLUMN IF NOT EXISTS damage_taken INTEGER DEFAULT 0;
+ALTER TABLE public.player_analytics ADD COLUMN IF NOT EXISTS accuracy DECIMAL(5,2) DEFAULT 0.00;
+ALTER TABLE public.player_analytics ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 0;
+
+-- Match-specific player performance tracking
+CREATE TABLE IF NOT EXISTS player_match_performance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
@@ -12,6 +20,10 @@ CREATE TABLE IF NOT EXISTS player_performance_history (
     flags_received INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Ensure correct columns exist if the table was created under a different name
+ALTER TABLE player_match_performance ADD COLUMN IF NOT EXISTS performance_rating DECIMAL(5,2);
+ALTER TABLE player_match_performance ADD COLUMN IF NOT EXISTS mvp_votes INTEGER DEFAULT 0;
 
 -- Team composition analytics
 CREATE TABLE IF NOT EXISTS team_analytics (
@@ -27,6 +39,13 @@ CREATE TABLE IF NOT EXISTS team_analytics (
     actual_result VARCHAR(10), -- 'win', 'loss', 'draw'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Explicitly ensure team_analytics has the required columns for advanced views
+ALTER TABLE team_analytics ADD COLUMN IF NOT EXISTS team_number INTEGER;
+ALTER TABLE team_analytics ADD COLUMN IF NOT EXISTS avg_elo DECIMAL(8,2);
+ALTER TABLE team_analytics ADD COLUMN IF NOT EXISTS total_assists INTEGER DEFAULT 0;
+ALTER TABLE team_analytics ADD COLUMN IF NOT EXISTS win_probability DECIMAL(5,2);
+ALTER TABLE team_analytics ADD COLUMN IF NOT EXISTS actual_result VARCHAR(10);
 
 -- Match outcome predictions
 CREATE TABLE IF NOT EXISTS match_predictions (
@@ -72,7 +91,7 @@ SELECT
 FROM users u
 LEFT JOIN player_analytics pa ON u.id = pa.user_id
 LEFT JOIN team_analytics ta ON pa.match_id = ta.match_id
-LEFT JOIN player_performance_history ph ON u.id = ph.user_id
+LEFT JOIN player_match_performance ph ON u.id = ph.user_id
 GROUP BY u.id, u.username, u.elo_rating;
 
 -- Function to calculate performance rating

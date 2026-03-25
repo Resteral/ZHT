@@ -55,7 +55,7 @@ RETURNS void AS $$
 DECLARE
   tournament_record RECORD;
   match_record RECORD;
-  current_time TIMESTAMP WITH TIME ZONE;
+  v_current_time TIMESTAMP WITH TIME ZONE;
   match_interval INTERVAL;
 BEGIN
   -- Get tournament details
@@ -67,7 +67,7 @@ BEGIN
   
   -- Calculate match interval based on tournament duration
   match_interval := INTERVAL '1 hour' * (tournament_record.duration_hours / 10); -- Spread matches over tournament duration
-  current_time := tournament_record.start_date;
+  v_current_time := tournament_record.start_date;
   
   -- Schedule all matches
   FOR match_record IN 
@@ -76,9 +76,9 @@ BEGIN
     ORDER BY round_number, match_number
   LOOP
     INSERT INTO tournament_schedule (tournament_id, match_id, scheduled_time)
-    VALUES (tournament_id_param, match_record.id, current_time);
+    VALUES (tournament_id_param, match_record.id, v_current_time);
     
-    current_time := current_time + match_interval;
+    v_current_time := v_current_time + match_interval;
   END LOOP;
 END;
 $$ LANGUAGE plpgsql;

@@ -1,16 +1,42 @@
 -- Update auction system to integrate with team ownership
 
+-- Ensure base auction tables exist
+CREATE TABLE IF NOT EXISTS auction_leagues (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    creator_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    require_team_ownership BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS auction_bids (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    auction_id UUID REFERENCES auction_leagues(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    amount DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS auction_picks (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    auction_id UUID REFERENCES auction_leagues(id) ON DELETE CASCADE,
+    player_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    amount DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Add team_id to auction_bids table to track which team made the bid
 ALTER TABLE auction_bids 
-ADD COLUMN team_id UUID REFERENCES teams(id);
+ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id);
 
 -- Add team_id to auction_picks table to track which team won the player
 ALTER TABLE auction_picks 
-ADD COLUMN team_id UUID REFERENCES teams(id);
+ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id);
 
 -- Update auction_leagues to require team ownership
 ALTER TABLE auction_leagues 
-ADD COLUMN require_team_ownership BOOLEAN DEFAULT true;
+ADD COLUMN IF NOT EXISTS require_team_ownership BOOLEAN DEFAULT true;
 
 -- Create function to validate team ownership before bidding
 CREATE OR REPLACE FUNCTION validate_team_ownership_for_auction(

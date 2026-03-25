@@ -13,10 +13,14 @@ CREATE TABLE IF NOT EXISTS tournament_chat (
 CREATE INDEX IF NOT EXISTS idx_tournament_chat_tournament ON tournament_chat(tournament_id);
 CREATE INDEX IF NOT EXISTS idx_tournament_chat_created_at ON tournament_chat(created_at);
 
+-- Ensure dependencies exist
+ALTER TABLE public.tournament_teams ADD COLUMN IF NOT EXISTS team_captain UUID REFERENCES users(id);
+
 -- Enable RLS
 ALTER TABLE tournament_chat ENABLE ROW LEVEL SECURITY;
 
 -- Create policies
+DROP POLICY IF EXISTS "Users can view tournament chat" ON tournament_chat;
 CREATE POLICY "Users can view tournament chat" ON tournament_chat
     FOR SELECT USING (
         EXISTS (
@@ -36,6 +40,7 @@ CREATE POLICY "Users can view tournament chat" ON tournament_chat
         )
     );
 
+DROP POLICY IF EXISTS "Participants can send messages" ON tournament_chat;
 CREATE POLICY "Participants can send messages" ON tournament_chat
     FOR INSERT WITH CHECK (
         user_id = auth.uid()

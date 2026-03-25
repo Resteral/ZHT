@@ -58,16 +58,21 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Log the changes
-INSERT INTO tournament_status_history (tournament_id, previous_status, new_status, changed_by, change_type, changed_at)
-SELECT 
-    id,
-    'system_update',
-    'team_count_fixed',
-    '00000000-0000-0000-0000-000000000000'::uuid,
-    'automatic',
-    NOW()
-FROM tournaments 
-WHERE (player_pool_settings->>'max_teams')::int = 4
-AND status = 'registration'
-AND created_at > NOW() - INTERVAL '7 days';
+-- Log the changes if history table exists
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tournament_status_history') THEN
+        INSERT INTO tournament_status_history (tournament_id, previous_status, new_status, changed_by, change_type, changed_at)
+        SELECT 
+            id,
+            'system_update',
+            'team_count_fixed',
+            '00000000-0000-0000-0000-000000000000'::uuid,
+            'automatic',
+            NOW()
+        FROM tournaments 
+        WHERE (player_pool_settings->>'max_teams')::int = 4
+        AND status = 'registration'
+        AND created_at > NOW() - INTERVAL '7 days';
+    END IF;
+END $$;

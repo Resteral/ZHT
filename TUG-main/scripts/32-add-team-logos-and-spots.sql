@@ -1,17 +1,17 @@
 -- Add team logo and spots functionality
 ALTER TABLE teams 
-ADD COLUMN logo_url TEXT,
-ADD COLUMN max_players INTEGER DEFAULT 5,
-ADD COLUMN current_players INTEGER DEFAULT 0;
+ADD COLUMN IF NOT EXISTS logo_url TEXT,
+ADD COLUMN IF NOT EXISTS max_players INTEGER DEFAULT 5,
+ADD COLUMN IF NOT EXISTS current_players INTEGER DEFAULT 0;
 
 -- Update tournaments to be team-based with flexible duration
 ALTER TABLE tournaments 
-ADD COLUMN max_teams INTEGER DEFAULT 8,
-ADD COLUMN duration_hours INTEGER DEFAULT 72, -- 3 days default, but can be shorter
-ADD COLUMN team_based BOOLEAN DEFAULT true;
+ADD COLUMN IF NOT EXISTS max_teams INTEGER DEFAULT 8,
+ADD COLUMN IF NOT EXISTS duration_hours INTEGER DEFAULT 72, -- 3 days default, but can be shorter
+ADD COLUMN IF NOT EXISTS team_based BOOLEAN DEFAULT true;
 
 -- Create team spots/roster management
-CREATE TABLE team_rosters (
+CREATE TABLE IF NOT EXISTS team_rosters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   team_id UUID REFERENCES teams(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,

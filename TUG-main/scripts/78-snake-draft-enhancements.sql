@@ -187,7 +187,7 @@ CREATE TRIGGER trigger_update_draft_analytics
 INSERT INTO snake_draft_settings (tournament_id, total_rounds, pick_time_limit)
 SELECT id, 6, 120
 FROM tournaments
-WHERE draft_type = 'snake'
+WHERE player_pool_settings->>'draft_type' = 'snake'
 ON CONFLICT (tournament_id) DO NOTHING;
 
 -- Grant permissions

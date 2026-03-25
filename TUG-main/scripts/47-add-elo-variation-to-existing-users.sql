@@ -10,6 +10,16 @@ SET elo_rating = CASE
 END
 WHERE elo_rating = 1200;
 
+-- Ensure unique constraint exists for ON CONFLICT to work
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_key') THEN
+        ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Skipping constraint addition: %', SQLERRM;
+END $$;
+
 -- Add some sample high-skill players for testing
 INSERT INTO users (id, username, email, elo_rating, created_at, updated_at)
 VALUES 

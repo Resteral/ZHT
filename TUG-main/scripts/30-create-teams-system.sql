@@ -10,6 +10,12 @@ CREATE TABLE IF NOT EXISTS teams (
     is_active BOOLEAN DEFAULT true
 );
 
+-- Ensure table has necessary columns if it already existed
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS game VARCHAR(50) DEFAULT 'omega-strikers';
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
 -- Create team members table
 CREATE TABLE IF NOT EXISTS team_members (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

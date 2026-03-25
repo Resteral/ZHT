@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS wager_matches (
     completed_at timestamp with time zone
 );
 
+-- Ensure all columns exist if table was already created differently
+ALTER TABLE wager_matches ADD COLUMN IF NOT EXISTS challenger_id uuid REFERENCES auth.users(id);
+ALTER TABLE wager_matches ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'waiting';
+ALTER TABLE wager_matches ADD COLUMN IF NOT EXISTS winner_id uuid REFERENCES auth.users(id);
+ALTER TABLE wager_matches ADD COLUMN IF NOT EXISTS started_at timestamp with time zone;
+ALTER TABLE wager_matches ADD COLUMN IF NOT EXISTS completed_at timestamp with time zone;
+
 -- Create function to create wager match
 CREATE OR REPLACE FUNCTION create_wager_match(
     p_creator_id uuid,

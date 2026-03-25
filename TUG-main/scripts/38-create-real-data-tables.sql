@@ -8,6 +8,20 @@ CREATE TABLE IF NOT EXISTS games (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Ensure columns exist if table was already created differently
+ALTER TABLE games ADD COLUMN IF NOT EXISTS name VARCHAR(100);
+ALTER TABLE games ADD COLUMN IF NOT EXISTS display_name VARCHAR(100);
+ALTER TABLE games ADD COLUMN IF NOT EXISTS icon VARCHAR(10);
+ALTER TABLE games ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
+-- Handle existing scheduled_time constraint if the table was reused from a sports schema
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'games' AND column_name = 'scheduled_time') THEN
+        ALTER TABLE games ALTER COLUMN scheduled_time DROP NOT NULL;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS venues (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) NOT NULL,

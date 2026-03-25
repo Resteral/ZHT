@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS tournament_teams (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Explicitly ensure team_captain exists if the table was created by a legacy script
+ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS team_captain UUID REFERENCES users(id);
+ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS team_name TEXT;
+ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS budget_remaining DECIMAL(10,2) DEFAULT 0;
+ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS draft_order INTEGER;
+
 -- Tournament team members table
 CREATE TABLE IF NOT EXISTS tournament_team_members (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

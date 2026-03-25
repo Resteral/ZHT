@@ -1,9 +1,8 @@
--- Create tournament teams table for snake draft teams
 CREATE TABLE IF NOT EXISTS tournament_teams (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     tournament_id UUID NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
     team_name VARCHAR(100) NOT NULL,
-    captain_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    team_captain UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     total_team_elo INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -56,19 +55,22 @@ CREATE TABLE IF NOT EXISTS match_spectators (
 CREATE TABLE IF NOT EXISTS captain_match_performance (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     match_id VARCHAR(100) NOT NULL REFERENCES tournament_matches(id) ON DELETE CASCADE,
-    captain_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    team_captain UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     goals INTEGER DEFAULT 0,
     assists INTEGER DEFAULT 0,
     saves INTEGER DEFAULT 0,
     mvp BOOLEAN DEFAULT FALSE,
     performance_score INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(match_id, captain_id)
+    UNIQUE(match_id, team_captain)
 );
+
+-- Ensure team_captain exists if created by legacy script
+ALTER TABLE captain_match_performance ADD COLUMN IF NOT EXISTS team_captain UUID REFERENCES users(id);
 
 -- Add indexes for performance
 CREATE INDEX IF NOT EXISTS idx_tournament_teams_tournament_id ON tournament_teams(tournament_id);
-CREATE INDEX IF NOT EXISTS idx_tournament_teams_captain_id ON tournament_teams(captain_id);
+CREATE INDEX IF NOT EXISTS idx_tournament_teams_captain_id ON tournament_teams(team_captain);
 CREATE INDEX IF NOT EXISTS idx_tournament_team_members_team_id ON tournament_team_members(team_id);
 CREATE INDEX IF NOT EXISTS idx_tournament_team_members_user_id ON tournament_team_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_tournament_matches_tournament_id ON tournament_matches(tournament_id);
@@ -76,7 +78,7 @@ CREATE INDEX IF NOT EXISTS idx_tournament_matches_status ON tournament_matches(s
 CREATE INDEX IF NOT EXISTS idx_tournament_matches_round ON tournament_matches(round_number);
 CREATE INDEX IF NOT EXISTS idx_match_spectators_match_id ON match_spectators(match_id);
 CREATE INDEX IF NOT EXISTS idx_captain_performance_match_id ON captain_match_performance(match_id);
-CREATE INDEX IF NOT EXISTS idx_captain_performance_captain_id ON captain_match_performance(captain_id);
+CREATE INDEX IF NOT EXISTS idx_captain_performance_captain_id ON captain_match_performance(team_captain);
 
 -- Create function to automatically update team ELO when members are added
 CREATE OR REPLACE FUNCTION update_team_total_elo()
@@ -179,9 +181,9 @@ BEGIN
         COUNT(*) FILTER (WHERE cmp.mvp = true)::INTEGER as mvp_count,
         COALESCE(SUM(cmp.performance_score), 0)::INTEGER as performance_score
     FROM tournament_teams tt
-    JOIN users u ON tt.captain_id = u.id
+    JOIN users u ON tt.team_captain = u.id
     LEFT JOIN tournament_matches tm ON (tm.team1_id = tt.id OR tm.team2_id = tt.id) AND tm.status = 'completed'
-    LEFT JOIN captain_match_performance cmp ON cmp.match_id = tm.id AND cmp.captain_id = tt.captain_id
+    LEFT JOIN captain_match_performance cmp ON cmp.match_id = tm.id AND cmp.team_captain = tt.team_captain
     WHERE tt.tournament_id = tournament_id_param
     GROUP BY tt.id, tt.team_name, u.username
     ORDER BY performance_score DESC, wins DESC;

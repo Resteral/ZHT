@@ -35,6 +35,6 @@ CREATE POLICY "Team captains can manage name history"
     USING (
         team_id IN (
             SELECT id FROM tournament_teams
-            WHERE captain_id = auth.uid()
+            WHERE team_captain = auth.uid()
         )
     );

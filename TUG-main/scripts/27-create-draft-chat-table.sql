@@ -15,23 +15,29 @@ CREATE INDEX IF NOT EXISTS idx_draft_chat_messages_created_at ON draft_chat_mess
 -- Enable RLS
 ALTER TABLE draft_chat_messages ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policies
-CREATE POLICY "Users can view chat messages for drafts they're in" ON draft_chat_messages
-    FOR SELECT USING (
-        draft_id IN (
-            SELECT draft_id FROM captain_draft_participants 
-            WHERE user_id = auth.uid()
-        )
-    );
+-- Create RLS policies safely with DO blocks
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view chat messages for drafts they''re in' AND tablename = 'draft_chat_messages') THEN
+        CREATE POLICY "Users can view chat messages for drafts they're in" ON draft_chat_messages
+            FOR SELECT USING (
+                draft_id IN (
+                    SELECT draft_id FROM captain_draft_participants 
+                    WHERE user_id = auth.uid()
+                )
+            );
+    END IF;
 
-CREATE POLICY "Users can send chat messages to drafts they're in" ON draft_chat_messages
-    FOR INSERT WITH CHECK (
-        user_id = auth.uid() AND
-        draft_id IN (
-            SELECT draft_id FROM captain_draft_participants 
-            WHERE user_id = auth.uid()
-        )
-    );
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can send chat messages to drafts they''re in' AND tablename = 'draft_chat_messages') THEN
+        CREATE POLICY "Users can send chat messages to drafts they're in" ON draft_chat_messages
+            FOR INSERT WITH CHECK (
+                user_id = auth.uid() AND
+                draft_id IN (
+                    SELECT draft_id FROM captain_draft_participants 
+                    WHERE user_id = auth.uid()
+                )
+            );
+    END IF;
+END $$;
 
 -- Add started_at column to captain_drafts if it doesn't exist
 ALTER TABLE captain_drafts ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE;

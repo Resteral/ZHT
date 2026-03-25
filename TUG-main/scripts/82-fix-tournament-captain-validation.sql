@@ -39,7 +39,7 @@ BEGIN
     INTO teams_with_captains
     FROM tournament_teams tt
     WHERE tt.tournament_id = tournament_id_param
-    AND tt.captain_id IS NOT NULL;
+    AND tt.team_captain IS NOT NULL;
     
     -- Count total participants
     SELECT COUNT(*)
@@ -115,9 +115,9 @@ SELECT
     t.max_participants,
     COALESCE(t.max_teams, (t.player_pool_settings->>'max_teams')::INTEGER, 4) as required_teams,
     COALESCE((t.player_pool_settings->>'players_per_team')::INTEGER, 4) as players_per_team,
-    COUNT(DISTINCT tt.id) FILTER (WHERE tt.captain_id IS NOT NULL) as teams_with_captains,
+    COUNT(DISTINCT tt.id) FILTER (WHERE tt.team_captain IS NOT NULL) as teams_with_captains,
     COUNT(DISTINCT tp.user_id) FILTER (WHERE tp.status = 'registered') as registered_players,
-    (COUNT(DISTINCT tt.id) FILTER (WHERE tt.captain_id IS NOT NULL) >= 
+    (COUNT(DISTINCT tt.id) FILTER (WHERE tt.team_captain IS NOT NULL) >= 
      COALESCE(t.max_teams, (t.player_pool_settings->>'max_teams')::INTEGER, 4)) as has_enough_captains,
     (COUNT(DISTINCT tp.user_id) FILTER (WHERE tp.status = 'registered') >= 
      COALESCE(t.max_teams, (t.player_pool_settings->>'max_teams')::INTEGER, 4) * 

@@ -43,7 +43,7 @@ SET player_pool_settings = jsonb_set(
 WHERE (player_pool_settings->>'players_per_team') IS NULL;
 
 -- Create missing tournament teams for tournaments that need them
-INSERT INTO tournament_teams (tournament_id, team_name, team_number, created_at)
+INSERT INTO tournament_teams (tournament_id, team_name, draft_order, created_at)
 SELECT 
   t.id,
   'Team ' || generate_series.num,
@@ -54,7 +54,7 @@ CROSS JOIN generate_series(1, COALESCE((t.player_pool_settings->>'max_teams')::i
 WHERE NOT EXISTS (
   SELECT 1 FROM tournament_teams tt 
   WHERE tt.tournament_id = t.id 
-  AND tt.team_number = generate_series.num
+  AND tt.draft_order = generate_series.num
 )
 AND t.status IN ('registration', 'active', 'drafting');
 
@@ -62,7 +62,10 @@ AND t.status IN ('registration', 'active', 'drafting');
 CREATE INDEX IF NOT EXISTS idx_tournaments_player_pool_settings_max_teams 
 ON tournaments USING gin ((player_pool_settings->'max_teams'));
 
--- Add constraint to ensure max_teams is reasonable
+-- Add constraint to ensure max_teams is reasonable (with existence check)
+ALTER TABLE tournaments 
+DROP CONSTRAINT IF EXISTS check_max_teams_reasonable;
+
 ALTER TABLE tournaments 
 ADD CONSTRAINT check_max_teams_reasonable 
 CHECK ((player_pool_settings->>'max_teams')::int BETWEEN 2 AND 16);

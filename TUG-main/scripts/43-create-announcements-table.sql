@@ -1,21 +1,32 @@
 -- Create announcements table for system announcements and notifications
-CREATE TABLE IF NOT EXISTS public.announcements (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title VARCHAR(255) NOT NULL,ww
-    content TEXT NOT NULL,
-    announcement_type VARCHAR(50) DEFAULT 'general' CHECK (announcement_type IN ('general', 'maintenance', 'feature', 'tournament', 'system')),
-    priority INTEGER DEFAULT 1 CHECK (priority BETWEEN 1 AND 5), -- 1 = low, 5 = critical
-    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'scheduled', 'expired')),
-    author_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    target_audience VARCHAR(50) DEFAULT 'all' CHECK (target_audience IN ('all', 'admins', 'premium', 'new_users')),
-    scheduled_for TIMESTAMP WITH TIME ZONE,
-    expires_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    is_pinned BOOLEAN DEFAULT FALSE,
-    view_count INTEGER DEFAULT 0,
-    metadata JSONB DEFAULT '{}'::jsonb
-);
+-- Ensure columns exist if table was already created differently
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS announcement_type VARCHAR(50) DEFAULT 'general';
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS priority INTEGER DEFAULT 1;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS author_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS target_audience VARCHAR(50) DEFAULT 'all';
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+
+-- Force drop potentially conflicting constraints
+ALTER TABLE public.announcements DROP CONSTRAINT IF EXISTS announcements_priority_check;
+ALTER TABLE public.announcements DROP CONSTRAINT IF EXISTS announcements_type_check;
+ALTER TABLE public.announcements DROP CONSTRAINT IF EXISTS announcements_status_check;
+ALTER TABLE public.announcements DROP CONSTRAINT IF EXISTS announcements_announcement_type_check;
+
+-- Handle modernization and re-add constraints
+DO $$ 
+BEGIN 
+    -- Add modern standardized constraints
+    ALTER TABLE public.announcements ADD CONSTRAINT announcements_priority_check CHECK (priority BETWEEN 1 AND 5);
+    ALTER TABLE public.announcements ADD CONSTRAINT announcements_type_check CHECK (announcement_type IN ('general', 'maintenance', 'feature', 'tournament', 'system'));
+    ALTER TABLE public.announcements ADD CONSTRAINT announcements_status_check CHECK (status IN ('active', 'inactive', 'scheduled', 'expired'));
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Constraint modernization skipped: %', SQLERRM;
+END $$;
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_announcements_status ON public.announcements(status);
@@ -40,11 +51,20 @@ CREATE TRIGGER trigger_update_announcements_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_announcements_updated_at();
 
--- Insert some sample announcements
-INSERT INTO public.announcements (title, content, announcement_type, priority, author_id) VALUES
-('Welcome to the Fantasy Sports Platform!', 'Welcome to our fantasy sports platform! Create teams, join leagues, and compete with friends.', 'general', 2, NULL),
-('New ELO Draft System Available', 'Try our new ELO draft system with 1v1, 2v2, 3v3, 4v4, 5v5, and 6v6 formats. FREE entry with $50 rewards per player!', 'feature', 3, NULL),
-('Tournament Registration Open', 'Registration is now open for upcoming tournaments. Check the tournaments page for details.', 'tournament', 2, NULL);
+-- Insert sample data safely specifying ALL columns to avoid default/null issues
+INSERT INTO public.announcements (
+    title, 
+    content, 
+    announcement_type, 
+    priority, 
+    status, 
+    is_pinned, 
+    view_count, 
+    metadata
+) VALUES
+('Welcome to the Fantasy Sports Platform!', 'Welcome to our fantasy sports platform! Create teams, join leagues, and compete with friends.', 'general', 1, 'active', false, 0, '{}'::jsonb),
+('New ELO Draft System Available', 'Try our new ELO draft system with 1v1, 2v2, 3v3, 4v4, 5v5, and 6v6 formats. FREE entry with $50 rewards per player!', 'feature', 3, 'active', false, 0, '{}'::jsonb),
+('Tournament Registration Open', 'Registration is now open for upcoming tournaments. Check the tournaments page for details.', 'tournament', 2, 'active', false, 0, '{}'::jsonb);
 
 -- Grant permissions
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.announcements TO authenticated;

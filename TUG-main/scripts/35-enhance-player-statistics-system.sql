@@ -1,6 +1,13 @@
 -- Enhanced Player Statistics and Match History System
 -- Comprehensive tracking of player performance, achievements, and detailed statistics
 
+-- Ensure user_profiles table exists
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Enhanced user profiles with detailed statistics
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS bio TEXT;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS favorite_game VARCHAR(100) DEFAULT 'omega_strikers';
@@ -18,6 +25,7 @@ ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS average_match_duration INTEGE
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS profile_visibility VARCHAR(20) DEFAULT 'public'; -- public, friends, private
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS match_history_visibility VARCHAR(20) DEFAULT 'public';
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS show_online_status BOOLEAN DEFAULT true;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS elo_rating INTEGER DEFAULT 1200;
 
 -- Detailed match history table
 CREATE TABLE IF NOT EXISTS match_history (

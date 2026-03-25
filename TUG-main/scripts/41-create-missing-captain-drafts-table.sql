@@ -40,21 +40,27 @@ ALTER TABLE captain_drafts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE captain_draft_participants ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies for captain_drafts
+DROP POLICY IF EXISTS "Users can view captain drafts" ON captain_drafts;
 CREATE POLICY "Users can view captain drafts" ON captain_drafts
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can create captain drafts" ON captain_drafts;
 CREATE POLICY "Users can create captain drafts" ON captain_drafts
     FOR INSERT WITH CHECK (creator_id = auth.uid());
 
+DROP POLICY IF EXISTS "Creators can update their captain drafts" ON captain_drafts;
 CREATE POLICY "Creators can update their captain drafts" ON captain_drafts
     FOR UPDATE USING (creator_id = auth.uid());
 
 -- Create RLS policies for captain_draft_participants
+DROP POLICY IF EXISTS "Users can view captain draft participants" ON captain_draft_participants;
 CREATE POLICY "Users can view captain draft participants" ON captain_draft_participants
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can join captain drafts" ON captain_draft_participants;
 CREATE POLICY "Users can join captain drafts" ON captain_draft_participants
     FOR INSERT WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can leave captain drafts" ON captain_draft_participants;
 CREATE POLICY "Users can leave captain drafts" ON captain_draft_participants
     FOR DELETE USING (user_id = auth.uid());
