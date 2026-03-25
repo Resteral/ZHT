@@ -85,24 +85,36 @@ END $$;
 
 -- Log the reset operation if log table exists
 DO $$ 
+DECLARE
+    admin_id_val UUID;
+    has_ip_column BOOLEAN;
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'admin_activity_log') THEN
-        INSERT INTO admin_activity_log (
-          id,
-          admin_user_id,
-          action_type,
-          target_type,
-          description,
-          created_at,
-          ip_address
-        ) VALUES (
-          gen_random_uuid(),
-          (SELECT id FROM users WHERE username = 'admin' LIMIT 1),
-          'SYSTEM_RESET',
-          'DATABASE',
-          'Complete database reset to default state',
-          NOW(),
-          '127.0.0.1'::inet
-        );
+        -- Safely get admin ID from public.users
+        SELECT id INTO admin_id_val FROM users WHERE username = 'admin' LIMIT 1;
+        
+        -- Check if ip_address column exists
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'admin_activity_log' AND column_name = 'ip_address'
+        ) INTO has_ip_column;
+
+        IF admin_id_val IS NOT NULL THEN
+            IF has_ip_column THEN
+                INSERT INTO admin_activity_log (
+                  id, admin_user_id, action_type, target_type, description, created_at, ip_address
+                ) VALUES (
+                  gen_random_uuid(), admin_id_val, 'SYSTEM_RESET', 'DATABASE', 
+                  'Complete database reset to default state', NOW(), '127.0.0.1'::inet
+                );
+            ELSE
+                INSERT INTO admin_activity_log (
+                  id, admin_user_id, action_type, target_type, description, created_at, metadata
+                ) VALUES (
+                  gen_random_uuid(), admin_id_val, 'SYSTEM_RESET', 'DATABASE', 
+                  'Complete database reset to default state', NOW(), '{"ip": "127.0.0.1"}'::jsonb
+                );
+            END IF;
+        END IF;
     END IF;
 END $$;

@@ -48,7 +48,30 @@ export function ScoreScreen({ tournamentId }: { tournamentId: string }) {
             .subscribe()
 
         return () => { supabase.removeChannel(channel) }
-    }, [tournamentId])
+    }, [tournamentId, currentUser])
+
+    const playWinSound = async (res: any) => {
+        if (!currentUser) return
+
+        // Fetch team membership
+        const { data: member } = await supabase
+            .from("tournament_team_members")
+            .select("team_id, tournament_teams(draft_order)")
+            .eq("user_id", currentUser.id)
+            .eq("tournament_teams.tournament_id", tournamentId)
+            .maybeSingle()
+
+        if (member?.tournament_teams) {
+            const teamNum = (member.tournament_teams as any).draft_order // 1 or 2
+            const userWon = (teamNum === 1 && res.elo_change_team1 > 0) ||
+                          (teamNum === 2 && res.elo_change_team2 > 0)
+
+            if (userWon) {
+                const winAudio = new Audio("/sounds/winning_lobby.mp3")
+                winAudio.play().catch(e => console.error("Sound play failed", e))
+            }
+        }
+    }
 
     const submitScore = async () => {
         setSubmitting(true)
@@ -63,23 +86,7 @@ export function ScoreScreen({ tournamentId }: { tournamentId: string }) {
                 toast.error(res.error)
             } else if (res.consensus) {
                 setResult({ elo1: res.elo_change_team1, elo2: res.elo_change_team2 })
-                
-                // Determine which team this user is in
-                const userPart = participants.find(p => p.user_id === currentUser?.id)
-                if (userPart) {
-                    // How do we know which team they're on?
-                    // In solo queue, Team 1 reported_score vs Team 2 reported_score.
-                    // But consensus is reached.
-                    // The elo changes indicate who won.
-                    const userWon = (userPart.team_number === 1 && res.elo_change_team1 > 0) ||
-                                  (userPart.team_number === 2 && res.elo_change_team2 > 0)
-                    
-                    if (userWon) {
-                        const winAudio = new Audio("/sounds/winning_lobby.mp3")
-                        winAudio.play().catch(e => console.error("Sound play failed", e))
-                    }
-                }
-
+                playWinSound(res)
                 toast.success("Consensus reached! Match completed and prizes distributed.")
             } else {
                 toast.success("Score submitted! Awaiting other players.")
