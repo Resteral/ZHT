@@ -1,0 +1,198 @@
+app/api/checkout/route.ts(7,5): error TS2322: Type '"2024-12-18.acacia"' is not assignable to type '"2025-12-15.clover"'.
+app/draft/room/[id]/draft-room-client.tsx(26,37): error TS2339: Property 'draft_mode' does not exist on type 'DraftSettings'.
+app/draft/room/[id]/draft-room-client.tsx(27,25): error TS2339: Property 'draft_mode' does not exist on type 'DraftSettings'.
+app/draft/room/[id]/draft-room-client.tsx(36,26): error TS2339: Property 'owner_name' does not exist on type 'Team'.
+app/draft/room/[id]/draft-room-client.tsx(37,28): error TS2339: Property 'owner_id' does not exist on type 'Team'.
+app/draft/room/[id]/draft-room-client.tsx(38,27): error TS2339: Property 'budget' does not exist on type 'Team'.
+app/draft/room/[id]/draft-room-client.tsx(44,33): error TS2551: Property 'csvStats' does not exist on type 'Player'. Did you mean 'csv_stats'?
+app/draft/room/[id]/draft-room-client.tsx(46,38): error TS2339: Property 'draft_position' does not exist on type 'Player'.
+app/draft/room/[id]/draft-room-client.tsx(53,29): error TS2551: Property 'csvStats' does not exist on type 'Player'. Did you mean 'csv_stats'?
+app/draft/room/[id]/draft-room-client.tsx(54,31): error TS2551: Property 'totalCsvScore' does not exist on type 'Player'. Did you mean 'total_score'?
+app/draft/room/[id]/draft-room-client.tsx(56,26): error TS2367: This comparison appears to be unintentional because the types '"completed" | "paused" | "waiting" | "active"' and '"in_progress"' have no overlap.
+app/draft/room/[id]/draft-room-client.tsx(63,63): error TS2339: Property 'owner_id' does not exist on type 'Team'.
+app/draft/room/[id]/draft-room-client.tsx(64,43): error TS2339: Property 'owner_id' does not exist on type 'Team'.
+components/announcements/announcements-list.tsx(61,39): error TS2339: Property 'username' does not exist on type '{ username: any; display_name: any; }[]'.
+components/auction-draft/auction-draft-dashboard.tsx(93,69): error TS18048: 'league.teamSize' is possibly 'undefined'.
+components/auth/tournament-auth-gate.tsx(6,10): error TS2305: Module '"@supabase/auth-helpers-nextjs"' has no exported member 'createClientComponentClient'.
+components/betting/betting-results.tsx(221,7): error TS18048: 'result.game_name' is possibly 'undefined'.
+components/betting/elo-draft-betting.tsx(359,35): error TS2339: Property 'raw' does not exist on type 'SupabaseClient<any, "public", "public", any, any>'.
+components/betting/live-betting-markets.tsx(86,65): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/betting/live-betting-markets.tsx(270,24): error TS18048: 'market.entryFee' is possibly 'undefined'.
+components/betting/mvp-betting-markets.tsx(148,37): error TS2339: Property 'raw' does not exist on type 'SupabaseClient<any, "public", "public", any, any>'.
+components/betting/upcoming-bets.tsx(72,35): error TS2339: Property 'username' does not exist on type '{ username: any; display_name: any; wins: any; losses: any; }[]'.
+components/betting/upcoming-bets.tsx(74,40): error TS2339: Property 'wins' does not exist on type '{ username: any; display_name: any; wins: any; losses: any; }[]'.
+components/betting/upcoming-bets.tsx(74,69): error TS2339: Property 'losses' does not exist on type '{ username: any; display_name: any; wins: any; losses: any; }[]'.
+components/betting/upcoming-bets.tsx(77,35): error TS2339: Property 'username' does not exist on type '{ username: any; display_name: any; wins: any; losses: any; }[]'.
+components/betting/upcoming-bets.tsx(79,40): error TS2339: Property 'wins' does not exist on type '{ username: any; display_name: any; wins: any; losses: any; }[]'.
+components/betting/upcoming-bets.tsx(79,69): error TS2339: Property 'losses' does not exist on type '{ username: any; display_name: any; wins: any; losses: any; }[]'.
+components/dashboard/quick-stats.tsx(68,24): error TS2532: Object is possibly 'undefined'.
+components/dashboard/recent-activity.tsx(76,21): error TS2339: Property 'id' does not exist on type '{ id: any; name: any; match_type: any; status: any; description: any; }[]'.
+components/dashboard/recent-activity.tsx(78,34): error TS2339: Property 'match_type' does not exist on type '{ id: any; name: any; match_type: any; status: any; description: any; }[]'.
+components/dashboard/recent-activity.tsx(79,30): error TS2339: Property 'name' does not exist on type '{ id: any; name: any; match_type: any; status: any; description: any; }[]'.
+components/dashboard/recent-activity.tsx(79,44): error TS2339: Property 'description' does not exist on type '{ id: any; name: any; match_type: any; status: any; description: any; }[]'.
+components/dashboard/recent-activity.tsx(80,25): error TS2339: Property 'status' does not exist on type '{ id: any; name: any; match_type: any; status: any; description: any; }[]'.
+components/dashboard/recent-activity.tsx(82,23): error TS2339: Property 'status' does not exist on type '{ id: any; name: any; match_type: any; status: any; description: any; }[]'.
+components/dashboard/recent-activity.tsx(83,28): error TS2339: Property 'status' does not exist on type '{ id: any; name: any; match_type: any; status: any; description: any; }[]'.
+components/draft/live-draft-viewer.tsx(119,36): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+components/draft/live-draft-viewer.tsx(120,45): error TS2339: Property 'users' does not exist on type '{ users: { username: any; }[]; }[]'.
+components/draft/unified-draft-selector.tsx(169,98): error TS18046: 'error' is of type 'unknown'.
+components/leagues/battle-arena.tsx(58,33): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+components/leagues/battle-arena.tsx(59,34): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+components/leagues/battle-arena.tsx(62,33): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+components/leagues/leaderboards.tsx(75,33): error TS2339: Property 'username' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/leagues/leaderboards.tsx(76,35): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/leagues/recent-match-results.tsx(67,39): error TS2339: Property 'id' does not exist on type '{ id: any; username: any; }[]'.
+components/leagues/recent-match-results.tsx(68,45): error TS2339: Property 'username' does not exist on type '{ id: any; username: any; }[]'.
+components/leagues/recent-match-results.tsx(70,37): error TS2339: Property 'id' does not exist on type '{ id: any; username: any; }[]'.
+components/leagues/recent-match-results.tsx(71,43): error TS2339: Property 'username' does not exist on type '{ id: any; username: any; }[]'.
+components/leagues/user-created-teams.tsx(67,53): error TS7006: Parameter 'm' implicitly has an 'any' type.
+components/leagues/user-created-teams.tsx(70,37): error TS7006: Parameter 'member' implicitly has an 'any' type.
+components/profile/enhanced-match-history.tsx(88,39): error TS2339: Property 'match_type' does not exist on type '{ name: any; match_type: any; description: any; }[]'.
+components/profile/enhanced-match-history.tsx(89,44): error TS2339: Property 'name' does not exist on type '{ name: any; match_type: any; description: any; }[]'.
+components/profile/player-statistics-dashboard.tsx(108,70): error TS2339: Property 'status' does not exist on type '{ id: any; status: any; game: any; created_at: any; prize_pool: any; }[]'.
+components/profile/player-statistics-dashboard.tsx(168,37): error TS2339: Property 'game' does not exist on type '{ id: any; status: any; game: any; created_at: any; prize_pool: any; }[]'.
+components/profile/player-statistics-dashboard.tsx(182,41): error TS2339: Property 'created_at' does not exist on type '{ id: any; status: any; game: any; created_at: any; prize_pool: any; }[]'.
+components/profile/player-statistics-dashboard.tsx(193,57): error TS2339: Property 'prize_pool' does not exist on type '{ id: any; status: any; game: any; created_at: any; prize_pool: any; }[]'.
+components/realtime/notification-system.tsx(5,23): error TS2307: Cannot find module '@/hooks/use-toast' or its corresponding type declarations.
+components/schedule/season-calendar.tsx(82,26): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ "2024-03-15": { time: string; teams: string; type: string; }[]; "2024-03-16": { time: string; teams: string; type: string; }[]; "2024-03-18": { time: string; teams: string; type: string; }[]; "2024-03-22": { time: string; teams: string; type: string; }[]; }'.
+  No index signature with a parameter of type 'string' was found on type '{ "2024-03-15": { time: string; teams: string; type: string; }[]; "2024-03-16": { time: string; teams: string; type: string; }[]; "2024-03-18": { time: string; teams: string; type: string; }[]; "2024-03-22": { time: string; teams: string; type: string; }[]; }'.
+components/schedule/season-calendar.tsx(92,42): error TS7006: Parameter 'event' implicitly has an 'any' type.
+components/schedule/season-calendar.tsx(92,49): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/tournaments/captain-team-customization.tsx(187,9): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+components/tournaments/enhanced-captain-auction-system.tsx(14,24): error TS2307: Cannot find module '@/components/ui/slider' or its corresponding type declarations.
+components/tournaments/enhanced-captain-auction-system.tsx(489,50): error TS7031: Binding element 'value' implicitly has an 'any' type.
+components/tournaments/enhanced-captain-auction-system.tsx(501,50): error TS7031: Binding element 'value' implicitly has an 'any' type.
+components/tournaments/enhanced-drafting-sheet.tsx(171,13): error TS2345: Argument of type '() => () => Promise<"error" | "ok" | "timed out">' is not assignable to parameter of type 'EffectCallback'.
+  Type '() => Promise<"error" | "ok" | "timed out">' is not assignable to type 'void | Destructor'.
+    Type '() => Promise<"error" | "ok" | "timed out">' is not assignable to type 'Destructor'.
+      Type 'Promise<"error" | "ok" | "timed out">' is not assignable to type 'void | { [UNDEFINED_VOID_ONLY]: never; }'.
+components/tournaments/enhanced-snake-draft-system.tsx(157,37): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+components/tournaments/enhanced-tournament-bracket.tsx(161,62): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/enhanced-tournament-bracket.tsx(163,63): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/player-pool-registration.tsx(58,23): error TS2345: Argument of type '{ user_id: any; users: { username: any; elo_rating: any; }[]; }[]' is not assignable to parameter of type 'SetStateAction<Participant[]>'.
+  Type '{ user_id: any; users: { username: any; elo_rating: any; }[]; }[]' is not assignable to type 'Participant[]'.
+    Type '{ user_id: any; users: { username: any; elo_rating: any; }[]; }' is not assignable to type 'Participant'.
+      Types of property 'users' are incompatible.
+        Type '{ username: any; elo_rating: any; }[]' is missing the following properties from type '{ username: string; elo_rating: number; }': username, elo_rating
+components/tournaments/round-robin-bracket.tsx(347,56): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/round-robin-bracket.tsx(349,57): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/seasonal-tournament-dashboard.tsx(172,34): error TS2339: Property 'current_participants' does not exist on type 'SeasonalTournament'.
+components/tournaments/seasonal-tournament-dashboard.tsx(176,35): error TS2339: Property 'total_prize_pool' does not exist on type 'SeasonalTournament'.
+components/tournaments/seasonal-tournament-dashboard.tsx(285,30): error TS2322: Type '{ children: string; size: string; className: string; }' is not assignable to type 'IntrinsicAttributes & ClassAttributes<HTMLSpanElement> & HTMLAttributes<HTMLSpanElement> & VariantProps<...> & { ...; }'.
+  Property 'size' does not exist on type 'IntrinsicAttributes & ClassAttributes<HTMLSpanElement> & HTMLAttributes<HTMLSpanElement> & VariantProps<...> & { ...; }'.
+components/tournaments/team-formation-process.tsx(119,49): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+components/tournaments/team-formation-process.tsx(119,54): error TS7006: Parameter 'p' implicitly has an 'any' type.
+components/tournaments/team-formation-process.tsx(121,59): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+components/tournaments/team-formation-process.tsx(121,64): error TS7006: Parameter 'p' implicitly has an 'any' type.
+components/tournaments/tournament-auction-draft.tsx(204,38): error TS7006: Parameter 'player' implicitly has an 'any' type.
+components/tournaments/tournament-auction-draft.tsx(204,46): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/tournaments/tournament-betting-interface.tsx(43,20): error TS2554: Expected 2-3 arguments, but got 0.
+components/tournaments/tournament-bracket.tsx(198,56): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/tournament-bracket.tsx(200,57): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/tournament-draft-integration.tsx(162,69): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/tournaments/tournament-draft-integration.tsx(162,101): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/tournaments/tournament-draft-integration.tsx(168,34): error TS2339: Property 'username' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/tournaments/tournament-draft-integration.tsx(170,34): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/tournaments/tournament-draft-integration.tsx(172,33): error TS2339: Property 'username' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/tournaments/tournament-draft-integration.tsx(174,33): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/tournaments/tournament-draft-integration.tsx(191,53): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/tournaments/tournament-draft-integration.tsx(191,100): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+components/tournaments/tournament-draft-room.tsx(120,5): error TS2532: Object is possibly 'undefined'.
+components/tournaments/tournament-lifecycle-manager.tsx(196,12): error TS2678: Type '"team_building"' is not comparable to type '"completed" | "active" | "registration" | "cancelled" | "drafting" | "archived"'.
+components/tournaments/tournament-participants.tsx(145,56): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/tournament-participants.tsx(147,57): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/tournament-signup-system.tsx(61,24): error TS2345: Argument of type '{ id: any; user_id: any; status: any; created_at: any; users: { username: any; elo_rating: any; }[]; }[]' is not assignable to parameter of type 'SetStateAction<PlayerInPool[]>'.
+  Type '{ id: any; user_id: any; status: any; created_at: any; users: { username: any; elo_rating: any; }[]; }[]' is not assignable to type 'PlayerInPool[]'.
+    Type '{ id: any; user_id: any; status: any; created_at: any; users: { username: any; elo_rating: any; }[]; }' is not assignable to type 'PlayerInPool'.
+      Types of property 'users' are incompatible.
+        Type '{ username: any; elo_rating: any; }[]' is missing the following properties from type '{ username: string; elo_rating: number; }': username, elo_rating
+components/tournaments/tournament-teams.tsx(227,56): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/tournaments/tournament-teams.tsx(229,57): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+components/ui/chart.tsx(109,3): error TS2339: Property 'payload' does not exist on type 'Omit<Props<ValueType, NameType>, PropertiesReadFromContext> & { active?: boolean | undefined; allowEscapeViewBox?: AllowInDimension | undefined; ... 17 more ...; wrapperStyle?: CSSProperties | undefined; } & ClassAttributes<...> & HTMLAttributes<...> & { ...; }'.
+components/ui/chart.tsx(114,3): error TS2339: Property 'label' does not exist on type 'Omit<Props<ValueType, NameType>, PropertiesReadFromContext> & { active?: boolean | undefined; allowEscapeViewBox?: AllowInDimension | undefined; ... 17 more ...; wrapperStyle?: CSSProperties | undefined; } & ClassAttributes<...> & HTMLAttributes<...> & { ...; }'.
+components/ui/chart.tsx(182,23): error TS7006: Parameter 'item' implicitly has an 'any' type.
+components/ui/chart.tsx(182,29): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/ui/chart.tsx(260,39): error TS2344: Type '"verticalAlign" | "payload"' does not satisfy the constraint '"string" | "name" | "path" | "mode" | "origin" | "filter" | "fill" | "values" | "type" | "id" | "color" | "points" | "style" | "clipPath" | "mask" | "key" | "suppressHydrationWarning" | ... 429 more ... | "onBBoxUpdate"'.
+  Type '"payload"' is not assignable to type '"string" | "name" | "path" | "mode" | "origin" | "filter" | "fill" | "values" | "type" | "id" | "color" | "points" | "style" | "clipPath" | "mask" | "key" | "suppressHydrationWarning" | ... 429 more ... | "onBBoxUpdate"'.
+components/ui/chart.tsx(266,17): error TS2339: Property 'length' does not exist on type '{}'.
+components/ui/chart.tsx(278,16): error TS2339: Property 'map' does not exist on type '{}'.
+components/ui/chart.tsx(278,21): error TS7006: Parameter 'item' implicitly has an 'any' type.
+components/ui/enhanced-card.tsx(30,8): error TS2322: Type '{ children: (false | Element)[]; defaultChecked?: boolean | undefined; defaultValue?: string | number | readonly string[] | undefined; suppressContentEditableWarning?: boolean | undefined; ... 279 more ...; onHoverEnd: () => void; }' is not assignable to type 'Omit<HTMLMotionProps<"div">, "ref">'.
+  Types of property 'onDrag' are incompatible.
+    Type 'DragEventHandler<HTMLDivElement> | undefined' is not assignable to type '((event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void) | undefined'.
+      Type 'DragEventHandler<HTMLDivElement>' is not assignable to type '(event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void'.
+        Types of parameters 'event' and 'event' are incompatible.
+          Type 'MouseEvent | TouchEvent | PointerEvent' is not assignable to type 'DragEvent<HTMLDivElement>'.
+            Type 'MouseEvent' is missing the following properties from type 'DragEvent<HTMLDivElement>': dataTransfer, nativeEvent, isDefaultPrevented, isPropagationStopped, persist
+lib/hooks/use-realtime.ts(197,38): error TS2339: Property 'current_pick' does not exist on type '{} | { [key: string]: any; }'.
+  Property 'current_pick' does not exist on type '{}'.
+lib/hooks/use-realtime.ts(318,28): error TS2339: Property 'setting_key' does not exist on type '{} | { [key: string]: any; }'.
+  Property 'setting_key' does not exist on type '{}'.
+lib/hooks/use-realtime.ts(319,50): error TS2339: Property 'setting_value' does not exist on type '{} | { [key: string]: any; }'.
+  Property 'setting_value' does not exist on type '{}'.
+lib/services/analytics-service.ts(450,82): error TS2339: Property 'status' does not exist on type '{ status: any; winner_team: any; }[]'.
+lib/services/automatic-seasonal-tournament-service.ts(38,54): error TS2339: Property 'season_number' does not exist on type 'SeasonalTournament'.
+lib/services/automatic-seasonal-tournament-service.ts(45,51): error TS2339: Property 'season_number' does not exist on type 'SeasonalTournament'.
+lib/services/captain-selection-service.ts(255,103): error TS2339: Property 'username' does not exist on type '{ username: any; elo_rating: any; }[]'.
+lib/services/captain-selection-service.ts(264,103): error TS2339: Property 'username' does not exist on type '{ username: any; elo_rating: any; }[]'.
+lib/services/integration-service.ts(93,43): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(101,8): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(107,33): error TS7006: Parameter 't' implicitly has an 'any' type.
+lib/services/integration-service.ts(108,32): error TS7006: Parameter 't' implicitly has an 'any' type.
+lib/services/integration-service.ts(122,21): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(123,21): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(127,25): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(148,8): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(181,25): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(196,8): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(202,33): error TS7006: Parameter 't' implicitly has an 'any' type.
+lib/services/integration-service.ts(203,32): error TS7006: Parameter 't' implicitly has an 'any' type.
+lib/services/integration-service.ts(207,25): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(219,43): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(227,8): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(260,43): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(267,8): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(275,57): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(279,25): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(291,8): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/integration-service.ts(302,25): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<any, "public", "public", any, any>>'.
+lib/services/live-bracket-integration-service.ts(400,42): error TS2339: Property 'sql' does not exist on type 'SupabaseClient<any, "public", "public", any, any>'.
+lib/services/month-long-tournament-service.ts(447,29): error TS2339: Property 'raw' does not exist on type 'SupabaseClient<any, "public", "public", any, any>'.
+lib/services/seasonal-tournament-service.ts(210,9): error TS2393: Duplicate function implementation.
+lib/services/seasonal-tournament-service.ts(232,7): error TS2322: Type 'boolean' is not assignable to type 'SeasonalParticipant'.
+lib/services/seasonal-tournament-service.ts(235,7): error TS2322: Type 'boolean' is not assignable to type 'SeasonalParticipant'.
+lib/services/seasonal-tournament-service.ts(239,9): error TS2393: Duplicate function implementation.
+lib/services/team-auction-service.ts(76,37): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+lib/services/tournament-draft-scheduler-service.ts(300,86): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+lib/services/tournament-draft-scheduler-service.ts(301,87): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+lib/services/tournament-draft-service.ts(245,36): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+lib/services/tournament-draft-service.ts(401,37): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+lib/services/tournament-draft-service.ts(452,40): error TS2339: Property 'raw' does not exist on type 'SupabaseClient<any, "public", "public", any, any>'.
+lib/services/tournament-draft-service.ts(573,13): error TS2367: This comparison appears to be unintentional because the types '"active"' and '"completed"' have no overlap.
+lib/services/tournament-draft-service.ts(598,7): error TS2322: Type '{ id: any; username: any; elo_rating: any; csv_stats: { goals: any; assists: any; saves: any; games_played: any; }[]; total_score: any; status: "available" | "drafted"; }[]' is not assignable to type 'Player[]'.
+  Type '{ id: any; username: any; elo_rating: any; csv_stats: { goals: any; assists: any; saves: any; games_played: any; }[]; total_score: any; status: "available" | "drafted"; }' is not assignable to type 'Player'.
+    Types of property 'csv_stats' are incompatible.
+      Type '{ goals: any; assists: any; saves: any; games_played: any; }[]' is missing the following properties from type '{ goals: number; assists: number; saves: number; games_played: number; }': goals, assists, saves, games_played
+lib/services/tournament-draft-service.ts(601,36): error TS2339: Property 'goals' does not exist on type '{ goals: any; assists: any; saves: any; games_played: any; }[]'.
+lib/services/tournament-draft-service.ts(601,50): error TS2339: Property 'assists' does not exist on type '{ goals: any; assists: any; saves: any; games_played: any; }[]'.
+lib/services/tournament-draft-service.ts(601,75): error TS2339: Property 'saves' does not exist on type '{ goals: any; assists: any; saves: any; games_played: any; }[]'.
+lib/services/tournament-draft-service.ts(605,36): error TS2339: Property 'username' does not exist on type '{ username: any; elo_rating: any; }[]'.
+lib/services/tournament-draft-service.ts(606,38): error TS2339: Property 'elo_rating' does not exist on type '{ username: any; elo_rating: any; }[]'.
+lib/services/tournament-draft-service.ts(645,35): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+lib/services/tournament-lifecycle-service.ts(3,46): error TS2307: Cannot find module './tournament-auto-closure-service' or its corresponding type declarations.
+lib/services/tournament-progression-service.ts(41,51): error TS2339: Property 'username' does not exist on type '{ username: any; elo_rating: any; }[]'.
+lib/services/tournament-progression-service.ts(41,92): error TS2339: Property 'username' does not exist on type '{ username: any; elo_rating: any; }[]'.
+lib/services/tournament-progression-service.ts(97,39): error TS2339: Property 'username' does not exist on type '{ username: any; }[]'.
+lib/services/tournament-progression-service.ts(142,29): error TS2339: Property 'raw' does not exist on type 'SupabaseClient<any, "public", "public", any, any>'.
+lib/stripe/client.ts(4,3): error TS2322: Type '"2024-12-18.acacia"' is not assignable to type '"2025-12-15.clover"'.

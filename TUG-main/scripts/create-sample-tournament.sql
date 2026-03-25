@@ -1,0 +1,135 @@
+-- Create a sample snake draft tournament to demonstrate the system is working
+INSERT INTO tournaments (
+  id,
+  name,
+  description,
+  game,
+  tournament_type,
+  max_participants,
+  max_teams,
+  entry_fee,
+  prize_pool,
+  status,
+  start_date,
+  end_date,
+  team_based,
+  settings,
+  created_at
+) VALUES (
+  gen_random_uuid(),
+  'Welcome Snake Draft Tournament',
+  'A sample snake draft tournament to demonstrate the system. Join instantly and experience the ELO-style tournament flow!',
+  'hockey',
+  'snake_draft',
+  999999,
+  999999,
+  0,
+  5000,
+  'registration',
+  NOW(),
+  NOW() + INTERVAL '1 year',
+  false,
+  '{
+    "draft_mode": "snake_draft",
+    "pick_time_limit": 60,
+    "auto_start": true,
+    "num_teams": 999999,
+    "players_per_team": 4,
+    "create_lobbies_on_finish": true,
+    "instant_access": true,
+    "no_restrictions": true,
+    "bracket_type": "single_elimination"
+  }'::jsonb,
+  NOW()
+);
+
+-- Create a sample linear draft tournament
+INSERT INTO tournaments (
+  id,
+  name,
+  description,
+  game,
+  tournament_type,
+  max_participants,
+  max_teams,
+  entry_fee,
+  prize_pool,
+  status,
+  start_date,
+  end_date,
+  team_based,
+  settings,
+  created_at
+) VALUES (
+  gen_random_uuid(),
+  'Demo Linear Draft Tournament',
+  'Experience consistent pick order strategy with this linear draft tournament. Free to join with instant access!',
+  'hockey',
+  'linear_draft',
+  999999,
+  999999,
+  0,
+  3000,
+  'registration',
+  NOW(),
+  NOW() + INTERVAL '1 year',
+  false,
+  '{
+    "draft_mode": "linear_draft",
+    "pick_time_limit": 60,
+    "auto_start": true,
+    "num_teams": 999999,
+    "players_per_team": 4,
+    "create_lobbies_on_finish": true,
+    "instant_access": true,
+    "no_restrictions": true,
+    "bracket_type": "round_robin"
+  }'::jsonb,
+  NOW()
+);
+
+-- Create a sample auction draft tournament
+INSERT INTO tournaments (
+  id,
+  name,
+  description,
+  game,
+  tournament_type,
+  max_participants,
+  max_teams,
+  entry_fee,
+  prize_pool,
+  status,
+  start_date,
+  end_date,
+  team_based,
+  settings,
+  created_at
+) VALUES (
+  gen_random_uuid(),
+  'High Stakes Auction Tournament',
+  'Budget management meets strategy! Bid on players with limited funds to build the ultimate team.',
+  'hockey',
+  'auction_draft',
+  999999,
+  999999,
+  0,
+  25000,
+  'registration',
+  NOW(),
+  NOW() + INTERVAL '1 year',
+  false,
+  '{
+    "draft_mode": "auction_draft",
+    "pick_time_limit": 120,
+    "auto_start": true,
+    "num_teams": 999999,
+    "players_per_team": 4,
+    "create_lobbies_on_finish": true,
+    "instant_access": true,
+    "no_restrictions": true,
+    "bracket_type": "double_elimination",
+    "auction_budget": 1000
+  }'::jsonb,
+  NOW()
+);

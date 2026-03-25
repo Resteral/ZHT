@@ -1,0 +1,22 @@
+﻿node.exe : Cannot find 
+project ref. Have you run 
+supabase link?
+At C:\Program 
+Files\nodejs\npx.ps1:29 
+char:3
++   & $NODE_EXE 
+$NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo         
+     : NotSpecified:     
+(Cannot find pro...     
+supabase link?:Strin    g) 
+[], RemoteExcepti    on
+    + FullyQualifiedErro   
+ rId : NativeCommandE    
+rror
+ 
+Try rerunning the command 
+with --debug to 
+troubleshoot the error.

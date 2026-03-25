@@ -1,0 +1,96 @@
+-- Insert sample tournaments that will show up on the tournaments page
+INSERT INTO tournaments (
+  id,
+  name,
+  description,
+  tournament_type,
+  game,
+  max_participants,
+  entry_fee,
+  prize_pool,
+  start_date,
+  end_date,
+  created_by,
+  status,
+  team_based,
+  player_pool_settings,
+  created_at,
+  updated_at
+) VALUES 
+(
+  gen_random_uuid(),
+  'Snake Draft Championship',
+  'Classic snake draft tournament with 32 players',
+  'snake_draft',
+  'hockey',
+  32,
+  10.00,
+  256.00,
+  NOW() + INTERVAL '1 hour',
+  NOW() + INTERVAL '30 days',
+  '00000000-0000-0000-0000-000000000000',
+  'registration',
+  false,
+  '{"draft_type": "snake_draft", "duration_days": 30, "phases_enabled": true}',
+  NOW(),
+  NOW()
+),
+(
+  gen_random_uuid(),
+  'Linear Draft Pro League',
+  'Professional linear draft tournament',
+  'linear_draft',
+  'hockey',
+  64,
+  25.00,
+  1280.00,
+  NOW() + INTERVAL '2 hours',
+  NOW() + INTERVAL '45 days',
+  '00000000-0000-0000-0000-000000000000',
+  'registration',
+  false,
+  '{"draft_type": "linear_draft", "duration_days": 45, "phases_enabled": true}',
+  NOW(),
+  NOW()
+),
+(
+  gen_random_uuid(),
+  'Auction Draft Masters',
+  'High-stakes auction draft tournament',
+  'auction_draft',
+  'hockey',
+  16,
+  50.00,
+  640.00,
+  NOW() + INTERVAL '30 minutes',
+  NOW() + INTERVAL '14 days',
+  '00000000-0000-0000-0000-000000000000',
+  'registration',
+  false,
+  '{"draft_type": "auction_draft", "duration_days": 14, "phases_enabled": true}',
+  NOW(),
+  NOW()
+);
+
+-- Ensure system user exists for tournament ownership
+INSERT INTO users (
+  id,
+  username,
+  email,
+  elo_rating,
+  total_games,
+  wins,
+  losses,
+  created_at,
+  updated_at
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  'System',
+  null,
+  1200,
+  0,
+  0,
+  0,
+  NOW(),
+  NOW()
+) ON CONFLICT (id) DO NOTHING;
