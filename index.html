@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Esports Skill Contest | 8-Captain Draft</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header class="glass-header">
+            <h1>LEGAL SKILL CONTEST <span class="badge">$25 POOL</span></h1>
+            <div class="stats-bar">
+                <span>Game: <strong>Zealot Hockey</strong></span>
+                <span>Mode: <strong>8-Captain Auction</strong></span>
+                <span>Status: <strong>Drafting...</strong></span>
+            </div>
+        </header>
+
+        <!-- Match Ready Alert -->
+        <div id="ready-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="radar-pulse"></div>
+                <h2>MATCH READY!</h2>
+                <p>Confirming 48/48 Players...</p>
+                <button id="ready-btn" class="glow-button">READY UP</button>
+                <div class="timer-bar"><div id="progress"></div></div>
+            </div>
+        </div>
+
+        <main class="draft-grid">
+            <aside id="captains-left" class="cap-col"></aside>
+            <section class="player-pool">
+                <div class="pool-header">
+                    <h3>Free Agent Pool (ELO Sorted)</h3>
+                    <input type="text" placeholder="Search Player..." id="player-search">
+                </div>
+                <div id="pool-list"></div>
+            </section>
+            <aside id="captains-right" class="cap-col"></aside>
+        </main>
+    </div>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
