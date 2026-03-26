@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
 
-export async function updateProfile(data: { username?: string, avatar_url?: string, steam_id?: string, epic_games_id?: string }) {
+export async function updateProfile(data: { username?: string, avatar_url?: string, steam_id?: string, epic_games_id?: string, account_id?: string }) {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()

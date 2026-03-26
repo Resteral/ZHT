@@ -95,33 +95,6 @@ export const GAME_MODES: Record<string, GameMode> = {
 }
 
 export const GAMES: Record<string, GameConfig> = {
-  starcraft: {
-    id: 'starcraft',
-    name: 'StarCraft',
-    icon: '⚔️',
-    color: 'bg-blue-600',
-    allowedModes: ['1v1'],
-    defaultMode: '1v1',
-    description: '1v1 competitive RTS',
-  },
-  fortnite: {
-    id: 'fortnite',
-    name: 'Fortnite',
-    icon: '🎮',
-    color: 'bg-purple-600',
-    allowedModes: ['1v1', '2v2'],
-    defaultMode: '1v1',
-    description: '1v1 and 2v2 battle royale',
-  },
-  omega_strikers: {
-    id: 'omega_strikers',
-    name: 'Omega Strikers',
-    icon: '⚽',
-    color: 'bg-orange-600',
-    allowedModes: ['3v3'],
-    defaultMode: '3v3',
-    description: '3v3 competitive striker',
-  },
   zealot_hockey: {
     id: 'zealot_hockey',
     name: 'Zealot Hockey',
@@ -130,24 +103,6 @@ export const GAMES: Record<string, GameConfig> = {
     allowedModes: ['4v4'],
     defaultMode: '4v4',
     description: '4v4 hockey action',
-  },
-  counterstrike: {
-    id: 'counterstrike',
-    name: 'Counter-Strike',
-    icon: '🔫',
-    color: 'bg-yellow-600',
-    allowedModes: ['5v5'],
-    defaultMode: '5v5',
-    description: '5v5 tactical shooter',
-  },
-  rainbow_six_siege: {
-    id: 'rainbow_six_siege',
-    name: 'Rainbow Six Siege',
-    icon: '🛡️',
-    color: 'bg-red-600',
-    allowedModes: ['6v6'],
-    defaultMode: '6v6',
-    description: '6v6 tactical operations',
   },
 }
 

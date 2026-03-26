@@ -95,5 +95,41 @@ GROUP BY u.id, u.username, u.elo_rating;
 GRANT SELECT ON player_advanced_stats TO authenticated;
 GRANT ALL ON player_analytics TO authenticated;
 
+-- 5. Create teammate stats view for "Best/Worst Teammates"
+-- This view identifies win rates for player pairs in same matches/teams
+CREATE OR REPLACE VIEW teammate_stats AS
+WITH teammate_pairs AS (
+    -- Pair players who were on the same team in the same match
+    SELECT 
+        mp1.user_id as player_id,
+        mp2.user_id as teammate_id,
+        mp1.match_id,
+        CASE WHEN pa.score > 0 THEN true ELSE false END as participated -- simplified check if stats exist
+    FROM match_participants mp1
+    JOIN match_participants mp2 ON mp1.match_id = mp2.match_id 
+        AND mp1.team_id = mp2.team_id 
+        AND mp1.user_id != mp2.user_id
+    LEFT JOIN player_analytics pa ON mp1.match_id = pa.match_id AND mp1.user_id = pa.user_id
+)
+SELECT 
+    tp.player_id,
+    tp.teammate_id,
+    u.username as teammate_username,
+    COUNT(DISTINCT tp.match_id) as games_together,
+    SUM(CASE WHEN ta.actual_result = 'win' OR ta.victory = true THEN 1 ELSE 0 END) as wins,
+    SUM(CASE WHEN ta.actual_result = 'loss' OR ta.victory = false THEN 1 ELSE 0 END) as losses,
+    ROUND(
+        (SUM(CASE WHEN ta.actual_result = 'win' OR ta.victory = true THEN 1 ELSE 0 END)::DECIMAL / 
+         NULLIF(COUNT(DISTINCT tp.match_id), 0)) * 100, 2
+    ) as win_percentage
+FROM teammate_pairs tp
+JOIN users u ON tp.teammate_id = u.id
+JOIN team_analytics ta ON tp.match_id = ta.match_id 
+  AND ta.team_number = (SELECT team_id FROM match_participants WHERE match_id = tp.match_id AND user_id = tp.player_id LIMIT 1)
+GROUP BY tp.player_id, tp.teammate_id, u.username;
+
+GRANT SELECT ON teammate_stats TO authenticated;
+
 COMMENT ON TABLE player_analytics IS 'Individual player performance data for specific matches';
 COMMENT ON VIEW player_advanced_stats IS 'Aggregated career statistics for all players';
+COMMENT ON VIEW teammate_stats IS 'Win/loss history with specific teammates to identify best/worst partners';

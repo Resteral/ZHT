@@ -9,13 +9,11 @@ export interface CSVPlayerStats {
   pickups: number
   passes: number
   passesReceived: number
-  possession: number
-  savesAllowed: number
-  saves: number
   savePercentage: number
-  saveAmount: number // Total save attempts
-  goalTended: number
-  skatingTime: number
+  saves: number
+  savesAllowed: number
+  possession: number
+  totalPoints: number
   matchId: string
   matchName: string
   submittedAt: string
@@ -104,13 +102,11 @@ export class CSVStatsService {
         pickups: this.parseNumber(parts[6], 0),
         passes: this.parseNumber(parts[7], 0),
         passesReceived: this.parseNumber(parts[8], 0),
-        possession: this.parseNumber(parts[9], 0),
-        savesAllowed: this.parseNumber(parts[10], 0),
-        saves: this.parseNumber(parts[11], 0),
-        goalTended: this.parseNumber(parts[12], 0),
-        skatingTime: this.parseNumber(parts[13], 0),
-        saveAmount: this.parseNumber(parts[11], 0) + this.parseNumber(parts[10], 0), // Total save attempts
-        savePercentage: this.calculateSavePercentage(this.parseNumber(parts[11], 0), this.parseNumber(parts[10], 0)),
+        savePercentage: this.parseNumber(parts[9], 0),
+        saves: this.parseNumber(parts[10], 0),
+        savesAllowed: this.parseNumber(parts[11], 0),
+        possession: this.parseNumber(parts[12], 0), // Possession time/value
+        totalPoints: this.parseNumber(parts[13], 0), // Total Points
         matchId,
         matchName,
         submittedAt: new Date().toISOString(),
@@ -205,12 +201,10 @@ export class CSVStatsService {
           existing.possession += stat.possession
           existing.savesAllowed += stat.savesAllowed
           existing.saves += stat.saves
-          existing.goalTended += stat.goalTended
-          existing.skatingTime += stat.skatingTime
-          existing.saveAmount += stat.saveAmount
+          existing.totalPoints += stat.totalPoints
           existing.gamesPlayed += 1
-          // Recalculate save percentage
-          existing.savePercentage = this.calculateSavePercentage(existing.saves, existing.savesAllowed)
+          // Recalculate save percentage (simple average or weighted?)
+          existing.savePercentage = (existing.savePercentage + stat.savePercentage) / 2
           console.log(`[v0] Aggregated stats for ${stat.accountId}`)
         } else {
           playerStatsMap.set(stat.accountId, { ...stat })

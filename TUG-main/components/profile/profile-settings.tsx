@@ -17,6 +17,7 @@ export function ProfileSettings() {
     const [avatarUrl, setAvatarUrl] = useState("")
     const [steamId, setSteamId] = useState("")
     const [epicId, setEpicId] = useState("")
+    const [accountId, setAccountId] = useState("")
     const supabase = createClient()
 
     useEffect(() => {
@@ -26,7 +27,7 @@ export function ProfileSettings() {
 
             const { data: profile } = await supabase
                 .from("users")
-                .select("username, avatar_url, steam_id, epic_games_id")
+                .select("username, avatar_url, steam_id, epic_games_id, account_id")
                 .eq("id", user.id)
                 .single()
 
@@ -35,6 +36,7 @@ export function ProfileSettings() {
                 setAvatarUrl(profile.avatar_url || "")
                 setSteamId(profile.steam_id || "")
                 setEpicId(profile.epic_games_id || "")
+                setAccountId(profile.account_id || "")
             }
         }
         loadProfile()
@@ -48,7 +50,8 @@ export function ProfileSettings() {
             username,
             avatar_url: avatarUrl,
             steam_id: steamId,
-            epic_games_id: epicId
+            epic_games_id: epicId,
+            account_id: accountId
         })
 
         if (result?.success) {
@@ -126,6 +129,22 @@ export function ProfileSettings() {
                         />
                         <p className="text-[10px] text-muted-foreground">
                             Your display name used in Epic Games titles (Fortnite, etc.)
+                        </p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="flex items-center gap-2 text-primary">
+                            <Gamepad2 className="w-4 h-4" />
+                            Zealot Hockey / SC2 Account ID
+                        </Label>
+                        <Input
+                            placeholder="e.g. 1-S2-1-850006"
+                            value={accountId}
+                            onChange={(e) => setAccountId(e.target.value)}
+                            className="bg-primary/5 border-primary/10"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                            Required for automated Zealot Hockey stat tracking. Format: 1-S2-1-XXXXXX
                         </p>
                     </div>
 

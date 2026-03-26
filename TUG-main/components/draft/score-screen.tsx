@@ -12,6 +12,7 @@ import { CheckCircle2, CircleDashed, AlertCircle } from "lucide-react"
 export function ScoreScreen({ tournamentId }: { tournamentId: string }) {
     const [team1Score, setTeam1Score] = useState("")
     const [team2Score, setTeam2Score] = useState("")
+    const [csvCode, setCsvCode] = useState("")
     const [submitting, setSubmitting] = useState(false)
     const [participants, setParticipants] = useState<any[]>([])
     const [currentUser, setCurrentUser] = useState<any>(null)
@@ -79,7 +80,8 @@ export function ScoreScreen({ tournamentId }: { tournamentId: string }) {
             const res = await submitTournamentScore(
                 tournamentId,
                 parseInt(team1Score),
-                parseInt(team2Score)
+                parseInt(team2Score),
+                csvCode
             )
 
             if (res.error) {
@@ -134,6 +136,15 @@ export function ScoreScreen({ tournamentId }: { tournamentId: string }) {
                                 value={team2Score}
                                 onChange={e => setTeam2Score(e.target.value)}
                                 className="bg-zinc-950 border-zinc-800 text-lg py-6"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-zinc-400">Zealot Hockey CSV Stats (Optional)</label>
+                            <textarea
+                                placeholder="Paste CSV match stats here..."
+                                value={csvCode}
+                                onChange={e => setCsvCode(e.target.value)}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-md p-3 text-sm font-mono focus:ring-1 focus:ring-primary h-24"
                             />
                         </div>
                     </div>

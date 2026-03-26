@@ -3,8 +3,11 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Trophy, Target, DollarSign, TrendingUp, Award } from "lucide-react"
 
+import { TeammateStats } from "./teammate-stats"
+
 interface ProfileStatsProps {
   user: {
+    userId: string
     wins: number
     losses: number
     winRate: number
@@ -132,6 +135,11 @@ export function ProfileStats({ user }: ProfileStatsProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Combat Synergies (Best/Worst Teammates) */}
+      <div className="md:col-span-2 lg:col-span-4 mt-6">
+        <TeammateStats userId={user.userId || ""} />
+      </div>
     </div>
   )
 }
