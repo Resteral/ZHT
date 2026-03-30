@@ -106,7 +106,7 @@ BEGIN
     SUM(ma.healing_done)
   FROM match_analytics ma
   JOIN match_participants mp ON ma.player_id = mp.user_id
-  WHERE ma.match_id = p_match_id AND mp.match_id = p_match_id AND mp.team_number = 1;
+  WHERE ma.match_id = p_match_id AND mp.match_id = p_match_id AND mp.team_id = 1;
   
   INSERT INTO team_analytics (match_id, team_number, total_kills, total_deaths, total_damage, total_healing)
   SELECT 
@@ -118,7 +118,7 @@ BEGIN
     SUM(ma.healing_done)
   FROM match_analytics ma
   JOIN match_participants mp ON ma.player_id = mp.user_id
-  WHERE ma.match_id = p_match_id AND mp.match_id = p_match_id AND mp.team_number = 2;
+  WHERE ma.match_id = p_match_id AND mp.match_id = p_match_id AND mp.team_id = 2;
   
   RETURN TRUE;
 EXCEPTION

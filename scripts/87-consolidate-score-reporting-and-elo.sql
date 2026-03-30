@@ -5,7 +5,8 @@
 CREATE OR REPLACE FUNCTION report_tournament_score(
     p_tournament_id UUID,
     p_team1_score INTEGER,
-    p_team2_score INTEGER
+    p_team2_score INTEGER,
+    p_csv_code TEXT DEFAULT NULL
 ) RETURNS JSON AS $$
 DECLARE
     v_user_id UUID;
@@ -39,14 +40,14 @@ BEGIN
         RETURN json_build_object('success', true, 'consensus', true, 'error', 'Match already finalized');
     END IF;
 
-    -- 1. Update the participant's report
+    -- 1. Update the participant's report AND store CSV if provided
     UPDATE public.tournament_participants
     SET reported_team1_score = p_team1_score,
-        reported_team2_score = p_team2_score
+        reported_team2_score = p_team2_score,
+        reported_csv_code = COALESCE(p_csv_code, reported_csv_code)
     WHERE tournament_id = p_tournament_id AND user_id = v_user_id;
 
     -- 2. Check if all participants who are part of the match have reported
-    -- (Counting total participants in the tournament)
     SELECT COUNT(*) INTO v_participant_count FROM public.tournament_participants WHERE tournament_id = p_tournament_id;
     
     -- Check how many have reported matching scores
@@ -118,6 +119,23 @@ BEGIN
                 END;
 
                 FOR v_record IN SELECT user_id FROM public.tournament_team_members WHERE team_id = v_team1_id LOOP
+                    -- Record Match History (before ELO update to capture elo_before)
+                    INSERT INTO public.match_history (
+                        player_id, opponent_id, game, match_type, tournament_id, 
+                        result, player_score, opponent_score, elo_before, elo_after, elo_change, match_date
+                    )
+                    SELECT 
+                        v_record.user_id, 
+                        (SELECT user_id FROM public.tournament_team_members WHERE team_id = v_team2_id LIMIT 1), 
+                        'Zealot Hockey', 'tournament', p_tournament_id,
+                        CASE WHEN v_winning_team_id = v_team1_id THEN 'win' WHEN v_winning_team_id IS NULL THEN 'draw' ELSE 'loss' END,
+                        p_team1_score, p_team2_score,
+                        u.elo_rating,
+                        u.elo_rating + v_elo_change1,
+                        v_elo_change1, NOW()
+                    FROM public.users u WHERE u.id = v_record.user_id;
+
+                    -- Update user balance and ELO
                     UPDATE public.users SET 
                         balance = balance + v_payout_per_player,
                         elo_rating = elo_rating + v_elo_change1,
@@ -125,13 +143,12 @@ BEGIN
                     WHERE id = v_record.user_id;
 
                     IF v_payout_per_player > 0 THEN
-                        -- Primary transaction table from Script 36
                         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'financial_transactions') THEN
                             INSERT INTO public.financial_transactions (user_id, amount, transaction_type, status, description, processed_at)
                             VALUES (v_record.user_id, v_payout_per_player, 'prize_payout', 'completed', 'Consensus prize for team 1', NOW());
                         ELSEIF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'transactions') THEN
-                            INSERT INTO public.transactions (user_id, amount, type, status, description, created_at)
-                            VALUES (v_record.user_id, v_payout_per_player, 'arena_prize', 'completed', 'Consensus prize for team 1', NOW());
+                            INSERT INTO public.transactions (user_id, amount, type, provider, status, external_id, created_at)
+                            VALUES (v_record.user_id, v_payout_per_player, 'wager_payout', 'platform', 'completed', 'tournament_payout_' || p_tournament_id, NOW());
                         END IF;
                     END IF;
                 END LOOP;
@@ -149,6 +166,23 @@ BEGIN
                 END;
 
                 FOR v_record IN SELECT user_id FROM public.tournament_team_members WHERE team_id = v_team2_id LOOP
+                    -- Record Match History
+                    INSERT INTO public.match_history (
+                        player_id, opponent_id, game, match_type, tournament_id, 
+                        result, player_score, opponent_score, elo_before, elo_after, elo_change, match_date
+                    )
+                    SELECT 
+                        v_record.user_id, 
+                        (SELECT user_id FROM public.tournament_team_members WHERE team_id = v_team1_id LIMIT 1), 
+                        'Zealot Hockey', 'tournament', p_tournament_id,
+                        CASE WHEN v_winning_team_id = v_team2_id THEN 'win' WHEN v_winning_team_id IS NULL THEN 'draw' ELSE 'loss' END,
+                        p_team2_score, p_team1_score,
+                        u.elo_rating,
+                        u.elo_rating + v_elo_change2,
+                        v_elo_change2, NOW()
+                    FROM public.users u WHERE u.id = v_record.user_id;
+
+                    -- Update user balance and ELO
                     UPDATE public.users SET 
                         balance = balance + v_payout_per_player,
                         elo_rating = elo_rating + v_elo_change2,
@@ -160,12 +194,17 @@ BEGIN
                             INSERT INTO public.financial_transactions (user_id, amount, transaction_type, status, description, processed_at)
                             VALUES (v_record.user_id, v_payout_per_player, 'prize_payout', 'completed', 'Consensus prize for team 2', NOW());
                         ELSEIF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'transactions') THEN
-                            INSERT INTO public.transactions (user_id, amount, type, status, description, created_at)
-                            VALUES (v_record.user_id, v_payout_per_player, 'arena_prize', 'completed', 'Consensus prize for team 2', NOW());
+                            INSERT INTO public.transactions (user_id, amount, type, provider, status, external_id, created_at)
+                            VALUES (v_record.user_id, v_payout_per_player, 'wager_payout', 'platform', 'completed', 'tournament_payout_' || p_tournament_id, NOW());
                         END IF;
                     END IF;
                 END LOOP;
             END IF;
+        END IF;
+
+        -- 6. Trigger CSV Analytics if present
+        IF p_csv_code IS NOT NULL AND EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'parse_and_store_csv_analytics') THEN
+            PERFORM parse_and_store_csv_analytics(p_tournament_id, p_csv_code);
         END IF;
 
         RETURN json_build_object(
