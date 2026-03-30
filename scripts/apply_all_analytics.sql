@@ -398,16 +398,16 @@ WHERE t.status = 'completed';
 -- 2. Aggregated Synergy & Friction Stats
 CREATE OR REPLACE VIEW v_player_synergy_stats AS
 SELECT 
-    player_id,
-    teammate_id,
+    tp.player_id,
+    tp.teammate_id,
     COUNT(*) as games_played,
-    COUNT(*) FILTER (WHERE match_result = 'win') as wins,
-    COUNT(*) FILTER (WHERE match_result = 'loss') as losses,
-    ROUND((COUNT(*) FILTER (WHERE match_result = 'win'))::DECIMAL / NULLIF(COUNT(*), 0) * 100, 2) as win_rate,
+    COUNT(*) FILTER (WHERE tp.match_result = 'win') as wins,
+    COUNT(*) FILTER (WHERE tp.match_result = 'loss') as losses,
+    ROUND((COUNT(*) FILTER (WHERE tp.match_result = 'win'))::DECIMAL / NULLIF(COUNT(*), 0) * 100, 2) as win_rate,
     AVG(mh.elo_change) as avg_elo_gain
 FROM v_teammate_pairings tp
 LEFT JOIN match_history mh ON tp.player_id = mh.player_id AND tp.tournament_id = mh.tournament_id
-GROUP BY player_id, teammate_id;
+GROUP BY tp.player_id, tp.teammate_id;
 
 -- 3. Top Synergy Partners
 CREATE OR REPLACE VIEW v_top_synergy_partners AS
